@@ -9,12 +9,14 @@ export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
   const [loading, setLoading] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setError('')
+    setSuccess('')
 
     const res = await fetch('/api/login', {
       method: 'POST',
@@ -25,45 +27,58 @@ export default function LoginPage() {
     const data = await res.json()
 
     if (!res.ok) {
-      setError(data.message || 'Login failed')
+      setError(data.message || 'Credenciales incorrectas.')
       setLoading(false)
     } else {
-      router.push('/dashboard')
+      setSuccess('Login exitoso. Redirigiendo...')
+      setTimeout(() => {
+        router.push('/dashboard')
+      }, 1200)
     }
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 flex items-center justify-center px-4">
-      <div className="max-w-md w-full bg-white shadow-2xl rounded-2xl p-8">
-        <h2 className="text-2xl font-bold mb-6 text-center text-gray-800">Kline Task Manager</h2>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-100 via-white to-gray-100 px-4">
+      <div className="w-full max-w-md bg-white p-8 rounded-2xl shadow-xl">
+        <h1 className="text-3xl font-bold text-center text-gray-800 mb-6">
+          Kline Task Manager
+        </h1>
+
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700">Email</label>
+            <label className="block text-sm text-gray-700 mb-1">Email</label>
             <input
               type="email"
-              className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:ring-blue-500 focus:border-blue-500"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Password</label>
-            <input
-              type="password"
-              className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:ring-blue-500 focus:border-blue-500"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               required
             />
           </div>
 
-          {error && <p className="text-red-600 text-sm text-center">{error}</p>}
+          <div>
+            <label className="block text-sm text-gray-700 mb-1">Password</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            />
+          </div>
+
+          {error && (
+            <p className="text-red-600 text-sm text-center">{error}</p>
+          )}
+
+          {success && (
+            <p className="text-green-600 text-sm text-center">{success}</p>
+          )}
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+            className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition duration-200 disabled:opacity-50"
           >
             {loading ? 'Iniciando sesión...' : 'Login'}
           </button>
