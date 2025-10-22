@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 
 export default function LoginPage() {
   const router = useRouter()
+
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -15,66 +16,56 @@ export default function LoginPage() {
     setLoading(true)
     setError('')
 
-    try {
-      const res = await fetch('/api/login', {
-        method: 'POST',
-        body: JSON.stringify({ email, password }),
-        headers: { 'Content-Type': 'application/json' },
-      })
+    const res = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    })
 
-      if (!res.ok) {
-        const text = await res.text()
-        setError(text || 'Login failed')
-        setLoading(false)
-        return
-      }
+    const data = await res.json()
 
-      router.push('/dashboard')
-    } catch (err) {
-      console.error('Login error:', err)
-      setError('An unexpected error occurred')
+    if (!res.ok) {
+      setError(data.message || 'Login failed')
       setLoading(false)
+    } else {
+      router.push('/dashboard')
     }
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100 px-4">
-      <div className="max-w-md w-full bg-white p-8 shadow-lg rounded-xl">
-        <h1 className="text-2xl font-bold mb-6 text-center text-gray-800">Login</h1>
-
-        {error && (
-          <div className="mb-4 text-sm text-red-600 bg-red-100 p-2 rounded">{error}</div>
-        )}
-
+    <div className="min-h-screen bg-gray-100 flex items-center justify-center px-4">
+      <div className="max-w-md w-full bg-white shadow-2xl rounded-2xl p-8">
+        <h2 className="text-2xl font-bold mb-6 text-center text-gray-800">Kline Task Manager</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700">Email</label>
             <input
               type="email"
-              className="w-full border px-3 py-2 rounded shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:ring-blue-500 focus:border-blue-500"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
             />
           </div>
-
           <div>
             <label className="block text-sm font-medium text-gray-700">Password</label>
             <input
               type="password"
-              className="w-full border px-3 py-2 rounded shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:ring-blue-500 focus:border-blue-500"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
             />
           </div>
 
+          {error && <p className="text-red-600 text-sm text-center">{error}</p>}
+
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded transition"
+            className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
           >
-            {loading ? 'Logging in...' : 'Login'}
+            {loading ? 'Iniciando sesión...' : 'Login'}
           </button>
         </form>
       </div>
