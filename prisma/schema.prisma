@@ -1,0 +1,125 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Customer {
+  id             String   @id @default(uuid())
+  fullName       String
+  email          String   @unique
+  phone          String
+  billingAddress String
+  billingCity    String
+  billingState   String
+  billingZip     String
+  serviceAddress String
+  serviceCity    String
+  serviceState   String
+  serviceZip     String
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  createdBy      String?
+  updatedBy      String?
+
+  tasks      Task[]
+  properties Property[]
+}
+
+model Property {
+  id         String   @id @default(uuid())
+  customerId String
+  address    String
+  city       String
+  state      String
+  zip        String
+  customer   Customer @relation(fields: [customerId], references: [id])
+  tasks      Task[]
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Service {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdBy   String?
+  updatedBy   String?
+
+  tasks Task[]
+}
+
+model TaskStatus {
+  id           String   @id @default(uuid())
+  name         String   @unique
+  notifyClient Boolean  @default(false)
+  color        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  createdBy    String?
+  updatedBy    String?
+
+  tasks Task[]
+}
+
+model Task {
+  id           String     @id @default(uuid())
+  customerId   String
+  serviceId    String
+  statusId     String
+  propertyId   String
+  notes        String?
+  scheduledFor DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  createdBy    String?
+  updatedBy    String?
+
+  customer     Customer   @relation(fields: [customerId], references: [id])
+  service      Service    @relation(fields: [serviceId], references: [id])
+  status       TaskStatus @relation(fields: [statusId], references: [id])
+  property     Property   @relation(fields: [propertyId], references: [id])
+  media        TaskMedia[]
+}
+
+model TaskMedia {
+  id         String   @id @default(uuid())
+  url        String
+  taskId     String
+  uploadedAt DateTime @default(now())
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  userId      String
+  action      String
+  description String?
+  entity      String
+  entityId    String
+  timestamp   DateTime @default(now())
+  details     Json?
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  role      Role     @default(VIEWER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum Role {
+  ADMIN
+  VIEWER
+}
