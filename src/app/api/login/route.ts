@@ -1,23 +1,35 @@
+// app/api/login/route.ts
 import { NextResponse } from 'next/server'
-import prisma from '@/lib/prisma'
-import { verifyPassword } from '@/lib/auth'
-import { cookies } from 'next/headers'
+import { compare } from 'bcryptjs'
+import { prisma } from '@/lib/prisma'
+import { sign } from 'jsonwebtoken'
 
 export async function POST(req: Request) {
-  const { email, password } = await req.json()
+  try {
+    const { email, password } = await req.json()
 
-  const user = await prisma.user.findUnique({ where: { email } })
-  if (!user) return new NextResponse('Invalid credentials', { status: 401 })
+    if (!email || !password) {
+      return NextResponse.json({ message: 'Email y contraseña requeridos' }, { status: 400 })
+    }
 
-  const isValid = await verifyPassword(password, user.password)
-  if (!isValid) return new NextResponse('Invalid credentials', { status: 401 })
+    const user = await prisma.user.findUnique({ where: { email } })
 
-  // ✅ Aquí agregamos await porque cookies() devuelve una promesa
-  const cookieStore = await cookies()
-  cookieStore.set('userId', user.id, {
-    httpOnly: true,
-    path: '/',
-  })
+    if (!user || !(await compare(password, user.password))) {
+      return NextResponse.json({ message: 'Credenciales inválidas' }, { status: 401 })
+    }
 
-  return NextResponse.json({ message: 'Logged in successfully' })
+    const token = sign({ userId: user.id }, process.env.JWT_SECRET!, { expiresIn: '7d' })
+
+    const response = NextResponse.json({ message: 'Login exitoso' })
+    response.cookies.set('token', token, {
+      httpOnly: true,
+      path: '/',
+      secure: process.env.NODE_ENV === 'production',
+    })
+
+    return response
+  } catch (error) {
+    console.error('Error en login:', error)
+    return NextResponse.json({ message: 'Error del servidor' }, { status: 500 })
+  }
 }
