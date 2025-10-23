@@ -5,57 +5,75 @@
 }
 
 :root {
-  /* Colores de Kline Brothers - balanceados */
-  --kline-green: #0a5c36;
-  --kline-green-light: #1a7d4e;
-  --kline-blue: #1e3a5f;
-  --kline-blue-light: #2d4a7a;
+  /* COLORES REALES DE KLINE BROTHERS */
+  --kline-red: #e30613;
+  --kline-red-dark: #c40510;
+  --kline-yellow: #ffc600;
+  --kline-yellow-light: #ffd84d;
   --kline-white: #ffffff;
-  --kline-gray-light: #f8f9fa;
-  --kline-gray: #e9ecef;
-  --kline-text: #1e3a5f;
+  --kline-gray-light: #f5f5f5;
+  --kline-gray: #e5e5e5;
+  --kline-text: #333333;
+  --kline-text-light: #666666;
 }
 
 body {
   font-family: 'Arial', sans-serif;
-  background: linear-gradient(135deg, var(--kline-blue) 0%, var(--kline-green) 100%);
+  background: var(--kline-gray-light);
   color: var(--kline-text);
   min-height: 100vh;
 }
 
-/* CLASES REUTILIZABLES */
+/* SISTEMA DE DISEÑO KLINE */
 .kline-card {
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(20px);
-  border-radius: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  box-shadow: 0 20px 60px rgba(10, 92, 54, 0.15);
+  background: var(--kline-white);
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--kline-gray);
 }
 
 .kline-btn-primary {
-  background: linear-gradient(135deg, var(--kline-blue), var(--kline-green));
+  background: linear-gradient(135deg, var(--kline-red), var(--kline-red-dark));
   color: white;
   border: none;
   padding: 1rem 2rem;
-  border-radius: 12px;
+  border-radius: 8px;
   font-weight: 600;
   font-size: 1.1rem;
   cursor: pointer;
   transition: all 0.3s ease;
-  box-shadow: 0 8px 25px rgba(10, 92, 54, 0.3);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .kline-btn-primary:hover {
+  background: linear-gradient(135deg, var(--kline-red-dark), var(--kline-red));
   transform: translateY(-2px);
-  box-shadow: 0 12px 30px rgba(10, 92, 54, 0.4);
+  box-shadow: 0 6px 20px rgba(227, 6, 19, 0.3);
+}
+
+.kline-btn-secondary {
+  background: var(--kline-yellow);
+  color: var(--kline-text);
+  border: none;
+  padding: 1rem 2rem;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.kline-btn-secondary:hover {
+  background: var(--kline-yellow-light);
+  transform: translateY(-2px);
 }
 
 .kline-input {
   width: 100%;
-  padding: 1rem 1.25rem;
-  background: rgba(248, 249, 250, 0.8);
+  padding: 1rem;
+  background: var(--kline-white);
   border: 2px solid var(--kline-gray);
-  border-radius: 12px;
+  border-radius: 8px;
   font-size: 1rem;
   color: var(--kline-text);
   transition: all 0.3s ease;
@@ -63,18 +81,17 @@ body {
 
 .kline-input:focus {
   outline: none;
-  border-color: var(--kline-green);
+  border-color: var(--kline-red);
+  box-shadow: 0 0 0 3px rgba(227, 6, 19, 0.1);
+}
+
+.kline-header {
   background: var(--kline-white);
-  box-shadow: 0 0 0 3px rgba(10, 92, 54, 0.1);
+  border-bottom: 3px solid var(--kline-red);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
 }
 
-.kline-gradient-bg {
-  background: linear-gradient(135deg, var(--kline-blue) 0%, var(--kline-green) 50%, var(--kline-blue-light) 100%);
-}
-
-.kline-text-gradient {
-  background: linear-gradient(135deg, var(--kline-blue), var(--kline-green));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+.kline-accent {
+  color: var(--kline-red);
+  font-weight: bold;
 }

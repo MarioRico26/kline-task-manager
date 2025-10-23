@@ -32,34 +32,52 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="kline-gradient-bg" style={{ 
+    <div style={{ 
       minHeight: '100vh',
+      background: 'var(--kline-gray-light)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      padding: '1rem',
-      position: 'relative'
+      padding: '1rem'
     }}>
       <div style={{ maxWidth: '440px', width: '100%' }}>
-        <div className="kline-card" style={{ padding: '3rem' }}>
+        <div className="kline-card" style={{ padding: '3rem', position: 'relative' }}>
+          {/* Accent bar */}
+          <div style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            height: '4px',
+            background: 'linear-gradient(90deg, var(--kline-red), var(--kline-yellow))',
+            borderTopLeftRadius: '12px',
+            borderTopRightRadius: '12px'
+          }}></div>
+          
           {/* Header */}
-          <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
+          <div style={{ textAlign: 'center', marginBottom: '2.5rem', marginTop: '1rem' }}>
             <div style={{
               width: '80px',
               height: '80px',
-              background: 'linear-gradient(135deg, var(--kline-blue), var(--kline-green))',
-              borderRadius: '16px',
+              background: 'var(--kline-red)',
+              borderRadius: '12px',
               margin: '0 auto 1.5rem',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center'
+              justifyContent: 'center',
+              boxShadow: '0 4px 15px rgba(227, 6, 19, 0.3)'
             }}>
               <span style={{ color: 'white', fontWeight: 'bold', fontSize: '2rem' }}>K</span>
             </div>
-            <h1 style={{ fontSize: '2.5rem', fontWeight: '700', marginBottom: '0.5rem' }} className="kline-text-gradient">
-              KLINE TASKS
+            <h1 style={{ 
+              fontSize: '2.5rem', 
+              fontWeight: '700', 
+              color: 'var(--kline-text)',
+              marginBottom: '0.5rem'
+            }}>
+              KLINE <span style={{ color: 'var(--kline-red)' }}>TASKS</span>
             </h1>
-            <p style={{ color: 'var(--kline-text)', opacity: 0.8, fontSize: '1.1rem' }}>
+            <p style={{ color: 'var(--kline-text-light)', fontSize: '1.1rem' }}>
               Professional Task Management
             </p>
           </div>
@@ -98,11 +116,16 @@ export default function LoginPage() {
               type="submit"
               disabled={loading}
               className="kline-btn-primary"
-              style={{ width: '100', opacity: loading ? 0.7 : 1 }}
+              style={{ width: '100%', opacity: loading ? 0.7 : 1 }}
             >
-              {loading ? 'Signing in...' : 'Sign in to Dashboard'}
+              {loading ? 'Signing in...' : 'SIGN IN TO DASHBOARD'}
             </button>
           </form>
+        </div>
+        
+        {/* Footer */}
+        <div style={{ textAlign: 'center', marginTop: '2rem', color: 'var(--kline-text-light)' }}>
+          <p>Kline Brothers Task Management System</p>
         </div>
       </div>
     </div>
