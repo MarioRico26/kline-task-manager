@@ -1,63 +1,9 @@
 import { NextResponse } from 'next/server'
 import { PrismaClient } from '@prisma/client'
+import { uploadFile } from '@/lib/upload'
+import { sendTaskUpdateEmail } from '@/lib/email'
 
 const prisma = new PrismaClient()
-
-export async function GET() {
-  try {
-    const tasks = await prisma.task.findMany({
-      include: {
-        customer: {
-          select: {
-            id: true,
-            fullName: true,
-            email: true
-          }
-        },
-        property: {
-          select: {
-            id: true,
-            address: true,
-            city: true,
-            state: true
-          }
-        },
-        service: {
-          select: {
-            id: true,
-            name: true,
-            description: true
-          }
-        },
-        status: {
-          select: {
-            id: true,
-            name: true,
-            color: true,
-            notifyClient: true
-          }
-        },
-        media: {
-          select: {
-            id: true,
-            url: true
-          }
-        }
-      },
-      orderBy: {
-        createdAt: 'desc'
-      }
-    })
-
-    return NextResponse.json(tasks)
-  } catch (error) {
-    console.error('Error fetching tasks:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
-  }
-}
 
 export async function POST(request: Request) {
   try {
@@ -79,7 +25,7 @@ export async function POST(request: Request) {
       )
     }
 
-    // Obtener datos relacionados para el email
+    // Obtener datos relacionados
     const [customer, property, service, status] = await Promise.all([
       prisma.customer.findUnique({ where: { id: customerId } }),
       prisma.property.findUnique({ where: { id: propertyId } }),
@@ -113,34 +59,51 @@ export async function POST(request: Request) {
       }
     })
 
-    // Subir imágenes si existen (OPCIONAL)
+    // Subir imágenes si existen
     const uploadedImages: string[] = []
     if (files && files.length > 0) {
       for (const file of files) {
         if (file.size > 0) {
-          // Aquí iría tu lógica de upload a Vercel Blob
-          // Por ahora solo simulamos
-          console.log('Uploading file:', file.name)
-          
-          // Simular URL de imagen
-          const fakeUrl = `https://example.com/tasks/${task.id}/${file.name}`
-          
-          await prisma.taskMedia.create({
-            data: {
-              url: fakeUrl,
-              taskId: task.id,
-            }
-          })
-          
-          uploadedImages.push(fakeUrl)
+          try {
+            const imageUrl = await uploadFile(file, task.id)
+            
+            await prisma.taskMedia.create({
+              data: {
+                url: imageUrl,
+                taskId: task.id,
+              }
+            })
+            
+            uploadedImages.push(imageUrl)
+          } catch (uploadError) {
+            console.error('Error uploading file:', uploadError)
+            // Continuar con otras imágenes incluso si una falla
+          }
         }
       }
     }
 
     // Enviar email si el status notifica al cliente
-    if (status.notifyClient) {
-      console.log('Would send email to:', customer.email)
-      // Aquí iría tu lógica de envío de email
+    if (status.notifyClient && customer.email) {
+      try {
+        const emailData = {
+          to: customer.email,
+          subject: `Service Update: ${service.name}`,
+          customerName: customer.fullName,
+          service: service.name,
+          property: `${property.address}, ${property.city}, ${property.state} ${property.zip}`,
+          status: status.name,
+          scheduledFor: task.scheduledFor?.toISOString() || null,
+          notes: task.notes,
+          images: uploadedImages
+        }
+
+        await sendTaskUpdateEmail(emailData)
+        console.log('Email sent successfully to:', customer.email)
+      } catch (emailError) {
+        console.error('Failed to send email:', emailError)
+        // No fallar la creación de la tarea si el email falla
+      }
     }
 
     return NextResponse.json(task)
