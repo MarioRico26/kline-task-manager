@@ -41,7 +41,6 @@ export default function PropertiesPage() {
   const fetchData = async () => {
     try {
       setLoading(true)
-      // Fetch properties and customers in parallel
       const [propertiesRes, customersRes] = await Promise.all([
         fetch('/api/properties'),
         fetch('/api/customers')
@@ -102,10 +101,6 @@ export default function PropertiesPage() {
     
     return matchesSearch && matchesCustomer
   })
-
-  const formatAddress = (property: Property) => {
-    return `${property.address}, ${property.city}, ${property.state} ${property.zip}`
-  }
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--kline-gray-light)' }}>
@@ -234,7 +229,7 @@ export default function PropertiesPage() {
           </div>
         </div>
 
-        {/* Properties Grid */}
+        {/* Properties Table - Compact View */}
         {loading ? (
           <div className="kline-card" style={{ padding: '3rem', textAlign: 'center', color: 'var(--kline-text-light)' }}>
             Loading properties...
@@ -252,117 +247,225 @@ export default function PropertiesPage() {
             </button>
           </div>
         ) : (
-          <div style={{ display: 'grid', gap: '1.5rem' }}>
+          <div className="kline-card" style={{ overflow: 'hidden' }}>
+            {/* Table Header */}
+            <div style={{ 
+              display: 'grid', 
+              gridTemplateColumns: '2fr 1.5fr 1fr 1fr auto',
+              padding: '1rem 1.5rem',
+              background: 'var(--kline-gray-light)',
+              borderBottom: '2px solid var(--kline-gray)',
+              fontWeight: '600',
+              color: 'var(--kline-text)',
+              fontSize: '0.85rem'
+            }}>
+              <div>Address & Customer</div>
+              <div>City</div>
+              <div>State</div>
+              <div>ZIP</div>
+              <div>Actions</div>
+            </div>
+
+            {/* Table Rows */}
             {filteredProperties.map((property) => (
-              <div key={property.id} className="kline-card" style={{ padding: '1.5rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
-                  <div style={{ flex: 1 }}>
-                    <h3 style={{ fontSize: '1.3rem', fontWeight: '700', color: 'var(--kline-text)', marginBottom: '0.5rem' }}>
-                      {property.address}
-                    </h3>
-                    <p style={{ color: 'var(--kline-text-light)', marginBottom: '0.5rem' }}>
-                      {property.city}, {property.state} {property.zip}
-                    </p>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <span style={{ 
-                        background: 'var(--kline-blue)', 
-                        color: 'white', 
-                        padding: '0.3rem 0.8rem', 
-                        borderRadius: '20px', 
-                        fontSize: '0.8rem',
-                        fontWeight: '600'
-                      }}>
-                        Owner: {property.customer.fullName}
-                      </span>
-                      <span style={{ color: 'var(--kline-text-light)', fontSize: '0.8rem' }}>
-                        {property.customer.email}
-                      </span>
-                    </div>
+              <div 
+                key={property.id}
+                style={{ 
+                  display: 'grid', 
+                  gridTemplateColumns: '2fr 1.5fr 1fr 1fr auto',
+                  padding: '1rem 1.5rem',
+                  borderBottom: '1px solid var(--kline-gray)',
+                  alignItems: 'center',
+                  fontSize: '0.85rem',
+                  transition: 'background 0.2s ease'
+                }}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.background = 'var(--kline-gray-light)'
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.background = 'transparent'
+                }}
+              >
+                {/* Address & Customer Column */}
+                <div>
+                  <div style={{ fontWeight: '500', marginBottom: '0.25rem' }}>
+                    {property.address}
                   </div>
-                  <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    <button 
-                      style={{ 
-                        background: 'var(--kline-yellow)',
-                        border: 'none',
-                        color: 'var(--kline-text)',
-                        padding: '0.5rem 1rem',
-                        borderRadius: '6px',
-                        cursor: 'pointer',
-                        fontWeight: '600',
-                        fontSize: '0.8rem',
-                        transition: 'all 0.3s ease'
-                      }}
-                      onMouseOver={(e) => {
-                        e.currentTarget.style.background = 'var(--kline-yellow-light)'
-                        e.currentTarget.style.transform = 'translateY(-1px)'
-                      }}
-                      onMouseOut={(e) => {
-                        e.currentTarget.style.background = 'var(--kline-yellow)'
-                        e.currentTarget.style.transform = 'translateY(0)'
-                      }}
-                      onClick={() => setEditingProperty(property)}
-                    >
-                      Edit
-                    </button>
-                    <button 
-                      style={{ 
-                        padding: '0.5rem 1rem', 
-                        fontSize: '0.8rem',
-                        background: 'transparent',
-                        border: '2px solid var(--kline-red)',
-                        color: 'var(--kline-red)',
-                        borderRadius: '6px',
-                        cursor: 'pointer',
-                        fontWeight: '600',
-                        transition: 'all 0.3s ease'
-                      }}
-                      onMouseOver={(e) => {
-                        e.currentTarget.style.background = 'var(--kline-red)'
-                        e.currentTarget.style.color = 'white'
-                      }}
-                      onMouseOut={(e) => {
-                        e.currentTarget.style.background = 'transparent'
-                        e.currentTarget.style.color = 'var(--kline-red)'
-                      }}
-                      onClick={() => setDeletingProperty(property)}
-                    >
-                      Delete
-                    </button>
+                  <div style={{ 
+                    color: 'var(--kline-blue)', 
+                    fontSize: '0.75rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem'
+                  }}>
+                    <span style={{ 
+                      background: 'var(--kline-blue)', 
+                      color: 'white', 
+                      padding: '0.2rem 0.5rem', 
+                      borderRadius: '12px', 
+                      fontSize: '0.7rem'
+                    }}>
+                      Owner
+                    </span>
+                    {property.customer.fullName}
                   </div>
                 </div>
-                <div style={{ color: 'var(--kline-text-light)', fontSize: '0.8rem' }}>
-                  Added: {new Date(property.createdAt).toLocaleDateString()}
+
+                {/* City Column */}
+                <div style={{ color: 'var(--kline-text)' }}>
+                  {property.city}
+                </div>
+
+                {/* State Column */}
+                <div>
+                  <span style={{ 
+                    background: 'rgba(30, 58, 95, 0.1)',
+                    color: 'var(--kline-blue)',
+                    padding: '0.3rem 0.6rem',
+                    borderRadius: '12px',
+                    fontSize: '0.75rem',
+                    fontWeight: '600'
+                  }}>
+                    {property.state}
+                  </span>
+                </div>
+
+                {/* ZIP Column */}
+                <div style={{ 
+                  color: 'var(--kline-text-light)', 
+                  fontFamily: 'monospace',
+                  fontSize: '0.8rem'
+                }}>
+                  {property.zip}
+                </div>
+
+                {/* Actions Column */}
+                <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                  <button 
+                    style={{ 
+                      background: 'var(--kline-yellow)',
+                      border: 'none',
+                      color: 'var(--kline-text)',
+                      padding: '0.4rem 0.8rem',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontWeight: '600',
+                      fontSize: '0.75rem',
+                      transition: 'all 0.2s ease',
+                      minWidth: '60px'
+                    }}
+                    onMouseOver={(e) => {
+                      e.currentTarget.style.background = 'var(--kline-yellow-light)'
+                      e.currentTarget.style.transform = 'translateY(-1px)'
+                    }}
+                    onMouseOut={(e) => {
+                      e.currentTarget.style.background = 'var(--kline-yellow)'
+                      e.currentTarget.style.transform = 'translateY(0)'
+                    }}
+                    onClick={() => setEditingProperty(property)}
+                  >
+                    Edit
+                  </button>
+                  <button 
+                    style={{ 
+                      padding: '0.4rem 0.8rem', 
+                      fontSize: '0.75rem',
+                      background: 'transparent',
+                      border: '1px solid var(--kline-red)',
+                      color: 'var(--kline-red)',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontWeight: '600',
+                      transition: 'all 0.2s ease',
+                      minWidth: '60px'
+                    }}
+                    onMouseOver={(e) => {
+                      e.currentTarget.style.background = 'var(--kline-red)'
+                      e.currentTarget.style.color = 'white'
+                    }}
+                    onMouseOut={(e) => {
+                      e.currentTarget.style.background = 'transparent'
+                      e.currentTarget.style.color = 'var(--kline-red)'
+                    }}
+                    onClick={() => setDeletingProperty(property)}
+                  >
+                    Delete
+                  </button>
                 </div>
               </div>
             ))}
 
             {filteredProperties.length === 0 && (
-              <div className="kline-card" style={{ padding: '3rem', textAlign: 'center', color: 'var(--kline-text-light)' }}>
+              <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--kline-text-light)' }}>
                 {properties.length === 0 ? 'No properties found' : 'No properties match your search'}
               </div>
             )}
           </div>
         )}
 
-        {/* Stats */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginTop: '2rem' }}>
-          <div className="kline-card" style={{ padding: '1.5rem', textAlign: 'center' }}>
-            <div style={{ fontSize: '2rem', fontWeight: '700', color: 'var(--kline-red)' }}>
+        {/* Compact Stats */}
+        <div style={{ 
+          display: 'grid', 
+          gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', 
+          gap: '0.75rem', 
+          marginTop: '1.5rem' 
+        }}>
+          <div className="kline-card" style={{ 
+            padding: '1rem', 
+            textAlign: 'center',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '0.5rem'
+          }}>
+            <div style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--kline-red)' }}>
               {properties.length}
             </div>
-            <div style={{ color: 'var(--kline-text-light)', fontSize: '0.9rem' }}>Total Properties</div>
+            <div style={{ 
+              color: 'var(--kline-text-light)', 
+              fontSize: '0.8rem',
+              fontWeight: '600'
+            }}>
+              Total Properties
+            </div>
           </div>
-          <div className="kline-card" style={{ padding: '1.5rem', textAlign: 'center' }}>
-            <div style={{ fontSize: '2rem', fontWeight: '700', color: 'var(--kline-red)' }}>
+          <div className="kline-card" style={{ 
+            padding: '1rem', 
+            textAlign: 'center',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '0.5rem'
+          }}>
+            <div style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--kline-red)' }}>
               {new Set(properties.map(p => p.customerId)).size}
             </div>
-            <div style={{ color: 'var(--kline-text-light)', fontSize: '0.9rem' }}>Customers with Properties</div>
-          </div>
-          <div className="kline-card" style={{ padding: '1.5rem', textAlign: 'center' }}>
-            <div style={{ fontSize: '2rem', fontWeight: '700', color: 'var(--kline-red)' }}>
-              {new Set(properties.map(p => p.state)).size}
+            <div style={{ 
+              color: 'var(--kline-text-light)', 
+              fontSize: '0.8rem',
+              fontWeight: '600'
+            }}>
+              Active Customers
             </div>
-            <div style={{ color: 'var(--kline-text-light)', fontSize: '0.9rem' }}>States Covered</div>
+          </div>
+          <div className="kline-card" style={{ 
+            padding: '1rem', 
+            textAlign: 'center',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '0.5rem'
+          }}>
+            <div style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--kline-red)' }}>
+              {Math.round(properties.length / Math.max(new Set(properties.map(p => p.customerId)).size, 1))}
+            </div>
+            <div style={{ 
+              color: 'var(--kline-text-light)', 
+              fontSize: '0.8rem',
+              fontWeight: '600'
+            }}>
+              Avg per Customer
+            </div>
           </div>
         </div>
       </main>
