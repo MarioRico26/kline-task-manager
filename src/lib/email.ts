@@ -1,5 +1,15 @@
 import nodemailer from 'nodemailer';
 
+// DEBUG: Verificar qué variables se están cargando
+console.log('🔍 DEBUG - Environment variables:', {
+  EMAIL_HOST: process.env.EMAIL_HOST,
+  EMAIL_PORT: process.env.EMAIL_PORT,
+  EMAIL_USER: process.env.EMAIL_USER ? '✅ SET' : '❌ MISSING',
+  EMAIL_PASS: process.env.EMAIL_PASS ? '✅ SET' : '❌ MISSING',
+  EMAIL_FROM: process.env.EMAIL_FROM,
+  NODE_ENV: process.env.NODE_ENV
+});
+
 // Configurar el transporter con tus credenciales SMTP de Gmail
 const transporter = nodemailer.createTransport({
   host: process.env.EMAIL_HOST || 'smtp.gmail.com',
