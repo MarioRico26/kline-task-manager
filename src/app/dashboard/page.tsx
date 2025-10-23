@@ -24,16 +24,6 @@ interface DashboardStats {
   }>
 }
 
-interface NavigationCard {
-  title: string
-  description: string
-  count: number
-  route: string
-  color: string
-  icon: string
-  subtitle: string
-}
-
 export default function Dashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [loading, setLoading] = useState(true)
@@ -81,12 +71,28 @@ export default function Dashboard() {
   // 🔐 REDIRECCIÓN SI NO ESTÁ AUTENTICADO
   if (isAuthenticated === false) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-16 h-16 bg-red-600 rounded-lg mx-auto mb-4 flex items-center justify-center">
-            <span className="text-white font-bold text-xl">K</span>
+      <div style={{ 
+        minHeight: '100vh', 
+        background: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)',
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center' 
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{
+            width: '80px',
+            height: '80px',
+            background: 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)',
+            borderRadius: '16px',
+            margin: '0 auto 20px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 10px 25px rgba(220, 38, 38, 0.3)'
+          }}>
+            <span style={{ color: 'white', fontWeight: 'bold', fontSize: '2rem' }}>K</span>
           </div>
-          <p className="text-gray-600">Redirecting to login...</p>
+          <p style={{ color: '#64748b', fontSize: '1.1rem', fontWeight: '500' }}>Redirecting to login...</p>
         </div>
       </div>
     )
@@ -97,13 +103,13 @@ export default function Dashboard() {
     window.location.href = '/auth/login'
   }
 
-  const navigationCards: NavigationCard[] = [
+  const navigationCards = [
     {
       title: 'Task Management',
       description: 'Manage and track service tasks',
       count: stats?.totalTasks || 0,
       route: '/tasks',
-      color: 'from-blue-600 to-blue-800',
+      color: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
       icon: '📋',
       subtitle: 'Active Tasks'
     },
@@ -112,7 +118,7 @@ export default function Dashboard() {
       description: 'Manage customer information and profiles',
       count: stats?.totalCustomers || 0,
       route: '/customers',
-      color: 'from-green-600 to-green-800',
+      color: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
       icon: '👥',
       subtitle: 'Total Clients'
     },
@@ -121,7 +127,7 @@ export default function Dashboard() {
       description: 'Manage service offerings and pricing',
       count: stats?.totalServices || 0,
       route: '/services', 
-      color: 'from-purple-600 to-purple-800',
+      color: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
       icon: '🛠️',
       subtitle: 'Services'
     },
@@ -130,7 +136,7 @@ export default function Dashboard() {
       description: 'Manage system users and permissions',
       count: stats?.totalUsers || 0,
       route: '/users',
-      color: 'from-red-600 to-red-800',
+      color: 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)',
       icon: '👤',
       subtitle: 'System Users'
     },
@@ -139,7 +145,7 @@ export default function Dashboard() {
       description: 'Manage customer properties and locations',
       count: stats?.totalProperties || 0,
       route: '/properties',
-      color: 'from-orange-600 to-orange-800',
+      color: 'linear-gradient(135deg, #ea580c 0%, #c2410c 100%)',
       icon: '🏢',
       subtitle: 'Properties'
     },
@@ -148,231 +154,330 @@ export default function Dashboard() {
       description: 'Configure task statuses and workflows',
       count: stats?.totalStatuses || 0,
       route: '/statuses',
-      color: 'from-indigo-600 to-indigo-800',
+      color: 'linear-gradient(135deg, #4f46e5 0%, #4338ca 100%)',
       icon: '📊',
       subtitle: 'Status Types'
     }
   ]
 
-  // Métricas clave con diseño corporativo
+  // Métricas clave
   const renderKeyMetrics = () => {
     const completionRate = stats?.totalTasks ? Math.round((stats.completedTasks / stats.totalTasks) * 100) : 0
     
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 transform transition-all duration-300 hover:scale-105">
-          <div className="flex items-center justify-between">
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+        gap: '24px',
+        marginBottom: '32px'
+      }}>
+        {/* Total Tasks Card */}
+        <div style={{
+          background: 'white',
+          borderRadius: '16px',
+          padding: '24px',
+          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)',
+          border: '1px solid #e2e8f0',
+          transition: 'all 0.3s ease',
+          cursor: 'pointer'
+        }} onMouseOver={(e) => {
+          e.currentTarget.style.transform = 'translateY(-4px)'
+          e.currentTarget.style.boxShadow = '0 8px 30px rgba(0, 0, 0, 0.12)'
+        }} onMouseOut={(e) => {
+          e.currentTarget.style.transform = 'translateY(0)'
+          e.currentTarget.style.boxShadow = '0 4px 20px rgba(0, 0, 0, 0.08)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
             <div>
-              <p className="text-sm font-medium text-gray-600 uppercase tracking-wide">Total Tasks</p>
-              <p className="text-3xl font-bold text-gray-900 mt-2">{stats?.totalTasks || 0}</p>
+              <p style={{ fontSize: '14px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                Total Tasks
+              </p>
+              <p style={{ fontSize: '2.5rem', fontWeight: 'bold', color: '#1e293b', margin: '8px 0 0 0' }}>
+                {stats?.totalTasks || 0}
+              </p>
             </div>
-            <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-blue-700 rounded-xl flex items-center justify-center shadow-md">
-              <span className="text-2xl text-white">📋</span>
+            <div style={{
+              width: '56px',
+              height: '56px',
+              background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
+              borderRadius: '12px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)'
+            }}>
+              <span style={{ fontSize: '1.5rem', color: 'white' }}>📋</span>
             </div>
           </div>
-          <div className="mt-6">
-            <div className="flex justify-between text-sm mb-2">
-              <span className="text-green-600 font-semibold">{stats?.completedTasks || 0} completed</span>
-              <span className="text-gray-500 font-medium">{completionRate}%</span>
+          <div style={{ marginTop: '20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', marginBottom: '8px' }}>
+              <span style={{ color: '#059669', fontWeight: '600' }}>{stats?.completedTasks || 0} completed</span>
+              <span style={{ color: '#64748b', fontWeight: '500' }}>{completionRate}%</span>
             </div>
-            <div className="w-full bg-gray-200 rounded-full h-3">
-              <div 
-                className="bg-gradient-to-r from-green-500 to-green-600 h-3 rounded-full transition-all duration-1000 shadow-sm"
-                style={{ width: `${completionRate}%` }}
-              />
+            <div style={{ width: '100%', background: '#e2e8f0', borderRadius: '8px', height: '8px' }}>
+              <div style={{ 
+                background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                height: '8px',
+                borderRadius: '8px',
+                transition: 'width 1s ease',
+                width: `${completionRate}%`
+              }} />
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 transform transition-all duration-300 hover:scale-105">
-          <div className="flex items-center justify-between">
+        {/* Customers Card */}
+        <div style={{
+          background: 'white',
+          borderRadius: '16px',
+          padding: '24px',
+          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)',
+          border: '1px solid #e2e8f0',
+          transition: 'all 0.3s ease',
+          cursor: 'pointer'
+        }} onMouseOver={(e) => {
+          e.currentTarget.style.transform = 'translateY(-4px)'
+          e.currentTarget.style.boxShadow = '0 8px 30px rgba(0, 0, 0, 0.12)'
+        }} onMouseOut={(e) => {
+          e.currentTarget.style.transform = 'translateY(0)'
+          e.currentTarget.style.boxShadow = '0 4px 20px rgba(0, 0, 0, 0.08)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
             <div>
-              <p className="text-sm font-medium text-gray-600 uppercase tracking-wide">Active Clients</p>
-              <p className="text-3xl font-bold text-gray-900 mt-2">{stats?.totalCustomers || 0}</p>
+              <p style={{ fontSize: '14px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                Active Clients
+              </p>
+              <p style={{ fontSize: '2.5rem', fontWeight: 'bold', color: '#1e293b', margin: '8px 0 0 0' }}>
+                {stats?.totalCustomers || 0}
+              </p>
             </div>
-            <div className="w-14 h-14 bg-gradient-to-br from-green-500 to-green-700 rounded-xl flex items-center justify-center shadow-md">
-              <span className="text-2xl text-white">👥</span>
+            <div style={{
+              width: '56px',
+              height: '56px',
+              background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+              borderRadius: '12px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
+            }}>
+              <span style={{ fontSize: '1.5rem', color: 'white' }}>👥</span>
             </div>
           </div>
-          <div className="mt-6 text-sm text-gray-600">
-            <div className="flex justify-between items-center py-2 border-b border-gray-100">
+          <div style={{ marginTop: '20px', fontSize: '14px', color: '#64748b' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>
               <span>Properties:</span>
-              <span className="font-semibold text-gray-900">{stats?.totalProperties || 0}</span>
+              <span style={{ fontWeight: '600', color: '#1e293b' }}>{stats?.totalProperties || 0}</span>
             </div>
-            <div className="flex justify-between items-center py-2">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0' }}>
               <span>Active Services:</span>
-              <span className="font-semibold text-gray-900">{stats?.totalServices || 0}</span>
+              <span style={{ fontWeight: '600', color: '#1e293b' }}>{stats?.totalServices || 0}</span>
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 transform transition-all duration-300 hover:scale-105">
-          <div className="flex items-center justify-between">
+        {/* Pending Tasks Card */}
+        <div style={{
+          background: 'white',
+          borderRadius: '16px',
+          padding: '24px',
+          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)',
+          border: '1px solid #e2e8f0',
+          transition: 'all 0.3s ease',
+          cursor: 'pointer'
+        }} onMouseOver={(e) => {
+          e.currentTarget.style.transform = 'translateY(-4px)'
+          e.currentTarget.style.boxShadow = '0 8px 30px rgba(0, 0, 0, 0.12)'
+        }} onMouseOut={(e) => {
+          e.currentTarget.style.transform = 'translateY(0)'
+          e.currentTarget.style.boxShadow = '0 4px 20px rgba(0, 0, 0, 0.08)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
             <div>
-              <p className="text-sm font-medium text-gray-600 uppercase tracking-wide">Pending Tasks</p>
-              <p className="text-3xl font-bold text-gray-900 mt-2">{stats?.pendingTasks || 0}</p>
+              <p style={{ fontSize: '14px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                Pending Tasks
+              </p>
+              <p style={{ fontSize: '2.5rem', fontWeight: 'bold', color: '#1e293b', margin: '8px 0 0 0' }}>
+                {stats?.pendingTasks || 0}
+              </p>
             </div>
-            <div className="w-14 h-14 bg-gradient-to-br from-orange-500 to-orange-700 rounded-xl flex items-center justify-center shadow-md">
-              <span className="text-2xl text-white">⏱️</span>
+            <div style={{
+              width: '56px',
+              height: '56px',
+              background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+              borderRadius: '12px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 4px 12px rgba(245, 158, 11, 0.3)'
+            }}>
+              <span style={{ fontSize: '1.5rem', color: 'white' }}>⏱️</span>
             </div>
           </div>
-          <div className="mt-6">
+          <div style={{ marginTop: '20px' }}>
             {stats?.overdueTasks && stats.overdueTasks > 0 ? (
-              <div className="flex items-center justify-between p-3 bg-red-50 rounded-lg border border-red-200">
-                <div className="flex items-center space-x-2">
-                  <span className="text-red-600">⚠️</span>
-                  <span className="text-red-800 font-semibold text-sm">{stats.overdueTasks} overdue</span>
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'space-between',
+                padding: '12px',
+                background: '#fef2f2',
+                borderRadius: '8px',
+                border: '1px solid #fecaca'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ color: '#dc2626', fontSize: '18px' }}>⚠️</span>
+                  <span style={{ color: '#dc2626', fontWeight: '600', fontSize: '14px' }}>
+                    {stats.overdueTasks} overdue
+                  </span>
                 </div>
-                <span className="text-red-600 text-xs font-medium">Attention needed</span>
+                <span style={{ color: '#dc2626', fontSize: '12px', fontWeight: '500' }}>Attention needed</span>
               </div>
             ) : (
-              <div className="text-center p-3 bg-green-50 rounded-lg border border-green-200">
-                <span className="text-green-800 font-semibold text-sm">All tasks on track</span>
+              <div style={{ 
+                textAlign: 'center',
+                padding: '12px',
+                background: '#f0fdf4',
+                borderRadius: '8px',
+                border: '1px solid #bbf7d0'
+              }}>
+                <span style={{ color: '#059669', fontWeight: '600', fontSize: '14px' }}>All tasks on track</span>
               </div>
             )}
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 transform transition-all duration-300 hover:scale-105">
-          <div className="flex items-center justify-between">
+        {/* Service Coverage Card */}
+        <div style={{
+          background: 'white',
+          borderRadius: '16px',
+          padding: '24px',
+          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)',
+          border: '1px solid #e2e8f0',
+          transition: 'all 0.3s ease',
+          cursor: 'pointer'
+        }} onMouseOver={(e) => {
+          e.currentTarget.style.transform = 'translateY(-4px)'
+          e.currentTarget.style.boxShadow = '0 8px 30px rgba(0, 0, 0, 0.12)'
+        }} onMouseOut={(e) => {
+          e.currentTarget.style.transform = 'translateY(0)'
+          e.currentTarget.style.boxShadow = '0 4px 20px rgba(0, 0, 0, 0.08)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
             <div>
-              <p className="text-sm font-medium text-gray-600 uppercase tracking-wide">Service Coverage</p>
-              <p className="text-3xl font-bold text-gray-900 mt-2">{stats?.totalServices || 0}</p>
+              <p style={{ fontSize: '14px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                Service Coverage
+              </p>
+              <p style={{ fontSize: '2.5rem', fontWeight: 'bold', color: '#1e293b', margin: '8px 0 0 0' }}>
+                {stats?.totalServices || 0}
+              </p>
             </div>
-            <div className="w-14 h-14 bg-gradient-to-br from-purple-500 to-purple-700 rounded-xl flex items-center justify-center shadow-md">
-              <span className="text-2xl text-white">🛠️</span>
+            <div style={{
+              width: '56px',
+              height: '56px',
+              background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
+              borderRadius: '12px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 4px 12px rgba(139, 92, 246, 0.3)'
+            }}>
+              <span style={{ fontSize: '1.5rem', color: 'white' }}>🛠️</span>
             </div>
           </div>
-          <div className="mt-6">
-            <div className="text-center p-3 bg-purple-50 rounded-lg border border-purple-200">
-              <span className="text-purple-800 font-semibold text-sm">Active service types</span>
+          <div style={{ marginTop: '20px' }}>
+            <div style={{ 
+              textAlign: 'center',
+              padding: '12px',
+              background: '#faf5ff',
+              borderRadius: '8px',
+              border: '1px solid #e9d5ff'
+            }}>
+              <span style={{ color: '#7c3aed', fontWeight: '600', fontSize: '14px' }}>Active service types</span>
             </div>
           </div>
         </div>
-      </div>
-    )
-  }
-
-  // Gráfico de barras profesional
-  const renderBarChart = () => {
-    if (!stats?.tasksByService || stats.tasksByService.length === 0) {
-      return (
-        <div className="text-center py-12 text-gray-500">
-          <div className="text-5xl mb-4">📊</div>
-          <p className="font-medium text-lg">No service data available</p>
-          <p className="text-sm mt-2">Service statistics will appear here</p>
-        </div>
-      )
-    }
-    
-    const maxCount = Math.max(...stats.tasksByService.map(item => item.count))
-    const topServices = stats.tasksByService.slice(0, 5)
-    
-    return (
-      <div className="space-y-5">
-        {topServices.map((item, index) => {
-          const percentage = maxCount > 0 ? (item.count / maxCount) * 100 : 0
-          return (
-            <div key={index} className="flex items-center space-x-4 group">
-              <div className="w-40 text-sm font-semibold text-gray-700 truncate">
-                {item.service}
-              </div>
-              <div className="flex-1">
-                <div className="bg-gray-100 rounded-full h-4 overflow-hidden shadow-inner">
-                  <div 
-                    className="bg-gradient-to-r from-blue-500 to-blue-700 h-4 rounded-full transition-all duration-1000 group-hover:from-blue-600 group-hover:to-blue-800"
-                    style={{ width: `${percentage}%` }}
-                  />
-                </div>
-              </div>
-              <div className="w-16 text-right">
-                <span className="font-bold text-gray-900 text-lg">{item.count}</span>
-                <span className="text-xs text-gray-500 ml-1">tasks</span>
-              </div>
-            </div>
-          )
-        })}
-      </div>
-    )
-  }
-
-  // Tabla de tareas recientes profesional
-  const renderRecentTasks = () => {
-    if (!stats?.recentTasks || stats.recentTasks.length === 0) {
-      return (
-        <div className="text-center py-12 text-gray-500">
-          <div className="text-5xl mb-4">📝</div>
-          <p className="font-medium text-lg">No recent tasks</p>
-          <p className="text-sm mt-2">Recently created tasks will appear here</p>
-        </div>
-      )
-    }
-
-    return (
-      <div className="overflow-hidden rounded-lg border border-gray-200">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
-            <tr>
-              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                Service & Customer
-              </th>
-              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                Location
-              </th>
-              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                Status
-              </th>
-              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                Scheduled
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {stats.recentTasks.map((task) => (
-              <tr key={task.id} className="hover:bg-blue-50 transition-colors duration-200">
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="font-semibold text-gray-900">{task.service}</div>
-                  <div className="text-sm text-gray-600">{task.customer}</div>
-                </td>
-                <td className="px-6 py-4">
-                  <div className="text-sm text-gray-900 max-w-xs truncate">
-                    {task.address}
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-200">
-                    {task.status}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                  {task.scheduledFor ? new Date(task.scheduledFor).toLocaleDateString() : 'Not scheduled'}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+    <div style={{ 
+      minHeight: '100vh', 
+      background: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)'
+    }}>
       {/* Header Corporativo */}
-      <header className="bg-white shadow-xl border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-6">
-            <div className="flex items-center space-x-4">
-              <div className="w-12 h-12 bg-gradient-to-br from-red-600 to-red-800 rounded-xl flex items-center justify-center shadow-lg">
-                <span className="text-white font-bold text-xl">K</span>
+      <header style={{
+        background: 'white',
+        boxShadow: '0 4px 25px rgba(0, 0, 0, 0.1)',
+        borderBottom: '1px solid #e2e8f0'
+      }}>
+        <div style={{ 
+          maxWidth: '1200px', 
+          margin: '0 auto', 
+          padding: '0 20px'
+        }}>
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center', 
+            padding: '20px 0'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              <div style={{
+                width: '48px',
+                height: '48px',
+                background: 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)',
+                borderRadius: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 6px 20px rgba(220, 38, 38, 0.3)'
+              }}>
+                <span style={{ color: 'white', fontWeight: 'bold', fontSize: '1.25rem' }}>K</span>
               </div>
               <div>
-                <h1 className="text-3xl font-bold text-gray-900">KLINE Task Manager</h1>
-                <p className="text-gray-600 font-medium">Service Management Dashboard</p>
+                <h1 style={{ 
+                  fontSize: '2rem', 
+                  fontWeight: 'bold', 
+                  color: '#1e293b',
+                  margin: 0
+                }}>
+                  KLINE Task Manager
+                </h1>
+                <p style={{ 
+                  color: '#64748b', 
+                  fontSize: '1rem',
+                  fontWeight: '500',
+                  margin: '4px 0 0 0'
+                }}>
+                  Service Management Dashboard
+                </p>
               </div>
             </div>
             <button 
               onClick={handleLogout}
-              className="px-6 py-3 bg-gradient-to-br from-red-600 to-red-800 text-white font-semibold rounded-xl hover:from-red-700 hover:to-red-900 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105"
+              style={{
+                padding: '12px 24px',
+                background: 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)',
+                color: 'white',
+                fontWeight: '600',
+                borderRadius: '12px',
+                border: 'none',
+                cursor: 'pointer',
+                boxShadow: '0 4px 15px rgba(220, 38, 38, 0.3)',
+                transition: 'all 0.3s ease'
+              }}
+              onMouseOver={(e) => {
+                e.currentTarget.style.background = 'linear-gradient(135deg, #b91c1c 0%, #991b1b 100%)'
+                e.currentTarget.style.transform = 'translateY(-2px)'
+                e.currentTarget.style.boxShadow = '0 6px 20px rgba(220, 38, 38, 0.4)'
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.background = 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)'
+                e.currentTarget.style.transform = 'translateY(0)'
+                e.currentTarget.style.boxShadow = '0 4px 15px rgba(220, 38, 38, 0.3)'
+              }}
             >
               Logout
             </button>
@@ -381,19 +486,46 @@ export default function Dashboard() {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main style={{ 
+        maxWidth: '1200px', 
+        margin: '0 auto', 
+        padding: '40px 20px'
+      }}>
         {loading ? (
-          <div className="text-center py-20">
-            <div className="w-16 h-16 border-4 border-gray-300 border-t-red-600 rounded-full animate-spin mx-auto mb-6"></div>
-            <p className="text-gray-600 text-lg font-medium">Loading dashboard data...</p>
+          <div style={{ textAlign: 'center', padding: '80px 20px' }}>
+            <div style={{ 
+              width: '60px', 
+              height: '60px', 
+              border: '4px solid #e2e8f0', 
+              borderTop: '4px solid #dc2626',
+              borderRadius: '50%',
+              animation: 'spin 1s linear infinite',
+              margin: '0 auto 20px'
+            }} />
+            <p style={{ color: '#64748b', fontSize: '1.125rem', fontWeight: '500' }}>
+              Loading dashboard data...
+            </p>
           </div>
         ) : (
           <>
             {/* Bienvenida */}
-            <div className="mb-10 text-center">
-              <h2 className="text-4xl font-bold text-gray-900 mb-3">Dashboard Overview</h2>
-              <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-                Welcome to your professional service management dashboard. Monitor performance and manage operations efficiently.
+            <div style={{ textAlign: 'center', marginBottom: '48px' }}>
+              <h2 style={{ 
+                fontSize: '2.5rem', 
+                fontWeight: 'bold', 
+                color: '#1e293b',
+                margin: '0 0 12px 0'
+              }}>
+                Dashboard Overview
+              </h2>
+              <p style={{ 
+                fontSize: '1.25rem', 
+                color: '#64748b',
+                maxWidth: '600px',
+                margin: '0 auto',
+                lineHeight: '1.6'
+              }}>
+                Welcome to your professional service management dashboard
               </p>
             </div>
 
@@ -401,64 +533,265 @@ export default function Dashboard() {
             {renderKeyMetrics()}
 
             {/* Navegación Principal */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))',
+              gap: '24px',
+              marginBottom: '48px'
+            }}>
               {navigationCards.map((card, index) => (
                 <div 
                   key={index}
-                  className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8 cursor-pointer transition-all duration-500 hover:shadow-2xl hover:border-gray-200 group transform hover:scale-105"
+                  style={{
+                    background: 'white',
+                    borderRadius: '20px',
+                    padding: '32px',
+                    boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)',
+                    border: '1px solid #e2e8f0',
+                    cursor: 'pointer',
+                    transition: 'all 0.4s ease',
+                    position: 'relative',
+                    overflow: 'hidden'
+                  }}
                   onClick={() => router.push(card.route)}
+                  onMouseOver={(e) => {
+                    e.currentTarget.style.transform = 'translateY(-8px)'
+                    e.currentTarget.style.boxShadow = '0 20px 40px rgba(0, 0, 0, 0.15)'
+                  }}
+                  onMouseOut={(e) => {
+                    e.currentTarget.style.transform = 'translateY(0)'
+                    e.currentTarget.style.boxShadow = '0 4px 20px rgba(0, 0, 0, 0.08)'
+                  }}
                 >
-                  <div className="flex items-start justify-between mb-6">
-                    <div className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${card.color} flex items-center justify-center shadow-lg group-hover:shadow-xl transition-shadow`}>
-                      <span className="text-white text-2xl">{card.icon}</span>
+                  <div style={{ 
+                    display: 'flex', 
+                    alignItems: 'flex-start', 
+                    justifyContent: 'space-between', 
+                    marginBottom: '20px',
+                    position: 'relative',
+                    zIndex: 2
+                  }}>
+                    <div style={{
+                      width: '64px',
+                      height: '64px',
+                      background: card.color,
+                      borderRadius: '16px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      boxShadow: '0 6px 20px rgba(0, 0, 0, 0.15)'
+                    }}>
+                      <span style={{ fontSize: '1.75rem', color: 'white' }}>{card.icon}</span>
                     </div>
-                    <div className="text-right">
-                      <div className="text-3xl font-bold text-gray-900">{card.count}</div>
-                      <div className="text-sm text-gray-500 font-medium mt-1">{card.subtitle}</div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: '2.5rem', fontWeight: 'bold', color: '#1e293b' }}>
+                        {card.count}
+                      </div>
+                      <div style={{ fontSize: '14px', color: '#64748b', fontWeight: '500', marginTop: '4px' }}>
+                        {card.subtitle}
+                      </div>
                     </div>
                   </div>
-                  <h3 className="font-bold text-gray-900 text-xl mb-3 group-hover:text-blue-600 transition-colors">
+                  
+                  <h3 style={{ 
+                    fontSize: '1.5rem', 
+                    fontWeight: 'bold', 
+                    color: '#1e293b',
+                    margin: '0 0 12px 0',
+                    position: 'relative',
+                    zIndex: 2
+                  }}>
                     {card.title}
                   </h3>
-                  <p className="text-gray-600 text-sm mb-6 leading-relaxed">{card.description}</p>
-                  <div className="flex items-center text-blue-600 font-semibold text-sm group-hover:text-blue-700 transition-colors">
+                  <p style={{ 
+                    color: '#64748b', 
+                    fontSize: '14px',
+                    lineHeight: '1.6',
+                    margin: '0 0 24px 0',
+                    position: 'relative',
+                    zIndex: 2
+                  }}>
+                    {card.description}
+                  </p>
+                  
+                  <div style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    color: '#2563eb',
+                    fontWeight: '600',
+                    fontSize: '14px',
+                    position: 'relative',
+                    zIndex: 2
+                  }}>
                     Access module
-                    <svg className="w-5 h-5 ml-2 transition-transform group-hover:translate-x-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
+                    <span style={{ marginLeft: '8px', transition: 'transform 0.3s ease' }}>→</span>
                   </div>
                 </div>
               ))}
             </div>
 
-            {/* Sección Inferior - Estadísticas y Tareas Recientes */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-              {/* Estadísticas de Servicios */}
-              <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8">
-                <div className="flex items-center justify-between mb-8">
-                  <h3 className="text-2xl font-bold text-gray-900">Service Distribution</h3>
-                  <span className="text-sm text-gray-500 font-semibold bg-gray-100 px-3 py-1 rounded-full">Top Services</span>
-                </div>
-                {renderBarChart()}
+            {/* Sección de Tareas Recientes */}
+            <div style={{
+              background: 'white',
+              borderRadius: '20px',
+              padding: '32px',
+              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)',
+              border: '1px solid #e2e8f0'
+            }}>
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'space-between',
+                marginBottom: '24px'
+              }}>
+                <h3 style={{ 
+                  fontSize: '1.5rem', 
+                  fontWeight: 'bold', 
+                  color: '#1e293b',
+                  margin: 0
+                }}>
+                  Recent Tasks
+                </h3>
+                <button 
+                  onClick={() => router.push('/tasks')}
+                  style={{
+                    padding: '10px 20px',
+                    background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+                    color: 'white',
+                    fontWeight: '600',
+                    borderRadius: '10px',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    boxShadow: '0 4px 15px rgba(37, 99, 235, 0.3)',
+                    transition: 'all 0.3s ease'
+                  }}
+                  onMouseOver={(e) => {
+                    e.currentTarget.style.transform = 'translateY(-2px)'
+                    e.currentTarget.style.boxShadow = '0 6px 20px rgba(37, 99, 235, 0.4)'
+                  }}
+                  onMouseOut={(e) => {
+                    e.currentTarget.style.transform = 'translateY(0)'
+                    e.currentTarget.style.boxShadow = '0 4px 15px rgba(37, 99, 235, 0.3)'
+                  }}
+                >
+                  View All Tasks
+                </button>
               </div>
 
-              {/* Tareas Recientes */}
-              <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8">
-                <div className="flex items-center justify-between mb-8">
-                  <h3 className="text-2xl font-bold text-gray-900">Recent Tasks</h3>
-                  <button 
-                    onClick={() => router.push('/tasks')}
-                    className="px-4 py-2 bg-gradient-to-br from-blue-600 to-blue-800 text-white text-sm font-semibold rounded-lg hover:from-blue-700 hover:to-blue-900 transition-all duration-300 shadow-lg hover:shadow-xl"
-                  >
-                    View All Tasks
-                  </button>
+              {stats?.recentTasks && stats.recentTasks.length > 0 ? (
+                <div style={{ overflow: 'hidden', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)' }}>
+                        <th style={{ 
+                          padding: '16px 20px', 
+                          textAlign: 'left', 
+                          fontSize: '12px',
+                          fontWeight: '600',
+                          color: '#64748b',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.5px',
+                          borderBottom: '1px solid #e2e8f0'
+                        }}>
+                          Service & Customer
+                        </th>
+                        <th style={{ 
+                          padding: '16px 20px', 
+                          textAlign: 'left', 
+                          fontSize: '12px',
+                          fontWeight: '600',
+                          color: '#64748b',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.5px',
+                          borderBottom: '1px solid #e2e8f0'
+                        }}>
+                          Location
+                        </th>
+                        <th style={{ 
+                          padding: '16px 20px', 
+                          textAlign: 'left', 
+                          fontSize: '12px',
+                          fontWeight: '600',
+                          color: '#64748b',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.5px',
+                          borderBottom: '1px solid #e2e8f0'
+                        }}>
+                          Status
+                        </th>
+                        <th style={{ 
+                          padding: '16px 20px', 
+                          textAlign: 'left', 
+                          fontSize: '12px',
+                          fontWeight: '600',
+                          color: '#64748b',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.5px',
+                          borderBottom: '1px solid #e2e8f0'
+                        }}>
+                          Scheduled
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {stats.recentTasks.map((task) => (
+                        <tr key={task.id} style={{ 
+                          transition: 'background-color 0.2s ease',
+                          cursor: 'pointer'
+                        }} onMouseOver={(e) => {
+                          e.currentTarget.style.backgroundColor = '#f8fafc'
+                        }} onMouseOut={(e) => {
+                          e.currentTarget.style.backgroundColor = 'transparent'
+                        }}>
+                          <td style={{ padding: '16px 20px', borderBottom: '1px solid #f1f5f9' }}>
+                            <div style={{ fontWeight: '600', color: '#1e293b' }}>{task.service}</div>
+                            <div style={{ fontSize: '14px', color: '#64748b', marginTop: '4px' }}>{task.customer}</div>
+                          </td>
+                          <td style={{ padding: '16px 20px', borderBottom: '1px solid #f1f5f9' }}>
+                            <div style={{ fontSize: '14px', color: '#1e293b' }}>{task.address}</div>
+                          </td>
+                          <td style={{ padding: '16px 20px', borderBottom: '1px solid #f1f5f9' }}>
+                            <span style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              padding: '6px 12px',
+                              borderRadius: '20px',
+                              fontSize: '12px',
+                              fontWeight: '600',
+                              background: '#dbeafe',
+                              color: '#1e40af',
+                              border: '1px solid #bfdbfe'
+                            }}>
+                              {task.status}
+                            </span>
+                          </td>
+                          <td style={{ padding: '16px 20px', borderBottom: '1px solid #f1f5f9', fontSize: '14px', color: '#64748b' }}>
+                            {task.scheduledFor ? new Date(task.scheduledFor).toLocaleDateString() : 'Not scheduled'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-                {renderRecentTasks()}
-              </div>
+              ) : (
+                <div style={{ textAlign: 'center', padding: '60px 20px', color: '#64748b' }}>
+                  <div style={{ fontSize: '3rem', marginBottom: '16px' }}>📝</div>
+                  <p style={{ fontSize: '1.125rem', fontWeight: '500', marginBottom: '8px' }}>No recent tasks</p>
+                  <p style={{ fontSize: '14px' }}>Recently created tasks will appear here</p>
+                </div>
+              )}
             </div>
           </>
         )}
       </main>
+
+      <style jsx>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   )
 }
