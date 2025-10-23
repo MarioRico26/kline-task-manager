@@ -1,49 +1,128 @@
+'use client'
+import { useRouter } from 'next/navigation'
+
 export default function Dashboard() {
+  const router = useRouter()
+
+  const handleLogout = () => {
+    document.cookie = 'user-id=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;'
+    router.push('/auth/login')
+  }
+
+  const crudCards = [
+    {
+      title: 'Users',
+      description: 'Manage system users and permissions',
+      count: '12',
+      route: '/users',
+      color: 'var(--kline-red)'
+    },
+    {
+      title: 'Services',
+      description: 'Manage available services',
+      count: '8',
+      route: '/services', 
+      color: 'var(--kline-yellow)'
+    },
+    {
+      title: 'Customers',
+      description: 'Manage customer information',
+      count: '45',
+      route: '/customers',
+      color: 'var(--kline-blue)'
+    },
+    {
+      title: 'Tasks',
+      description: 'Manage and track tasks',
+      count: '23',
+      route: '/tasks',
+      color: 'var(--kline-green)'
+    }
+  ]
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50">
+    <div style={{ minHeight: '100vh', background: 'var(--kline-gray-light)' }}>
       {/* Header */}
-      <header className="bg-white/80 backdrop-blur-lg border-b border-gray-200/60">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-6">
-            <div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                Dashboard
-              </h1>
-              <p className="text-gray-600 mt-1">Welcome back, Admin</p>
-            </div>
-            <div className="flex items-center space-x-4">
-              <button className="bg-gradient-to-r from-red-500 to-pink-600 text-white px-6 py-2 rounded-xl hover:shadow-lg transition-all font-medium">
-                Logout
-              </button>
-            </div>
+      <header className="kline-header" style={{ padding: '1rem 0' }}>
+        <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 1rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h1 style={{ fontSize: '2rem', fontWeight: '700', color: 'var(--kline-text)' }}>
+              Dashboard <span className="kline-accent">Overview</span>
+            </h1>
+            <button 
+              onClick={handleLogout}
+              className="kline-btn-primary"
+              style={{ padding: '0.6rem 1.2rem', fontSize: '0.9rem' }}
+            >
+              Logout
+            </button>
           </div>
         </div>
       </header>
-      
+
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-          {/* Stats Cards */}
-          <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100">
-            <h3 className="text-gray-600 text-sm font-medium">Total Customers</h3>
-            <p className="text-3xl font-bold text-gray-900 mt-2">0</p>
-          </div>
-          <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100">
-            <h3 className="text-gray-600 text-sm font-medium">Active Tasks</h3>
-            <p className="text-3xl font-bold text-gray-900 mt-2">0</p>
-          </div>
-          <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100">
-            <h3 className="text-gray-600 text-sm font-medium">Completed</h3>
-            <p className="text-3xl font-bold text-gray-900 mt-2">0</p>
-          </div>
+      <main style={{ maxWidth: '1200px', margin: '2rem auto', padding: '0 1rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem' }}>
+          {crudCards.map((card, index) => (
+            <div 
+              key={index}
+              className="kline-card"
+              style={{ 
+                padding: '2rem',
+                cursor: 'pointer',
+                transition: 'all 0.3s ease',
+                borderTop: `4px solid ${card.color}`
+              }}
+              onClick={() => router.push(card.route)}
+              onMouseOver={(e) => {
+                e.currentTarget.style.transform = 'translateY(-5px)'
+                e.currentTarget.style.boxShadow = '0 15px 40px rgba(0, 0, 0, 0.15)'
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.transform = 'translateY(0)'
+                e.currentTarget.style.boxShadow = '0 4px 20px rgba(0, 0, 0, 0.08)'
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
+                <h3 style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--kline-text)' }}>
+                  {card.title}
+                </h3>
+                <div style={{
+                  background: card.color,
+                  color: 'white',
+                  padding: '0.5rem 0.8rem',
+                  borderRadius: '20px',
+                  fontSize: '0.9rem',
+                  fontWeight: '700'
+                }}>
+                  {card.count}
+                </div>
+              </div>
+              <p style={{ color: 'var(--kline-text-light)', marginBottom: '1.5rem', lineHeight: '1.5' }}>
+                {card.description}
+              </p>
+              <div style={{ 
+                color: card.color, 
+                fontWeight: '600', 
+                fontSize: '0.9rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem'
+              }}>
+                Manage → 
+              </div>
+            </div>
+          ))}
         </div>
-        
-        {/* Recent Activity */}
-        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
-          <h2 className="text-xl font-bold text-gray-900 mb-4">Recent Activity</h2>
-          <div className="text-center py-12">
-            <div className="text-gray-400 text-lg">No recent activity</div>
-            <p className="text-gray-500 mt-2">Tasks and customers will appear here</p>
+
+        {/* Recent Activity Section */}
+        <div className="kline-card" style={{ marginTop: '2rem', padding: '2rem' }}>
+          <h2 style={{ fontSize: '1.5rem', fontWeight: '700', marginBottom: '1.5rem', color: 'var(--kline-text)' }}>
+            Recent Activity
+          </h2>
+          <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--kline-text-light)' }}>
+            <p>Activity feed will appear here</p>
+            <p style={{ fontSize: '0.9rem', marginTop: '0.5rem' }}>Recent tasks, user actions, and system events</p>
           </div>
         </div>
       </main>
