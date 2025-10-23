@@ -17,12 +17,33 @@ export default function CustomersPage() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null)
   const [deletingCustomer, setDeletingCustomer] = useState<Customer | null>(null)
-  const [viewMode, setViewMode] = useState<'table' | 'cards'>('table') // Nueva opción de vista
+  const [viewMode, setViewMode] = useState<'table' | 'cards'>('table')
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
   const router = useRouter()
 
+  // 🔐 VERIFICACIÓN DE AUTENTICACIÓN
   useEffect(() => {
-    fetchCustomers()
-  }, [])
+    const checkAuth = () => {
+      const userId = document.cookie
+        .split('; ')
+        .find(row => row.startsWith('user-id='))
+        ?.split('=')[1]
+
+      if (!userId) {
+        console.log('🚫 NO HAY SESIÓN - Redirigiendo a login')
+        router.push('/auth/login')
+        setIsAuthenticated(false)
+        return false
+      }
+      
+      setIsAuthenticated(true)
+      return true
+    }
+
+    if (checkAuth()) {
+      fetchCustomers()
+    }
+  }, [router])
 
   const fetchCustomers = async () => {
     try {
@@ -42,7 +63,6 @@ export default function CustomersPage() {
 
   const handleLogout = () => {
     document.cookie = 'user-id=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;'
-    // ✅ Esto SÍ funciona - recarga todo el contexto
     window.location.href = '/auth/login'
   }
 
@@ -71,13 +91,41 @@ export default function CustomersPage() {
     }
   }
 
+  // 🔐 SI NO ESTÁ AUTENTICADO, MOSTRAR LOADING
+  if (isAuthenticated === false) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '100vh',
+        background: 'var(--kline-gray-light)'
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{
+            width: '60px',
+            height: '60px',
+            background: 'var(--kline-red)',
+            borderRadius: '8px',
+            margin: '0 auto 1rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            <span style={{ color: 'white', fontWeight: 'bold', fontSize: '1.5rem' }}>K</span>
+          </div>
+          <p style={{ color: 'var(--kline-text-light)' }}>Redirecting to login...</p>
+        </div>
+      </div>
+    )
+  }
+
   const filteredCustomers = customers.filter(customer => 
     customer.fullName.toLowerCase().includes(filter.toLowerCase()) ||
     customer.email.toLowerCase().includes(filter.toLowerCase()) ||
     customer.phone.includes(filter)
   )
 
-  // Función para formatear teléfono
   const formatPhone = (phone: string) => {
     const cleaned = phone.replace(/\D/g, '');
     const match = cleaned.match(/^(\d{3})(\d{3})(\d{4})$/);
@@ -444,25 +492,31 @@ export default function CustomersPage() {
       </main>
 
       {/* Create Customer Modal */}
-      <CreateCustomerModal
-        isOpen={isCreateModalOpen}
-        onClose={() => setIsCreateModalOpen(false)}
-        onCustomerCreated={fetchCustomers}
-      />
+      {isCreateModalOpen && (
+        <CreateCustomerModal
+          isOpen={isCreateModalOpen}
+          onClose={() => setIsCreateModalOpen(false)}
+          onCustomerCreated={fetchCustomers}
+        />
+      )}
 
       {/* Edit Customer Modal */}
-      <EditCustomerModal
-        customer={editingCustomer}
-        onClose={() => setEditingCustomer(null)}
-        onCustomerUpdated={fetchCustomers}
-      />
+      {editingCustomer && (
+        <EditCustomerModal
+          customer={editingCustomer}
+          onClose={() => setEditingCustomer(null)}
+          onCustomerUpdated={fetchCustomers}
+        />
+      )}
 
       {/* Delete Confirmation Modal */}
-      <DeleteCustomerModal
-        customer={deletingCustomer}
-        onClose={() => setDeletingCustomer(null)}
-        onCustomerDeleted={handleDeleteCustomer}
-      />
+      {deletingCustomer && (
+        <DeleteCustomerModal
+          customer={deletingCustomer}
+          onClose={() => setDeletingCustomer(null)}
+          onCustomerDeleted={handleDeleteCustomer}
+        />
+      )}
     </div>
   )
 }
@@ -482,14 +536,12 @@ function CreateCustomerModal({ isOpen, onClose, onCustomerCreated }: {
   const [error, setError] = useState('')
 
   const validateForm = () => {
-    // Validar email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     if (!emailRegex.test(formData.email)) {
       setError('Please enter a valid email address')
       return false
     }
 
-    // Validar teléfono (mínimo 10 dígitos)
     const phoneDigits = formData.phone.replace(/\D/g, '')
     if (phoneDigits.length < 10) {
       setError('Please enter a valid phone number (at least 10 digits)')
@@ -515,7 +567,7 @@ function CreateCustomerModal({ isOpen, onClose, onCustomerCreated }: {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...formData,
-          phone: formData.phone.replace(/\D/g, '') // Guardar solo dígitos
+          phone: formData.phone.replace(/\D/g, '')
         })
       })
 
@@ -535,7 +587,6 @@ function CreateCustomerModal({ isOpen, onClose, onCustomerCreated }: {
   }
 
   const handlePhoneChange = (value: string) => {
-    // Formatear teléfono mientras se escribe
     const digits = value.replace(/\D/g, '')
     let formatted = value
     

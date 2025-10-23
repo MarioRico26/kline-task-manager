@@ -17,11 +17,32 @@ export default function StatusesPage() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [editingStatus, setEditingStatus] = useState<TaskStatus | null>(null)
   const [deletingStatus, setDeletingStatus] = useState<TaskStatus | null>(null)
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
   const router = useRouter()
 
+  // 🔐 VERIFICACIÓN DE AUTENTICACIÓN
   useEffect(() => {
-    fetchStatuses()
-  }, [])
+    const checkAuth = () => {
+      const userId = document.cookie
+        .split('; ')
+        .find(row => row.startsWith('user-id='))
+        ?.split('=')[1]
+
+      if (!userId) {
+        console.log('🚫 NO HAY SESIÓN - Redirigiendo a login')
+        router.push('/auth/login')
+        setIsAuthenticated(false)
+        return false
+      }
+      
+      setIsAuthenticated(true)
+      return true
+    }
+
+    if (checkAuth()) {
+      fetchStatuses()
+    }
+  }, [router])
 
   const fetchStatuses = async () => {
     try {
@@ -41,7 +62,6 @@ export default function StatusesPage() {
 
   const handleLogout = () => {
     document.cookie = 'user-id=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;'
-    // ✅ Esto SÍ funciona - recarga todo el contexto
     window.location.href = '/auth/login'
   }
 
@@ -68,6 +88,35 @@ export default function StatusesPage() {
     } catch (error) {
       alert('Network error')
     }
+  }
+
+  // 🔐 REDIRECCIÓN SI NO ESTÁ AUTENTICADO
+  if (isAuthenticated === false) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '100vh',
+        background: 'var(--kline-gray-light)'
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{
+            width: '60px',
+            height: '60px',
+            background: 'var(--kline-red)',
+            borderRadius: '8px',
+            margin: '0 auto 1rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            <span style={{ color: 'white', fontWeight: 'bold', fontSize: '1.5rem' }}>K</span>
+          </div>
+          <p style={{ color: 'var(--kline-text-light)' }}>Redirecting to login...</p>
+        </div>
+      </div>
+    )
   }
 
   const filteredStatuses = statuses.filter(status => 
@@ -350,27 +399,33 @@ export default function StatusesPage() {
       </main>
 
       {/* Create Status Modal */}
-      <CreateStatusModal
-        isOpen={isCreateModalOpen}
-        onClose={() => setIsCreateModalOpen(false)}
-        onStatusCreated={fetchStatuses}
-        defaultColors={defaultColors}
-      />
+      {isCreateModalOpen && (
+        <CreateStatusModal
+          isOpen={isCreateModalOpen}
+          onClose={() => setIsCreateModalOpen(false)}
+          onStatusCreated={fetchStatuses}
+          defaultColors={defaultColors}
+        />
+      )}
 
       {/* Edit Status Modal */}
-      <EditStatusModal
-        status={editingStatus}
-        onClose={() => setEditingStatus(null)}
-        onStatusUpdated={fetchStatuses}
-        defaultColors={defaultColors}
-      />
+      {editingStatus && (
+        <EditStatusModal
+          status={editingStatus}
+          onClose={() => setEditingStatus(null)}
+          onStatusUpdated={fetchStatuses}
+          defaultColors={defaultColors}
+        />
+      )}
 
       {/* Delete Confirmation Modal */}
-      <DeleteStatusModal
-        status={deletingStatus}
-        onClose={() => setDeletingStatus(null)}
-        onStatusDeleted={handleDeleteStatus}
-      />
+      {deletingStatus && (
+        <DeleteStatusModal
+          status={deletingStatus}
+          onClose={() => setDeletingStatus(null)}
+          onStatusDeleted={handleDeleteStatus}
+        />
+      )}
     </div>
   )
 }

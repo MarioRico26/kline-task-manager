@@ -32,11 +32,32 @@ export default function PropertiesPage() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [editingProperty, setEditingProperty] = useState<Property | null>(null)
   const [deletingProperty, setDeletingProperty] = useState<Property | null>(null)
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
   const router = useRouter()
 
+  // 🔐 VERIFICACIÓN DE AUTENTICACIÓN
   useEffect(() => {
-    fetchData()
-  }, [])
+    const checkAuth = () => {
+      const userId = document.cookie
+        .split('; ')
+        .find(row => row.startsWith('user-id='))
+        ?.split('=')[1]
+
+      if (!userId) {
+        console.log('🚫 NO HAY SESIÓN - Redirigiendo a login')
+        router.push('/auth/login')
+        setIsAuthenticated(false)
+        return false
+      }
+      
+      setIsAuthenticated(true)
+      return true
+    }
+
+    if (checkAuth()) {
+      fetchData()
+    }
+  }, [router])
 
   const fetchData = async () => {
     try {
@@ -63,7 +84,6 @@ export default function PropertiesPage() {
 
   const handleLogout = () => {
     document.cookie = 'user-id=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;'
-    // ✅ Esto SÍ funciona - recarga todo el contexto
     window.location.href = '/auth/login'
   }
 
@@ -90,6 +110,35 @@ export default function PropertiesPage() {
     } catch (error) {
       alert('Network error')
     }
+  }
+
+  // 🔐 SI NO ESTÁ AUTENTICADO, MOSTRAR LOADING
+  if (isAuthenticated === false) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '100vh',
+        background: 'var(--kline-gray-light)'
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{
+            width: '60px',
+            height: '60px',
+            background: 'var(--kline-red)',
+            borderRadius: '8px',
+            margin: '0 auto 1rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            <span style={{ color: 'white', fontWeight: 'bold', fontSize: '1.5rem' }}>K</span>
+          </div>
+          <p style={{ color: 'var(--kline-text-light)' }}>Redirecting to login...</p>
+        </div>
+      </div>
+    )
   }
 
   const filteredProperties = properties.filter(property => {
@@ -242,7 +291,7 @@ export default function PropertiesPage() {
             <button 
               className="kline-btn-primary"
               style={{ marginTop: '1rem', padding: '0.8rem 1.5rem' }}
-              onClick={() => router.push('/customers')}
+              onClick={() => router.push('/customer')}
             >
               Go to Customers
             </button>
@@ -472,27 +521,33 @@ export default function PropertiesPage() {
       </main>
 
       {/* Create Property Modal */}
-      <CreatePropertyModal
-        isOpen={isCreateModalOpen}
-        onClose={() => setIsCreateModalOpen(false)}
-        onPropertyCreated={fetchData}
-        customers={customers}
-      />
+      {isCreateModalOpen && (
+        <CreatePropertyModal
+          isOpen={isCreateModalOpen}
+          onClose={() => setIsCreateModalOpen(false)}
+          onPropertyCreated={fetchData}
+          customers={customers}
+        />
+      )}
 
       {/* Edit Property Modal */}
-      <EditPropertyModal
-        property={editingProperty}
-        onClose={() => setEditingProperty(null)}
-        onPropertyUpdated={fetchData}
-        customers={customers}
-      />
+      {editingProperty && (
+        <EditPropertyModal
+          property={editingProperty}
+          onClose={() => setEditingProperty(null)}
+          onPropertyUpdated={fetchData}
+          customers={customers}
+        />
+      )}
 
       {/* Delete Confirmation Modal */}
-      <DeletePropertyModal
-        property={deletingProperty}
-        onClose={() => setDeletingProperty(null)}
-        onPropertyDeleted={handleDeleteProperty}
-      />
+      {deletingProperty && (
+        <DeletePropertyModal
+          property={deletingProperty}
+          onClose={() => setDeletingProperty(null)}
+          onPropertyDeleted={handleDeleteProperty}
+        />
+      )}
     </div>
   )
 }

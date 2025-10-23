@@ -17,11 +17,32 @@ export default function UsersPage() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [editingUser, setEditingUser] = useState<User | null>(null)
   const [deletingUser, setDeletingUser] = useState<User | null>(null)
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null) // 🔐 NUEVO
   const router = useRouter()
 
+  // 🔐 VERIFICACIÓN DE AUTENTICACIÓN (AÑADIDO)
   useEffect(() => {
-    fetchUsers()
-  }, [])
+    const checkAuth = () => {
+      const userId = document.cookie
+        .split('; ')
+        .find(row => row.startsWith('user-id='))
+        ?.split('=')[1]
+
+      if (!userId) {
+        console.log('🚫 NO HAY SESIÓN - Redirigiendo a login')
+        router.push('/auth/login')
+        setIsAuthenticated(false)
+        return false
+      }
+      
+      setIsAuthenticated(true)
+      return true
+    }
+
+    if (checkAuth()) {
+      fetchUsers()
+    }
+  }, [router])
 
   const fetchUsers = async () => {
     try {
@@ -39,9 +60,37 @@ export default function UsersPage() {
     }
   }
 
+  // 🔐 REDIRECCIÓN SI NO ESTÁ AUTENTICADO (AÑADIDO)
+  if (isAuthenticated === false) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '100vh',
+        background: 'var(--kline-gray-light)'
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{
+            width: '60px',
+            height: '60px',
+            background: 'var(--kline-red)',
+            borderRadius: '8px',
+            margin: '0 auto 1rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            <span style={{ color: 'white', fontWeight: 'bold', fontSize: '1.5rem' }}>K</span>
+          </div>
+          <p style={{ color: 'var(--kline-text-light)' }}>Redirecting to login...</p>
+        </div>
+      </div>
+    )
+  }
+
   const handleLogout = () => {
     document.cookie = 'user-id=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;'
-    // ✅ Esto SÍ funciona - recarga todo el contexto
     window.location.href = '/auth/login'
   }
 
@@ -335,25 +384,31 @@ export default function UsersPage() {
       </main>
 
       {/* Create User Modal */}
-      <CreateUserModal
-        isOpen={isCreateModalOpen}
-        onClose={() => setIsCreateModalOpen(false)}
-        onUserCreated={fetchUsers}
-      />
+      {isCreateModalOpen && (
+        <CreateUserModal
+          isOpen={isCreateModalOpen}
+          onClose={() => setIsCreateModalOpen(false)}
+          onUserCreated={fetchUsers}
+        />
+      )}
 
       {/* Edit User Modal */}
-      <EditUserModal
-        user={editingUser}
-        onClose={() => setEditingUser(null)}
-        onUserUpdated={fetchUsers}
-      />
+      {editingUser && (
+        <EditUserModal
+          user={editingUser}
+          onClose={() => setEditingUser(null)}
+          onUserUpdated={fetchUsers}
+        />
+      )}
 
       {/* Delete Confirmation Modal */}
-      <DeleteUserModal
-        user={deletingUser}
-        onClose={() => setDeletingUser(null)}
-        onUserDeleted={handleDeleteUser}
-      />
+      {deletingUser && (
+        <DeleteUserModal
+          user={deletingUser}
+          onClose={() => setDeletingUser(null)}
+          onUserDeleted={handleDeleteUser}
+        />
+      )}
     </div>
   )
 }

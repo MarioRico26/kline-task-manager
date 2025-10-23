@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react'
+'use client'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
-export function useAuth() {
+export function useAuth(redirectTo: string = '/auth/login') {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
   const router = useRouter()
 
@@ -12,17 +13,19 @@ export function useAuth() {
         .find(row => row.startsWith('user-id='))
         ?.split('=')[1]
 
-      setIsAuthenticated(!!userId)
+      if (!userId) {
+        console.log('🚫 NO HAY SESIÓN - Redirigiendo a login')
+        router.push(redirectTo)
+        setIsAuthenticated(false)
+        return false
+      }
+      
+      setIsAuthenticated(true)
+      return true
     }
 
     checkAuth()
-  }, [])
+  }, [router, redirectTo])
 
-  const logout = () => {
-    document.cookie = 'user-id=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;'
-    setIsAuthenticated(false)
-    router.push('/auth/login')
-  }
-
-  return { isAuthenticated, logout }
+  return { isAuthenticated }
 }

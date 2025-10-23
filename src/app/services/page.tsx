@@ -16,11 +16,32 @@ export default function ServicesPage() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [editingService, setEditingService] = useState<Service | null>(null)
   const [deletingService, setDeletingService] = useState<Service | null>(null)
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
   const router = useRouter()
 
+  // 🔐 VERIFICACIÓN DE AUTENTICACIÓN
   useEffect(() => {
-    fetchServices()
-  }, [])
+    const checkAuth = () => {
+      const userId = document.cookie
+        .split('; ')
+        .find(row => row.startsWith('user-id='))
+        ?.split('=')[1]
+
+      if (!userId) {
+        console.log('🚫 NO HAY SESIÓN - Redirigiendo a login')
+        router.push('/auth/login')
+        setIsAuthenticated(false)
+        return false
+      }
+      
+      setIsAuthenticated(true)
+      return true
+    }
+
+    if (checkAuth()) {
+      fetchServices()
+    }
+  }, [router])
 
   const fetchServices = async () => {
     try {
@@ -40,7 +61,6 @@ export default function ServicesPage() {
 
   const handleLogout = () => {
     document.cookie = 'user-id=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;'
-    // ✅ Esto SÍ funciona - recarga todo el contexto
     window.location.href = '/auth/login'
   }
 
@@ -67,6 +87,35 @@ export default function ServicesPage() {
     } catch (error) {
       alert('Network error')
     }
+  }
+
+  // 🔐 SI NO ESTÁ AUTENTICADO, MOSTRAR LOADING
+  if (isAuthenticated === false) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '100vh',
+        background: 'var(--kline-gray-light)'
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{
+            width: '60px',
+            height: '60px',
+            background: 'var(--kline-red)',
+            borderRadius: '8px',
+            margin: '0 auto 1rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            <span style={{ color: 'white', fontWeight: 'bold', fontSize: '1.5rem' }}>K</span>
+          </div>
+          <p style={{ color: 'var(--kline-text-light)' }}>Redirecting to login...</p>
+        </div>
+      </div>
+    )
   }
 
   const filteredServices = services.filter(service => 
@@ -286,25 +335,31 @@ export default function ServicesPage() {
       </main>
 
       {/* Create Service Modal */}
-      <CreateServiceModal
-        isOpen={isCreateModalOpen}
-        onClose={() => setIsCreateModalOpen(false)}
-        onServiceCreated={fetchServices}
-      />
+      {isCreateModalOpen && (
+        <CreateServiceModal
+          isOpen={isCreateModalOpen}
+          onClose={() => setIsCreateModalOpen(false)}
+          onServiceCreated={fetchServices}
+        />
+      )}
 
       {/* Edit Service Modal */}
-      <EditServiceModal
-        service={editingService}
-        onClose={() => setEditingService(null)}
-        onServiceUpdated={fetchServices}
-      />
+      {editingService && (
+        <EditServiceModal
+          service={editingService}
+          onClose={() => setEditingService(null)}
+          onServiceUpdated={fetchServices}
+        />
+      )}
 
       {/* Delete Confirmation Modal */}
-      <DeleteServiceModal
-        service={deletingService}
-        onClose={() => setDeletingService(null)}
-        onServiceDeleted={handleDeleteService}
-      />
+      {deletingService && (
+        <DeleteServiceModal
+          service={deletingService}
+          onClose={() => setDeletingService(null)}
+          onServiceDeleted={handleDeleteService}
+        />
+      )}
     </div>
   )
 }
