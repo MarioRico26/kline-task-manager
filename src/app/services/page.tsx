@@ -40,7 +40,8 @@ export default function ServicesPage() {
 
   const handleLogout = () => {
     document.cookie = 'user-id=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;'
-    router.push('/auth/login')
+    // ✅ Esto SÍ funciona - recarga todo el contexto
+    window.location.href = '/auth/login'
   }
 
   const handleBack = () => {
