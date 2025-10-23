@@ -187,8 +187,9 @@ export async function sendTaskUpdateEmail(emailData: EmailData) {
             
             <!-- Footer -->
             <div class="footer">
-              <p>&copy; 2024 Kline Services. All rights reserved.</p>
-              <p>This is an automated service notification. Please do not reply to this email.</p>
+              <p>&copy; 2025 Kline Services. All rights reserved.</p>
+               <p>This is an automated service notification. Please do not reply to this email.</p>
+               <p>Design & Engineering by ByteNetworks • © 2025</p>
             </div>
           </div>
         </body>
