@@ -156,21 +156,6 @@ function LoginForm() {
               {loading ? 'Signing in...' : 'SIGN IN TO DASHBOARD'}
             </button>
           </form>
-
-          {/* Demo Credentials Hint */}
-          <div style={{ 
-            marginTop: '2rem', 
-            padding: '1rem',
-            background: 'var(--kline-gray-light)',
-            borderRadius: '8px',
-            border: '1px solid var(--kline-gray)',
-            textAlign: 'center',
-            fontSize: '0.9rem',
-            color: 'var(--kline-text-light)'
-          }}>
-            <strong>Demo Access:</strong><br />
-            Use any email/password combination
-          </div>
         </div>
         
         {/* Footer */}

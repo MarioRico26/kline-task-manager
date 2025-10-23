@@ -182,7 +182,7 @@ export async function sendTaskUpdateEmail(emailData: EmailData) {
               
               <p>Thank you for choosing Kline!</p>
               
-              <p>Best regards,<br><strong>The Kline Team</strong></p>
+              <p>Best regards,<br><strong>The Kline Brothers Team</strong></p>
             </div>
             
             <!-- Footer -->
