@@ -5,6 +5,66 @@ import { sendTaskUpdateEmail } from '@/lib/email'
 
 const prisma = new PrismaClient()
 
+export async function GET() {
+  try {
+    console.log('🔄 Fetching tasks from database...')
+    
+    const tasks = await prisma.task.findMany({
+      include: {
+        customer: {
+          select: {
+            id: true,
+            fullName: true,
+            email: true
+          }
+        },
+        property: {
+          select: {
+            id: true,
+            address: true,
+            city: true,
+            state: true
+          }
+        },
+        service: {
+          select: {
+            id: true,
+            name: true,
+            description: true
+          }
+        },
+        status: {
+          select: {
+            id: true,
+            name: true,
+            color: true,
+            notifyClient: true
+          }
+        },
+        media: {
+          select: {
+            id: true,
+            url: true
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    })
+
+    console.log(`✅ Found ${tasks.length} tasks`)
+    return NextResponse.json(tasks)
+    
+  } catch (error) {
+    console.error('❌ Error fetching tasks:', error)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const formData = await request.formData()
@@ -110,7 +170,7 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error('Error creating task:', error)
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Internal server error' }, 
       { status: 500 }
     )
   }
