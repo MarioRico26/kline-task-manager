@@ -444,7 +444,6 @@ export default function TasksPage() {
                     display: 'inline-block'
                   }}>
                     {task.status.name}
-                    {task.status.notifyClient && ' 📧'}
                   </span>
                 </div>
 
