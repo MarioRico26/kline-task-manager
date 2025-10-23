@@ -2,51 +2,65 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 export function middleware(request: NextRequest) {
+  // 1. Obtener la ruta actual
   const { pathname } = request.nextUrl
+  
+  // 2. Verificar si el usuario está autenticado
   const userId = request.cookies.get('user-id')?.value
+  
+  console.log('🛡️ MIDDLEWARE - Path:', pathname, 'User ID:', userId ? 'YES' : 'NO')
 
-  console.log('🔍 MIDDLEWARE EXECUTING:', {
-    pathname,
-    hasUserId: !!userId,
-    userId: userId
-  })
-
-  // Si está en la raíz → redirigir a dashboard o login
+  // 3. Si está en la raíz, redirigir
   if (pathname === '/') {
     if (userId) {
-      console.log('🔄 Redirecting to dashboard')
       return NextResponse.redirect(new URL('/dashboard', request.url))
     } else {
-      console.log('🔄 Redirecting to login')
       return NextResponse.redirect(new URL('/auth/login', request.url))
     }
   }
 
-  // Rutas protegidas
-  const protectedRoutes = ['/dashboard', '/tasks', '/customer', '/properties', '/services', '/statuses']
-  const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route))
+  // 4. Definir rutas protegidas EXPLÍCITAMENTE
+  const protectedRoutes = [
+    '/dashboard',
+    '/tasks', 
+    '/customer',
+    '/properties',
+    '/services', 
+    '/statuses'
+  ]
 
+  // 5. Verificar si la ruta actual es protegida
+  const isProtectedRoute = protectedRoutes.some(route => 
+    pathname === route || pathname.startsWith(route + '/')
+  )
+
+  // 6. Si es ruta protegida y NO tiene sesión → BLOQUEAR
   if (isProtectedRoute && !userId) {
-    console.log('🚫 BLOCKING ACCESS - No user ID')
+    console.log('🚫 BLOCKING: No auth for protected route')
     const loginUrl = new URL('/auth/login', request.url)
     loginUrl.searchParams.set('from', pathname)
     return NextResponse.redirect(loginUrl)
   }
 
-  console.log('✅ ALLOWING ACCESS')
+  // 7. Si está en login y YA tiene sesión → redirigir a dashboard
+  if (pathname === '/auth/login' && userId) {
+    return NextResponse.redirect(new URL('/dashboard', request.url))
+  }
+
   return NextResponse.next()
 }
 
+// 8. Configuración MUY IMPORTANTE - proteger TODAS las rutas
 export const config = {
   matcher: [
     /*
      * Match all request paths except for the ones starting with:
-     * - api (API routes)
      * - _next/static (static files)
-     * - _next/image (image optimization files)
+     * - _next/image (image optimization files) 
      * - favicon.ico (favicon file)
-     * - public folder
+     * - images (public images)
+     * - api/auth (login API)
      */
-    '/((?!api|_next/static|_next/image|favicon.ico|logo.png|.*\\.png$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|logo.png|.*\\.png$|api/auth).*)',
   ],
 }
