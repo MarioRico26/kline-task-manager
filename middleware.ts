@@ -2,65 +2,51 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 export function middleware(request: NextRequest) {
-  // 1. Obtener la ruta actual
   const { pathname } = request.nextUrl
-  
-  // 2. Verificar si el usuario está autenticado
   const userId = request.cookies.get('user-id')?.value
-  
-  console.log('🛡️ MIDDLEWARE - Path:', pathname, 'User ID:', userId ? 'YES' : 'NO')
 
-  // 3. Si está en la raíz, redirigir
+  console.log('🛡️ MIDDLEWARE FIRING - Path:', pathname, 'Has User:', !!userId)
+
+  // Ruta raíz - siempre redirigir
   if (pathname === '/') {
-    if (userId) {
-      return NextResponse.redirect(new URL('/dashboard', request.url))
-    } else {
-      return NextResponse.redirect(new URL('/auth/login', request.url))
-    }
+    const redirectUrl = userId ? '/dashboard' : '/auth/login'
+    console.log('🔀 Root redirect to:', redirectUrl)
+    return NextResponse.redirect(new URL(redirectUrl, request.url))
   }
 
-  // 4. Definir rutas protegidas EXPLÍCITAMENTE
-  const protectedRoutes = [
-    '/dashboard',
-    '/tasks', 
-    '/customer',
-    '/properties',
-    '/services', 
-    '/statuses'
-  ]
+  // Rutas protegidas - lista EXPLÍCITA
+  const protectedPaths = ['/dashboard', '/tasks', '/customer', '/properties', '/services', '/statuses']
+  const isProtected = protectedPaths.some(path => pathname.startsWith(path))
 
-  // 5. Verificar si la ruta actual es protegida
-  const isProtectedRoute = protectedRoutes.some(route => 
-    pathname === route || pathname.startsWith(route + '/')
-  )
-
-  // 6. Si es ruta protegida y NO tiene sesión → BLOQUEAR
-  if (isProtectedRoute && !userId) {
-    console.log('🚫 BLOCKING: No auth for protected route')
+  // Si es ruta protegida y NO hay usuario → BLOQUEAR
+  if (isProtected && !userId) {
+    console.log('🚫 BLOCKING unprotected access to:', pathname)
     const loginUrl = new URL('/auth/login', request.url)
     loginUrl.searchParams.set('from', pathname)
     return NextResponse.redirect(loginUrl)
   }
 
-  // 7. Si está en login y YA tiene sesión → redirigir a dashboard
+  // Si está en login PERO ya tiene sesión → redirigir a dashboard
   if (pathname === '/auth/login' && userId) {
+    console.log('🔄 Already logged in, redirecting to dashboard')
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 
+  console.log('✅ Allowing access to:', pathname)
   return NextResponse.next()
 }
 
-// 8. Configuración MUY IMPORTANTE - proteger TODAS las rutas
+// 🔥 CONFIGURACIÓN MÁS AGRESIVA - capturar TODAS las rutas
 export const config = {
   matcher: [
     /*
      * Match all request paths except for the ones starting with:
      * - _next/static (static files)
-     * - _next/image (image optimization files) 
+     * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
-     * - images (public images)
-     * - api/auth (login API)
+     * - images/ (public images)
+     * - api/ (API routes - pero vamos a proteger algunas después)
      */
-    '/((?!_next/static|_next/image|favicon.ico|logo.png|.*\\.png$|api/auth).*)',
+    '/((?!_next/static|_next/image|favicon.ico|logo.png|images/).*)',
   ],
 }
