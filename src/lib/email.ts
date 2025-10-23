@@ -17,7 +17,7 @@ const transporter = nodemailer.createTransport({
   secure: true,
   auth: {
     user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS, // Tu app password de Gmail
+    pass: process.env.EMAIL_PASS,
   },
 });
 
@@ -45,6 +45,10 @@ interface EmailData {
 export async function sendTaskUpdateEmail(emailData: EmailData) {
   try {
     const { to, subject, customerName, service, property, status, scheduledFor, notes, images } = emailData;
+
+    // Preparar thumbnails para el email (máximo 4 imágenes)
+    const thumbnails = images.slice(0, 4); // Solo mostrar primeras 4 imágenes
+    const hasMoreImages = images.length > 4;
 
     const htmlContent = `
       <!DOCTYPE html>
@@ -101,22 +105,38 @@ export async function sendTaskUpdateEmail(emailData: EmailData) {
               background: #e30613;
               font-size: 14px;
             }
-            .image-notice {
-              background: #e8f4fd;
+            .image-section {
+              background: #f8f9fa;
               padding: 15px;
               border-radius: 8px;
-              border: 1px solid #b6e0fe;
+              border: 1px solid #e9ecef;
               margin: 15px 0;
             }
-            .button {
-              display: inline-block;
+            .thumbnail-grid {
+              display: grid;
+              grid-template-columns: repeat(2, 1fr);
+              gap: 8px;
+              margin: 10px 0;
+            }
+            .thumbnail {
+              width: 100%;
+              height: 120px;
+              object-fit: cover;
+              border-radius: 6px;
+              border: 1px solid #ddd;
+            }
+            .image-count {
               background: #e30613;
               color: white;
-              padding: 12px 24px;
-              text-decoration: none;
-              border-radius: 6px;
+              padding: 4px 8px;
+              border-radius: 10px;
+              font-size: 11px;
               font-weight: bold;
-              margin: 10px 0;
+            }
+            .more-images {
+              color: #666;
+              font-size: 12px;
+              margin-top: 8px;
             }
           </style>
         </head>
@@ -142,9 +162,19 @@ export async function sendTaskUpdateEmail(emailData: EmailData) {
               </div>
 
               ${images.length > 0 ? `
-                <div class="image-notice">
-                  <p><strong>📸 ${images.length} photo(s) attached</strong></p>
-                  <p>Images have been uploaded with your service task. You can view them in your customer portal.</p>
+                <div class="image-section">
+                  <p><strong>📸 Service Photos <span class="image-count">${images.length}</span></strong></p>
+                  <div class="thumbnail-grid">
+                    ${thumbnails.map(img => `
+                      <img class="thumbnail" src="${img}" alt="Service photo" />
+                    `).join('')}
+                  </div>
+                  ${hasMoreImages ? `
+                    <p class="more-images">+ ${images.length - 4} more photos available in your account</p>
+                  ` : ''}
+                  <p style="font-size: 12px; color: #666; margin-top: 8px;">
+                    All photos are securely stored with your service record.
+                  </p>
                 </div>
               ` : ''}
 
@@ -170,7 +200,6 @@ export async function sendTaskUpdateEmail(emailData: EmailData) {
       to: to,
       subject: subject,
       html: htmlContent,
-      // Texto plano alternativo para clientes de email que no soportan HTML
       text: `
 Service Update: ${service}
 
@@ -184,7 +213,7 @@ Status: ${status}
 ${scheduledFor ? `Scheduled For: ${new Date(scheduledFor).toLocaleDateString()}` : ''}
 ${notes ? `Notes: ${notes}` : ''}
 
-${images.length > 0 ? `${images.length} image(s) have been attached to this task.` : ''}
+${images.length > 0 ? `${images.length} photo(s) have been attached to this task. View them in your account.` : ''}
 
 If you have any questions, please contact us.
 
@@ -194,6 +223,8 @@ The Kline Team
     };
 
     console.log('📧 Attempting to send email to:', to);
+    console.log('🖼️ Including thumbnails:', thumbnails.length);
+    
     const result = await transporter.sendMail(mailOptions);
     console.log('✅ Email sent successfully! Message ID:', result.messageId);
     
@@ -201,6 +232,14 @@ The Kline Team
 
   } catch (error) {
     console.error('❌ Failed to send email:', error);
-    throw error;
+    // No fallar la aplicación si el email falla
+    console.log('⚠️ Continuing without email notification...');
+    
+    // Manejar el tipo unknown correctamente
+    if (error instanceof Error) {
+      return { success: false, error: error.message };
+    } else {
+      return { success: false, error: 'Unknown error occurred' };
+    }
   }
 }
