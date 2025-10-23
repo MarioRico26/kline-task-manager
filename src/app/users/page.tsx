@@ -22,17 +22,32 @@ export default function UsersPage() {
 
   const fetchUsers = async () => {
     try {
-      // Esto lo implementaremos después con la API
-      const mockUsers: User[] = [
-        { id: '1', email: 'admin@kline.com', role: 'ADMIN', createdAt: '2024-01-01' },
-        { id: '2', email: 'viewer@kline.com', role: 'VIEWER', createdAt: '2024-01-02' },
-      ]
-      setUsers(mockUsers)
+      const response = await fetch('/api/users')
+      if (response.ok) {
+        const usersData = await response.json()
+        setUsers(usersData)
+      } else {
+        console.error('Error fetching users')
+      }
     } catch (error) {
       console.error('Error fetching users:', error)
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleLogout = () => {
+    // Eliminar cookie y redirigir al login
+    document.cookie = 'user-id=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;'
+    router.push('/auth/login')
+  }
+
+  const handleBack = () => {
+    router.back()
+  }
+
+  const handleDashboard = () => {
+    router.push('/dashboard')
   }
 
   const filteredUsers = users.filter(user => {
@@ -47,11 +62,28 @@ export default function UsersPage() {
       <header className="kline-header" style={{ padding: '1rem 0' }}>
         <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 1rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
               <button 
-                onClick={() => router.back()}
-                className="kline-btn-secondary"
-                style={{ padding: '0.5rem 1rem' }}
+                onClick={handleBack}
+                style={{ 
+                  background: 'transparent',
+                  border: '2px solid var(--kline-text-light)',
+                  color: 'var(--kline-text-light)',
+                  padding: '0.6rem 1.2rem',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontWeight: '600',
+                  fontSize: '0.9rem',
+                  transition: 'all 0.3s ease'
+                }}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.borderColor = 'var(--kline-red)'
+                  e.currentTarget.style.color = 'var(--kline-red)'
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.borderColor = 'var(--kline-text-light)'
+                  e.currentTarget.style.color = 'var(--kline-text-light)'
+                }}
               >
                 ← Back
               </button>
@@ -61,14 +93,33 @@ export default function UsersPage() {
             </div>
             <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
               <button 
-                onClick={() => router.push('/dashboard')}
-                className="kline-btn-secondary"
+                onClick={handleDashboard}
+                style={{ 
+                  background: 'var(--kline-yellow)',
+                  border: 'none',
+                  color: 'var(--kline-text)',
+                  padding: '0.6rem 1.2rem',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontWeight: '600',
+                  fontSize: '0.9rem',
+                  transition: 'all 0.3s ease'
+                }}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.background = 'var(--kline-yellow-light)'
+                  e.currentTarget.style.transform = 'translateY(-2px)'
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.background = 'var(--kline-yellow)'
+                  e.currentTarget.style.transform = 'translateY(0)'
+                }}
               >
                 Dashboard
               </button>
               <button 
-                onClick={() => {/* Logout implementation */}}
+                onClick={handleLogout}
                 className="kline-btn-primary"
+                style={{ padding: '0.6rem 1.2rem', fontSize: '0.9rem' }}
               >
                 Logout
               </button>
@@ -91,7 +142,7 @@ export default function UsersPage() {
                   value={filter}
                   onChange={(e) => setFilter(e.target.value)}
                   className="kline-input"
-                  style={{ paddingLeft: '2.5rem', width: '250px' }}
+                  style={{ paddingLeft: '2.5rem', width: '250px', padding: '0.8rem 1rem 0.8rem 2.5rem' }}
                 />
                 <span style={{ 
                   position: 'absolute', 
@@ -109,7 +160,7 @@ export default function UsersPage() {
                 value={roleFilter}
                 onChange={(e) => setRoleFilter(e.target.value)}
                 className="kline-input"
-                style={{ width: '150px' }}
+                style={{ width: '150px', padding: '0.8rem 1rem' }}
               >
                 <option value="ALL">All Roles</option>
                 <option value="ADMIN">Admin</option>
@@ -120,7 +171,8 @@ export default function UsersPage() {
             {/* Add User Button */}
             <button 
               className="kline-btn-primary"
-              onClick={() => {/* Open create modal */}}
+              style={{ padding: '0.8rem 1.5rem', fontSize: '0.9rem' }}
+              onClick={() => alert('Create user modal will be implemented next')}
             >
               + New User
             </button>
@@ -138,11 +190,12 @@ export default function UsersPage() {
               <div style={{ 
                 display: 'grid', 
                 gridTemplateColumns: '1fr auto auto', 
-                padding: '1rem 1.5rem',
+                padding: '1.2rem 1.5rem',
                 background: 'var(--kline-gray-light)',
                 borderBottom: '2px solid var(--kline-gray)',
                 fontWeight: '600',
-                color: 'var(--kline-text)'
+                color: 'var(--kline-text)',
+                fontSize: '0.9rem'
               }}>
                 <div>Email</div>
                 <div>Role</div>
@@ -155,18 +208,19 @@ export default function UsersPage() {
                   style={{ 
                     display: 'grid', 
                     gridTemplateColumns: '1fr auto auto', 
-                    padding: '1rem 1.5rem',
+                    padding: '1.2rem 1.5rem',
                     borderBottom: '1px solid var(--kline-gray)',
-                    alignItems: 'center'
+                    alignItems: 'center',
+                    fontSize: '0.9rem'
                   }}
                 >
                   <div style={{ fontWeight: '500' }}>{user.email}</div>
                   <div>
                     <span 
                       style={{ 
-                        padding: '0.25rem 0.75rem', 
+                        padding: '0.4rem 1rem', 
                         borderRadius: '20px', 
-                        fontSize: '0.85rem',
+                        fontSize: '0.8rem',
                         fontWeight: '600',
                         background: user.role === 'ADMIN' ? 'rgba(227, 6, 19, 0.1)' : 'rgba(255, 198, 0, 0.1)',
                         color: user.role === 'ADMIN' ? 'var(--kline-red)' : 'var(--kline-text)'
@@ -177,21 +231,39 @@ export default function UsersPage() {
                   </div>
                   <div style={{ display: 'flex', gap: '0.5rem' }}>
                     <button 
-                      className="kline-btn-secondary"
-                      style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
-                      onClick={() => {/* Edit user */}}
+                      style={{ 
+                        background: 'var(--kline-yellow)',
+                        border: 'none',
+                        color: 'var(--kline-text)',
+                        padding: '0.5rem 1rem',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontWeight: '600',
+                        fontSize: '0.8rem',
+                        transition: 'all 0.3s ease'
+                      }}
+                      onMouseOver={(e) => {
+                        e.currentTarget.style.background = 'var(--kline-yellow-light)'
+                        e.currentTarget.style.transform = 'translateY(-1px)'
+                      }}
+                      onMouseOut={(e) => {
+                        e.currentTarget.style.background = 'var(--kline-yellow)'
+                        e.currentTarget.style.transform = 'translateY(0)'
+                      }}
+                      onClick={() => alert('Edit user: ' + user.email)}
                     >
                       Edit
                     </button>
                     <button 
                       style={{ 
-                        padding: '0.4rem 0.8rem', 
-                        fontSize: '0.85rem',
+                        padding: '0.5rem 1rem', 
+                        fontSize: '0.8rem',
                         background: 'transparent',
-                        border: '1px solid var(--kline-red)',
+                        border: '2px solid var(--kline-red)',
                         color: 'var(--kline-red)',
                         borderRadius: '6px',
                         cursor: 'pointer',
+                        fontWeight: '600',
                         transition: 'all 0.3s ease'
                       }}
                       onMouseOver={(e) => {
@@ -202,7 +274,7 @@ export default function UsersPage() {
                         e.currentTarget.style.background = 'transparent'
                         e.currentTarget.style.color = 'var(--kline-red)'
                       }}
-                      onClick={() => {/* Delete user */}}
+                      onClick={() => alert('Delete user: ' + user.email)}
                     >
                       Delete
                     </button>
@@ -212,7 +284,7 @@ export default function UsersPage() {
 
               {filteredUsers.length === 0 && (
                 <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--kline-text-light)' }}>
-                  No users found
+                  {users.length === 0 ? 'No users found' : 'No users match your filters'}
                 </div>
               )}
             </>
@@ -225,19 +297,19 @@ export default function UsersPage() {
             <div style={{ fontSize: '2rem', fontWeight: '700', color: 'var(--kline-red)' }}>
               {users.length}
             </div>
-            <div style={{ color: 'var(--kline-text-light)' }}>Total Users</div>
+            <div style={{ color: 'var(--kline-text-light)', fontSize: '0.9rem' }}>Total Users</div>
           </div>
           <div className="kline-card" style={{ padding: '1.5rem', textAlign: 'center' }}>
             <div style={{ fontSize: '2rem', fontWeight: '700', color: 'var(--kline-red)' }}>
               {users.filter(u => u.role === 'ADMIN').length}
             </div>
-            <div style={{ color: 'var(--kline-text-light)' }}>Admin Users</div>
+            <div style={{ color: 'var(--kline-text-light)', fontSize: '0.9rem' }}>Admin Users</div>
           </div>
           <div className="kline-card" style={{ padding: '1.5rem', textAlign: 'center' }}>
             <div style={{ fontSize: '2rem', fontWeight: '700', color: 'var(--kline-red)' }}>
               {users.filter(u => u.role === 'VIEWER').length}
             </div>
-            <div style={{ color: 'var(--kline-text-light)' }}>Viewer Users</div>
+            <div style={{ color: 'var(--kline-text-light)', fontSize: '0.9rem' }}>Viewer Users</div>
           </div>
         </div>
       </main>
