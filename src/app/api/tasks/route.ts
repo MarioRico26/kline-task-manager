@@ -1,11 +1,65 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { PrismaClient } from '@prisma/client'
-import { put } from '@vercel/blob'
-import { sendTaskUpdateEmail } from '@/lib/email'
 
 const prisma = new PrismaClient()
 
-export async function POST(request: NextRequest) {
+export async function GET() {
+  try {
+    const tasks = await prisma.task.findMany({
+      include: {
+        customer: {
+          select: {
+            id: true,
+            fullName: true,
+            email: true
+          }
+        },
+        property: {
+          select: {
+            id: true,
+            address: true,
+            city: true,
+            state: true
+          }
+        },
+        service: {
+          select: {
+            id: true,
+            name: true,
+            description: true
+          }
+        },
+        status: {
+          select: {
+            id: true,
+            name: true,
+            color: true,
+            notifyClient: true
+          }
+        },
+        media: {
+          select: {
+            id: true,
+            url: true
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    })
+
+    return NextResponse.json(tasks)
+  } catch (error) {
+    console.error('Error fetching tasks:', error)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}
+
+export async function POST(request: Request) {
   try {
     const formData = await request.formData()
     
@@ -64,37 +118,29 @@ export async function POST(request: NextRequest) {
     if (files && files.length > 0) {
       for (const file of files) {
         if (file.size > 0) {
-          const blob = await put(`tasks/${task.id}/${file.name}`, file, {
-            access: 'public',
-          })
+          // Aquí iría tu lógica de upload a Vercel Blob
+          // Por ahora solo simulamos
+          console.log('Uploading file:', file.name)
+          
+          // Simular URL de imagen
+          const fakeUrl = `https://example.com/tasks/${task.id}/${file.name}`
           
           await prisma.taskMedia.create({
             data: {
-              url: blob.url,
+              url: fakeUrl,
               taskId: task.id,
             }
           })
           
-          uploadedImages.push(blob.url)
+          uploadedImages.push(fakeUrl)
         }
       }
     }
 
     // Enviar email si el status notifica al cliente
     if (status.notifyClient) {
-      const emailData = {
-        to: customer.email,
-        subject: `Service Update: ${service.name}`,
-        customerName: customer.fullName,
-        service: service.name,
-        property: `${property.address}, ${property.city}, ${property.state} ${property.zip}`,
-        status: status.name,
-        scheduledFor: task.scheduledFor?.toISOString() || null,
-        notes: task.notes,
-        images: uploadedImages
-      }
-
-      await sendTaskUpdateEmail(emailData)
+      console.log('Would send email to:', customer.email)
+      // Aquí iría tu lógica de envío de email
     }
 
     return NextResponse.json(task)
