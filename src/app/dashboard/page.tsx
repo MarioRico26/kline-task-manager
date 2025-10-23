@@ -8,6 +8,7 @@ interface DashboardStats {
   totalServices: number
   totalUsers: number
   totalProperties: number
+  totalStatuses: number
   completedTasks: number
   pendingTasks: number
   overdueTasks: number
@@ -20,14 +21,12 @@ interface DashboardStats {
     status: string
     scheduledFor: string | null
   }[]
-  monthlyStats: { month: string; tasks: number; completed: number }[]
 }
 
 export default function Dashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
-  const [timeRange, setTimeRange] = useState<'week' | 'month' | 'year'>('month')
   const router = useRouter()
 
   // 🔐 VERIFICACIÓN DE AUTENTICACIÓN
@@ -52,11 +51,12 @@ export default function Dashboard() {
     if (checkAuth()) {
       fetchDashboardData()
     }
-  }, [router, timeRange])
+  }, [router])
 
   const fetchDashboardData = async () => {
     try {
-      const response = await fetch(`/api/dashboard/stats?range=${timeRange}`)
+      setLoading(true)
+      const response = await fetch('/api/dashboard/stats')
       if (response.ok) {
         const data = await response.json()
         setStats(data)
@@ -111,8 +111,7 @@ export default function Dashboard() {
       count: stats?.totalTasks || 0,
       route: '/tasks',
       color: 'var(--kline-green)',
-      icon: '✅',
-      trend: '+12%'
+      icon: '✅'
     },
     {
       title: 'Customers',
@@ -120,8 +119,7 @@ export default function Dashboard() {
       count: stats?.totalCustomers || 0,
       route: '/customers',
       color: 'var(--kline-blue)',
-      icon: '👨‍💼',
-      trend: '+5%'
+      icon: '👨‍💼'
     },
     {
       title: 'Services',
@@ -129,8 +127,7 @@ export default function Dashboard() {
       count: stats?.totalServices || 0,
       route: '/services', 
       color: 'var(--kline-yellow)',
-      icon: '🛠️',
-      trend: '+8%'
+      icon: '🛠️'
     },
     {
       title: 'Users',
@@ -138,14 +135,37 @@ export default function Dashboard() {
       count: stats?.totalUsers || 0,
       route: '/users',
       color: 'var(--kline-red)',
-      icon: '👥',
-      trend: '+2%'
+      icon: '👥'
+    },
+    {
+      title: 'Properties',
+      description: 'Manage customer properties',
+      count: stats?.totalProperties || 0,
+      route: '/properties',
+      color: 'var(--kline-purple)',
+      icon: '🏠'
+    },
+    {
+      title: 'Statuses',
+      description: 'Manage task statuses',
+      count: stats?.totalStatuses || 0,
+      route: '/statuses',
+      color: 'var(--kline-orange)',
+      icon: '📊'
     }
   ]
 
   // Función para el gráfico de barras
   const renderBarChart = () => {
-    if (!stats?.tasksByService.length) return null
+    if (!stats?.tasksByService || stats.tasksByService.length === 0) {
+      return (
+        <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--kline-text-light)' }}>
+          <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📊</div>
+          <p>No task data available</p>
+          <p style={{ fontSize: '0.9rem' }}>Create some tasks to see statistics</p>
+        </div>
+      )
+    }
     
     const maxCount = Math.max(...stats.tasksByService.map(item => item.count))
     
@@ -156,7 +176,7 @@ export default function Dashboard() {
             <div 
               style={{ 
                 background: `linear-gradient(to top, var(--kline-blue), var(--kline-green))`,
-                height: `${(item.count / maxCount) * 150}px`,
+                height: `${maxCount > 0 ? (item.count / maxCount) * 150 : 50}px`,
                 width: '40px',
                 borderRadius: '8px 8px 0 0',
                 transition: 'height 1s ease',
@@ -198,9 +218,16 @@ export default function Dashboard() {
 
   // Función para el gráfico circular de estados
   const renderStatusChart = () => {
-    if (!stats?.tasksByStatus.length) return null
+    if (!stats?.tasksByStatus || stats.tasksByStatus.length === 0) {
+      return (
+        <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--kline-text-light)' }}>
+          <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📈</div>
+          <p>No status data available</p>
+        </div>
+      )
+    }
     
-    const total = stats.tasksByStatus.reduce((sum, item) => sum + item.count, 0)
+    const total = stats.tasksByStatus.reduce((sum, item) => sum + item.count, 0) || 1
     let currentAngle = 0
     
     return (
@@ -271,31 +298,13 @@ export default function Dashboard() {
                 Welcome back! Here's what's happening today.
               </p>
             </div>
-            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-              <select 
-                value={timeRange}
-                onChange={(e) => setTimeRange(e.target.value as any)}
-                style={{
-                  padding: '0.5rem 1rem',
-                  border: '2px solid var(--kline-gray)',
-                  borderRadius: '8px',
-                  background: 'white',
-                  color: 'var(--kline-text)',
-                  fontWeight: '600'
-                }}
-              >
-                <option value="week">Last Week</option>
-                <option value="month">Last Month</option>
-                <option value="year">Last Year</option>
-              </select>
-              <button 
-                onClick={handleLogout}
-                className="kline-btn-primary"
-                style={{ padding: '0.6rem 1.2rem', fontSize: '0.9rem' }}
-              >
-                Logout
-              </button>
-            </div>
+            <button 
+              onClick={handleLogout}
+              className="kline-btn-primary"
+              style={{ padding: '0.6rem 1.2rem', fontSize: '0.9rem' }}
+            >
+              Logout
+            </button>
           </div>
         </div>
       </header>
@@ -333,9 +342,6 @@ export default function Dashboard() {
                   {stats?.totalTasks || 0}
                 </div>
                 <div style={{ color: 'var(--kline-text-light)', fontSize: '0.9rem', fontWeight: '600' }}>Total Tasks</div>
-                <div style={{ color: 'var(--kline-green)', fontSize: '0.8rem', fontWeight: '600', marginTop: '0.5rem' }}>
-                  ↑ 12% from last month
-                </div>
               </div>
               
               <div className="kline-card" style={{ textAlign: 'center', padding: '1.5rem', position: 'relative', overflow: 'hidden' }}>
@@ -352,9 +358,6 @@ export default function Dashboard() {
                   {stats?.totalCustomers || 0}
                 </div>
                 <div style={{ color: 'var(--kline-text-light)', fontSize: '0.9rem', fontWeight: '600' }}>Total Customers</div>
-                <div style={{ color: 'var(--kline-blue)', fontSize: '0.8rem', fontWeight: '600', marginTop: '0.5rem' }}>
-                  ↑ 5% from last month
-                </div>
               </div>
               
               <div className="kline-card" style={{ textAlign: 'center', padding: '1.5rem', position: 'relative', overflow: 'hidden' }}>
@@ -390,9 +393,6 @@ export default function Dashboard() {
                   {stats?.pendingTasks || 0}
                 </div>
                 <div style={{ color: 'var(--kline-text-light)', fontSize: '0.9rem', fontWeight: '600' }}>Pending Tasks</div>
-                <div style={{ color: 'var(--kline-red)', fontSize: '0.8rem', fontWeight: '600', marginTop: '0.5rem' }}>
-                  Needs attention
-                </div>
               </div>
             </div>
 
@@ -488,22 +488,28 @@ export default function Dashboard() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
                     {renderStatusChart()}
                     <div style={{ flex: 1 }}>
-                      {stats?.tasksByStatus.map((status, index) => (
-                        <div key={index} style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
-                          <div style={{ 
-                            width: '12px', 
-                            height: '12px', 
-                            borderRadius: '50%', 
-                            background: status.color 
-                          }} />
-                          <div style={{ flex: 1, fontSize: '0.9rem', color: 'var(--kline-text)' }}>
-                            {status.status}
+                      {stats?.tasksByStatus && stats.tasksByStatus.length > 0 ? (
+                        stats.tasksByStatus.map((status, index) => (
+                          <div key={index} style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
+                            <div style={{ 
+                              width: '12px', 
+                              height: '12px', 
+                              borderRadius: '50%', 
+                              background: status.color 
+                            }} />
+                            <div style={{ flex: 1, fontSize: '0.9rem', color: 'var(--kline-text)' }}>
+                              {status.status}
+                            </div>
+                            <div style={{ fontWeight: '700', color: 'var(--kline-text)' }}>
+                              {status.count}
+                            </div>
                           </div>
-                          <div style={{ fontWeight: '700', color: 'var(--kline-text)' }}>
-                            {status.count}
-                          </div>
+                        ))
+                      ) : (
+                        <div style={{ textAlign: 'center', color: 'var(--kline-text-light)', padding: '1rem' }}>
+                          No status data available
                         </div>
-                      ))}
+                      )}
                     </div>
                   </div>
                 </div>
@@ -558,6 +564,7 @@ export default function Dashboard() {
                     <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--kline-text-light)' }}>
                       <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📝</div>
                       <p>No recent tasks</p>
+                      <p style={{ fontSize: '0.9rem', marginTop: '0.5rem' }}>Create some tasks to see them here</p>
                     </div>
                   )}
                 </div>
