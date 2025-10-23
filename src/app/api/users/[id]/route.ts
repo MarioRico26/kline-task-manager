@@ -3,16 +3,20 @@ import { PrismaClient } from '@prisma/client'
 
 const prisma = new PrismaClient()
 
+interface Context {
+  params: Promise<{ id: string }>
+}
+
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: Context
 ) {
   try {
     const { email, role } = await request.json()
-    const userId = params.id
+    const { id } = await context.params
 
     const user = await prisma.user.update({
-      where: { id: userId },
+      where: { id },
       data: { email, role },
       select: {
         id: true,
@@ -34,13 +38,13 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: Context
 ) {
   try {
-    const userId = params.id
+    const { id } = await context.params
 
     await prisma.user.delete({
-      where: { id: userId }
+      where: { id }
     })
 
     return NextResponse.json({ message: 'User deleted successfully' })
