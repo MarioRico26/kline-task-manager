@@ -1,16 +1,21 @@
 'use client'
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 
-export default function LoginPage() {
+// Componente principal envuelto en Suspense
+function LoginForm() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const from = searchParams.get('from') || '/dashboard'
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
+    setError('')
     
     try {
       const res = await fetch('/api/auth/login', {
@@ -19,13 +24,21 @@ export default function LoginPage() {
         body: JSON.stringify({ email, password })
       })
       
-      if (res.ok) {
-        router.push('/dashboard')
+      const data = await res.json()
+      
+      if (res.ok && data.user) {
+        // ✅ SETEAR COOKIE DE SESIÓN CORRECTAMENTE
+        document.cookie = `user-id=${data.user.id}; path=/; max-age=86400; SameSite=Lax` // 24 horas
+        
+        // ✅ REDIRIGIR A LA PÁGINA ORIGINAL O DASHBOARD
+        router.push(from)
+        router.refresh() // Forzar actualización del middleware
       } else {
-        alert('Invalid credentials')
+        setError(data.error || 'Invalid credentials')
       }
     } catch (error) {
-      alert('Server error - please try again')
+      setError('Server error - please try again')
+      console.error('Login error:', error)
     } finally {
       setLoading(false)
     }
@@ -81,6 +94,22 @@ export default function LoginPage() {
               Professional Task Management
             </p>
           </div>
+
+          {/* Error Message */}
+          {error && (
+            <div style={{
+              background: 'rgba(227, 6, 19, 0.1)',
+              border: '1px solid var(--kline-red)',
+              color: 'var(--kline-red)',
+              padding: '1rem',
+              borderRadius: '8px',
+              marginBottom: '1.5rem',
+              textAlign: 'center',
+              fontWeight: '600'
+            }}>
+              {error}
+            </div>
+          )}
           
           {/* Form */}
           <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
@@ -95,6 +124,7 @@ export default function LoginPage() {
                 placeholder="Enter your email"
                 required
                 className="kline-input"
+                disabled={loading}
               />
             </div>
             
@@ -109,6 +139,7 @@ export default function LoginPage() {
                 placeholder="Enter your password"
                 required
                 className="kline-input"
+                disabled={loading}
               />
             </div>
             
@@ -116,18 +147,78 @@ export default function LoginPage() {
               type="submit"
               disabled={loading}
               className="kline-btn-primary"
-              style={{ width: '100%', opacity: loading ? 0.7 : 1 }}
+              style={{ 
+                width: '100%', 
+                opacity: loading ? 0.7 : 1,
+                cursor: loading ? 'not-allowed' : 'pointer'
+              }}
             >
               {loading ? 'Signing in...' : 'SIGN IN TO DASHBOARD'}
             </button>
           </form>
+
+          {/* Demo Credentials Hint */}
+          <div style={{ 
+            marginTop: '2rem', 
+            padding: '1rem',
+            background: 'var(--kline-gray-light)',
+            borderRadius: '8px',
+            border: '1px solid var(--kline-gray)',
+            textAlign: 'center',
+            fontSize: '0.9rem',
+            color: 'var(--kline-text-light)'
+          }}>
+            <strong>Demo Access:</strong><br />
+            Use any email/password combination
+          </div>
         </div>
         
         {/* Footer */}
         <div style={{ textAlign: 'center', marginTop: '2rem', color: 'var(--kline-text-light)' }}>
-          <p>Kline Brothers Task Management System</p>
+          <p>Kline Brothers Task Notification System</p>
         </div>
       </div>
     </div>
+  )
+}
+
+// Componente de carga para Suspense
+function LoginLoading() {
+  return (
+    <div style={{ 
+      minHeight: '100vh',
+      background: 'var(--kline-gray-light)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '1rem'
+    }}>
+      <div style={{ maxWidth: '440px', width: '100%' }}>
+        <div className="kline-card" style={{ padding: '3rem', textAlign: 'center' }}>
+          <div style={{
+            width: '80px',
+            height: '80px',
+            background: 'var(--kline-gray)',
+            borderRadius: '12px',
+            margin: '0 auto 1.5rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            <span style={{ color: 'white', fontWeight: 'bold', fontSize: '2rem' }}>K</span>
+          </div>
+          <p style={{ color: 'var(--kline-text-light)' }}>Loading...</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Página principal con Suspense boundary
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<LoginLoading />}>
+      <LoginForm />
+    </Suspense>
   )
 }
