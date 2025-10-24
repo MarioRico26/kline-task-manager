@@ -87,9 +87,8 @@ export async function PUT(request: NextRequest) {
     // ENVIAR NOTIFICACIONES EN PARALELO E INDEPENDIENTES
     const notificationPromises = [];
 
-    // 1. EMAIL - Si el status cambió y notifica al cliente
-    const statusChanged = existingTask.statusId !== statusId;
-    if (statusChanged && newStatus?.notifyClient && existingTask.customer.email) {
+    // 1. EMAIL - Enviar SIEMPRE que el status notifique al cliente
+    if (newStatus?.notifyClient && existingTask.customer.email) {
       notificationPromises.push(
         (async () => {
           try {
@@ -114,9 +113,15 @@ export async function PUT(request: NextRequest) {
           }
         })()
       );
+    } else {
+      console.log('ℹ️ Email skipped - reasons:', {
+        hasNewStatus: !!newStatus,
+        notifyClient: newStatus?.notifyClient,
+        hasEmail: !!existingTask.customer.email
+      });
     }
 
-    // 2. SMS - Siempre que tenga teléfono (independiente del email y del status change)
+    // 2. SMS - Siempre que tenga teléfono
     if (existingTask.customer.phone) {
       notificationPromises.push(
         (async () => {
@@ -146,19 +151,23 @@ export async function PUT(request: NextRequest) {
           }
         })()
       );
+    } else {
+      console.log('ℹ️ SMS skipped - no phone number for customer');
     }
 
     // Esperar todas las notificaciones (pero no fallar si alguna falla)
     if (notificationPromises.length > 0) {
       const results = await Promise.allSettled(notificationPromises);
       console.log('📨 Update notification results:', results);
+    } else {
+      console.log('ℹ️ No notifications to send');
     }
 
     return NextResponse.json({
       ...task,
       notifications: {
-        email: statusChanged && newStatus?.notifyClient && existingTask.customer.email ? 'sent' : 'skipped',
-        sms: existingTask.customer.phone ? 'sent' : 'no_phone'
+        email: newStatus?.notifyClient && existingTask.customer.email ? 'sent' : 'skipped',
+        sms: existingTask.customer.phone ? 'attempted' : 'no_phone'
       }
     })
   } catch (error) {
