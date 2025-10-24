@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { PrismaClient } from '@prisma/client'
 import { uploadFile } from '@/lib/upload'
 import { sendTaskUpdateEmail } from '@/lib/email'
+import { smsService } from '@/lib/sms-services'
 
 const prisma = new PrismaClient()
 
@@ -83,29 +84,83 @@ export async function PUT(request: NextRequest) {
       }
     }
 
-    // Enviar email si el status cambió y notifica al cliente
-    if (newStatus?.notifyClient && existingTask.customer.email) {
-      try {
-        const emailData = {
-          to: existingTask.customer.email,
-          subject: `Service Update: ${task.service.name}`,
-          customerName: existingTask.customer.fullName,
-          service: task.service.name,
-          property: `${task.property.address}, ${task.property.city}, ${task.property.state} ${task.property.zip}`,
-          status: newStatus.name,
-          scheduledFor: task.scheduledFor?.toISOString() || null,
-          notes: task.notes,
-          images: uploadedImages
-        }
+    // ENVIAR NOTIFICACIONES EN PARALELO E INDEPENDIENTES
+    const notificationPromises = [];
 
-        await sendTaskUpdateEmail(emailData)
-        console.log('Update email sent successfully to:', existingTask.customer.email)
-      } catch (emailError) {
-        console.error('Failed to send update email:', emailError)
-      }
+    // 1. EMAIL - Si el status cambió y notifica al cliente
+    const statusChanged = existingTask.statusId !== statusId;
+    if (statusChanged && newStatus?.notifyClient && existingTask.customer.email) {
+      notificationPromises.push(
+        (async () => {
+          try {
+            const emailData = {
+              to: existingTask.customer.email,
+              subject: `Service Update: ${task.service.name}`,
+              customerName: existingTask.customer.fullName,
+              service: task.service.name,
+              property: `${task.property.address}, ${task.property.city}, ${task.property.state} ${task.property.zip}`,
+              status: newStatus.name,
+              scheduledFor: task.scheduledFor?.toISOString() || null,
+              notes: task.notes,
+              images: uploadedImages
+            }
+
+            await sendTaskUpdateEmail(emailData)
+            console.log('✅ Update email sent successfully to:', existingTask.customer.email)
+            return { type: 'email', success: true }
+          } catch (emailError) {
+            console.error('❌ Failed to send update email:', emailError)
+            return { type: 'email', success: false, error: emailError }
+          }
+        })()
+      );
     }
 
-    return NextResponse.json(task)
+    // 2. SMS - Siempre que tenga teléfono (independiente del email y del status change)
+    if (existingTask.customer.phone) {
+      notificationPromises.push(
+        (async () => {
+          try {
+            const smsResult = await smsService.sendTaskNotification(
+              existingTask.customer.phone!,
+              existingTask.customer.fullName,
+              {
+                service: task.service.name,
+                scheduledFor: task.scheduledFor,
+                status: newStatus?.name || task.status.name,
+                propertyAddress: `${task.property.address}, ${task.property.city}`
+              },
+              'update'
+            )
+
+            if (smsResult.success) {
+              console.log('✅ Update SMS sent successfully to:', existingTask.customer.phone)
+              return { type: 'sms', success: true }
+            } else {
+              console.warn('⚠️ Update SMS failed:', smsResult.error)
+              return { type: 'sms', success: false, error: smsResult.error }
+            }
+          } catch (smsError) {
+            console.error('❌ Update SMS sending error:', smsError)
+            return { type: 'sms', success: false, error: smsError }
+          }
+        })()
+      );
+    }
+
+    // Esperar todas las notificaciones (pero no fallar si alguna falla)
+    if (notificationPromises.length > 0) {
+      const results = await Promise.allSettled(notificationPromises);
+      console.log('📨 Update notification results:', results);
+    }
+
+    return NextResponse.json({
+      ...task,
+      notifications: {
+        email: statusChanged && newStatus?.notifyClient && existingTask.customer.email ? 'sent' : 'skipped',
+        sms: existingTask.customer.phone ? 'sent' : 'no_phone'
+      }
+    })
   } catch (error) {
     console.error('Error updating task:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

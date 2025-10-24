@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { PrismaClient } from '@prisma/client'
 import { uploadFile } from '@/lib/upload'
 import { sendTaskUpdateEmail } from '@/lib/email'
+import { smsService } from '@/lib/sms-services'
 
 const prisma = new PrismaClient()
 
@@ -15,7 +16,8 @@ export async function GET() {
           select: {
             id: true,
             fullName: true,
-            email: true
+            email: true,
+            phone: true  // ← Agregar phone aquí también
           }
         },
         property: {
@@ -143,30 +145,82 @@ export async function POST(request: Request) {
       }
     }
 
-    // Enviar email si el status notifica al cliente
-    if (status.notifyClient && customer.email) {
-      try {
-        const emailData = {
-          to: customer.email,
-          subject: `Service Update: ${service.name}`,
-          customerName: customer.fullName,
-          service: service.name,
-          property: `${property.address}, ${property.city}, ${property.state} ${property.zip}`,
-          status: status.name,
-          scheduledFor: task.scheduledFor?.toISOString() || null,
-          notes: task.notes,
-          images: uploadedImages
-        }
+    // ENVIAR NOTIFICACIONES EN PARALELO E INDEPENDIENTES
+    const notificationPromises = [];
 
-        await sendTaskUpdateEmail(emailData)
-        console.log('Email sent successfully to:', customer.email)
-      } catch (emailError) {
-        console.error('Failed to send email:', emailError)
-        // No fallar la creación de la tarea si el email falla
-      }
+    // 1. EMAIL - Si el status notifica al cliente
+    if (status.notifyClient && customer.email) {
+      notificationPromises.push(
+        (async () => {
+          try {
+            const emailData = {
+              to: customer.email,
+              subject: `Service Update: ${service.name}`,
+              customerName: customer.fullName,
+              service: service.name,
+              property: `${property.address}, ${property.city}, ${property.state} ${property.zip}`,
+              status: status.name,
+              scheduledFor: task.scheduledFor?.toISOString() || null,
+              notes: task.notes,
+              images: uploadedImages
+            }
+
+            await sendTaskUpdateEmail(emailData)
+            console.log('✅ Email sent successfully to:', customer.email)
+            return { type: 'email', success: true }
+          } catch (emailError) {
+            console.error('❌ Failed to send email:', emailError)
+            return { type: 'email', success: false, error: emailError }
+          }
+        })()
+      );
     }
 
-    return NextResponse.json(task)
+    // 2. SMS - Independiente del email (siempre que tenga teléfono)
+    if (customer.phone) {
+      notificationPromises.push(
+        (async () => {
+          try {
+            const smsResult = await smsService.sendTaskNotification(
+              customer.phone!, // El teléfono sin formato +1
+              customer.fullName,
+              {
+                service: service.name,
+                scheduledFor: task.scheduledFor,
+                status: status.name,
+                propertyAddress: `${property.address}, ${property.city}`
+              },
+              'creation'
+            )
+
+            if (smsResult.success) {
+              console.log('✅ SMS sent successfully to:', customer.phone)
+              return { type: 'sms', success: true }
+            } else {
+              console.warn('⚠️ SMS failed:', smsResult.error)
+              return { type: 'sms', success: false, error: smsResult.error }
+            }
+          } catch (smsError) {
+            console.error('❌ SMS sending error:', smsError)
+            return { type: 'sms', success: false, error: smsError }
+          }
+        })()
+      );
+    }
+
+    // Esperar todas las notificaciones (pero no fallar si alguna falla)
+    if (notificationPromises.length > 0) {
+      const results = await Promise.allSettled(notificationPromises);
+      console.log('📨 Notification results:', results);
+    }
+
+    return NextResponse.json({
+      ...task,
+      notifications: {
+        email: customer.email && status.notifyClient ? 'sent' : 'skipped',
+        sms: customer.phone ? 'sent' : 'no_phone'
+      }
+    })
   } catch (error) {
     console.error('Error creating task:', error)
     return NextResponse.json(
