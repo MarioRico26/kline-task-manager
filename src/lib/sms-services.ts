@@ -5,9 +5,22 @@ class SMSService {
   private fromNumber: string;
 
   constructor() {
+    // DEBUG: Verificar que las variables existen
+    console.log('🔍 SMS Service - Environment check:', {
+      hasAccountSid: !!process.env.TWILIO_ACCOUNT_SID,
+      hasAuthToken: !!process.env.TWILIO_AUTH_TOKEN,
+      hasPhoneNumber: !!process.env.TWILIO_PHONE_NUMBER,
+      accountSidLength: process.env.TWILIO_ACCOUNT_SID?.length,
+      authTokenLength: process.env.TWILIO_AUTH_TOKEN?.length
+    });
+
+    if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN) {
+      throw new Error('Twilio credentials are missing');
+    }
+
     this.client = twilio(
-      process.env.TWILIO_ACCOUNT_SID!,
-      process.env.TWILIO_AUTH_TOKEN!
+      process.env.TWILIO_ACCOUNT_SID,
+      process.env.TWILIO_AUTH_TOKEN
     );
     this.fromNumber = process.env.TWILIO_PHONE_NUMBER!;
   }
@@ -17,40 +30,58 @@ class SMSService {
     customerName: string, 
     taskData: { 
       service: string; 
-      scheduledFor?: Date | string | null;  // ← CAMBIAR AQUÍ: Date | string | null
+      scheduledFor?: Date | string | null;
       status?: string;
       propertyAddress?: string;
     },
     type: 'creation' | 'update'
   ): Promise<{ success: boolean; error?: string }> {
     
+    console.log('🔍 SMS Service - Attempting to send SMS:', {
+      customerPhone,
+      customerName,
+      taskData,
+      type
+    });
+
     // Validar que tenga número
     if (!customerPhone) {
+      console.log('❌ SMS Service - No phone number provided');
       return { success: false, error: 'No phone number provided' };
     }
 
     // Formatear número (agregar +1 si no lo tiene)
     const formattedPhone = this.formatPhoneNumber(customerPhone);
     if (!formattedPhone) {
+      console.log('❌ SMS Service - Invalid phone number format:', customerPhone);
       return { success: false, error: 'Invalid phone number format' };
     }
 
+    console.log('🔍 SMS Service - Formatted phone:', formattedPhone);
+
     // Crear mensaje según tipo
     const message = this.buildMessage(customerName, taskData, type);
+    console.log('🔍 SMS Service - Message content:', message);
 
     try {
       // Enviar SMS
+      console.log('🔍 SMS Service - Sending via Twilio...');
       const result = await this.client.messages.create({
         body: message,
         from: this.fromNumber,
         to: formattedPhone
       });
 
-      console.log('✅ SMS sent successfully:', result.sid);
+      console.log('✅ SMS Service - SMS sent successfully:', result.sid);
       return { success: true };
 
     } catch (error: any) {
-      console.error('❌ SMS sending failed:', error);
+      console.error('❌ SMS Service - SMS sending failed:', error);
+      console.error('❌ SMS Service - Error details:', {
+        code: error.code,
+        message: error.message,
+        moreInfo: error.moreInfo
+      });
       return { 
         success: false, 
         error: error.message || 'Unknown error occurred' 
@@ -58,28 +89,25 @@ class SMSService {
     }
   }
 
+  // ... el resto del código permanece igual
   private formatPhoneNumber(phone: string): string | null {
     if (!phone) return null;
 
-    // Limpiar el número (quitar espacios, guiones, paréntesis, etc.)
     const cleaned = phone.replace(/\D/g, '');
     
-    // Si ya tiene +1, dejarlo como está
     if (cleaned.startsWith('1') && cleaned.length === 11) {
       return `+${cleaned}`;
     }
     
-    // Si tiene 10 dígitos, agregar +1
     if (cleaned.length === 10) {
       return `+1${cleaned}`;
     }
     
-    // Si tiene 11 dígitos y empieza con 1, agregar +
     if (cleaned.length === 11 && cleaned.startsWith('1')) {
       return `+${cleaned}`;
     }
 
-    console.warn('⚠️ Formato de teléfono no soportado:', phone, 'cleaned:', cleaned);
+    console.warn('⚠️ SMS Service - Formato de teléfono no soportado:', phone, 'cleaned:', cleaned);
     return null;
   }
 
@@ -102,7 +130,6 @@ class SMSService {
     const serviceLine = `We are writing to inform you that your ${taskData.service} service`;
     const addressLine = taskData.propertyAddress ? ` at ${taskData.propertyAddress}` : '';
     
-    // Manejar tanto Date como string para scheduledFor
     let dateLine = '';
     if (taskData.scheduledFor) {
       const date = typeof taskData.scheduledFor === 'string' 
