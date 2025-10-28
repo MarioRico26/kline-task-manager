@@ -28,12 +28,12 @@ function LoginForm() {
       const data = await res.json()
       
       if (res.ok && data.user) {
-        // ✅ SETEAR COOKIE DE SESIÓN CORRECTAMENTE
-        document.cookie = `user-id=${data.user.id}; path=/; max-age=86400; SameSite=Lax` // 24 horas
-        
-        // ✅ REDIRIGIR A LA PÁGINA ORIGINAL O DASHBOARD
-        router.push(from)
-        router.refresh() // Forzar actualización del middleware
+        // ❌ QUITAR ESTA LÍNEA:
+        // document.cookie = `user-id=${data.user.id}; path=/; max-age=86400; SameSite=Lax`
+  
+        // ✅ Solo redirect. Cookie ya está puesta por el servidor.
+        router.push('/dashboard')
+        router.refresh()
       } else {
         setError(data.error || 'Invalid credentials')
       }

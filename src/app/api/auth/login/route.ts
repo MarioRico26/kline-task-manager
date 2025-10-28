@@ -27,11 +27,13 @@ export async function POST(request: Request) {
       user: { id: user.id, email: user.email, role: user.role }
     })
     
-    response.cookies.set('user-id', user.id, {
+    // ✅ Cookie sólida solo desde servidor. Chrome-friendly ✅
+    response.cookies.set('user-id', String(user.id), {
       httpOnly: true,
-      secure: true,
+      secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 60 * 60 * 24
+      path: '/',
+      maxAge: 60 * 60 * 24, // 24h
     })
     
     return response

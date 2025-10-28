@@ -1,4 +1,3 @@
-//kline-task-manager/src/hooks/useAuth.ts:
 'use client'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -8,25 +7,21 @@ export function useAuth(redirectTo: string = '/auth/login') {
   const router = useRouter()
 
   useEffect(() => {
-    const checkAuth = () => {
-      const userId = document.cookie
+    const checkSession = () => {
+      const cookie = document.cookie
         .split('; ')
         .find(row => row.startsWith('user-id='))
-        ?.split('=')[1]
 
-      if (!userId) {
-        console.log('🚫 NO HAY SESIÓN - Redirigiendo a login')
-        router.push(redirectTo)
+      if (!cookie) {
         setIsAuthenticated(false)
-        return false
+        router.replace(redirectTo)
+      } else {
+        setIsAuthenticated(true)
       }
-      
-      setIsAuthenticated(true)
-      return true
     }
 
-    checkAuth()
-  }, [router, redirectTo])
+    checkSession()
+  }, [redirectTo, router])
 
   return { isAuthenticated }
 }
