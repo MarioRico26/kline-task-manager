@@ -33,32 +33,11 @@ export default function PropertiesPage() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [editingProperty, setEditingProperty] = useState<Property | null>(null)
   const [deletingProperty, setDeletingProperty] = useState<Property | null>(null)
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
   const router = useRouter()
 
-  // 🔐 VERIFICACIÓN DE AUTENTICACIÓN
   useEffect(() => {
-    const checkAuth = () => {
-      const userId = document.cookie
-        .split('; ')
-        .find(row => row.startsWith('user-id='))
-        ?.split('=')[1]
-
-      if (!userId) {
-        console.log('🚫 NO HAY SESIÓN - Redirigiendo a login')
-        router.push('/auth/login')
-        setIsAuthenticated(false)
-        return false
-      }
-      
-      setIsAuthenticated(true)
-      return true
-    }
-
-    if (checkAuth()) {
-      fetchData()
-    }
-  }, [router])
+    fetchData()
+  }, [])
 
   const fetchData = async () => {
     try {
@@ -111,35 +90,6 @@ export default function PropertiesPage() {
     } catch (error) {
       alert('Network error')
     }
-  }
-
-  // 🔐 SI NO ESTÁ AUTENTICADO, MOSTRAR LOADING
-  if (isAuthenticated === false) {
-    return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        height: '100vh',
-        background: 'var(--kline-gray-light)'
-      }}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{
-            width: '60px',
-            height: '60px',
-            background: 'var(--kline-red)',
-            borderRadius: '8px',
-            margin: '0 auto 1rem',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}>
-            <span style={{ color: 'white', fontWeight: 'bold', fontSize: '1.5rem' }}>K</span>
-          </div>
-          <p style={{ color: 'var(--kline-text-light)' }}>Redirecting to login...</p>
-        </div>
-      </div>
-    )
   }
 
   const filteredProperties = properties.filter(property => {

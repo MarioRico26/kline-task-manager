@@ -75,43 +75,40 @@ export default function TasksPage() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [editingTask, setEditingTask] = useState<Task | null>(null)
   const [deletingTask, setDeletingTask] = useState<Task | null>(null)
-  const [viewingTask, setViewingTask] = useState<Task | null>(null)
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null) // 🔐 NUEVO
   const router = useRouter()
 
-  // 🔐 VERIFICACIÓN DE AUTENTICACIÓN (AÑADIDO)
-  useEffect(() => {
-    const checkAuth = () => {
-      const userId = document.cookie
-        .split('; ')
-        .find(row => row.startsWith('user-id='))
-        ?.split('=')[1]
+  // ✅ Chequeo de sesión una sola vez al cargar
+useEffect(() => {
+  const userId = document.cookie
+    .split('; ')
+    .find(row => row.startsWith('user-id='))
+    ?.split('=')[1]
 
-      if (!userId) {
-        console.log('🚫 NO HAY SESIÓN - Redirigiendo a login')
-        router.push('/auth/login')
-        setIsAuthenticated(false)
-        return false
-      }
-      
-      setIsAuthenticated(true)
-      return true
-    }
+  if (!userId) {
+    setIsAuthenticated(false)
+    router.push('/auth/login')
+    return
+  }
+  setIsAuthenticated(true)
+}, [router])
 
-    if (checkAuth()) {
-      fetchData()
-    }
-  }, [router])
+// ✅ Cargar datos solo cuando ya estamos seguros que hay login
+useEffect(() => {
+  if (isAuthenticated === true) {
+    fetchData()
+  }
+}, [isAuthenticated])
 
   const fetchData = async () => {
     try {
       setLoading(true)
       const [tasksRes, customersRes, propertiesRes, servicesRes, statusesRes] = await Promise.all([
-        fetch('/api/tasks'),
-        fetch('/api/customers'),
-        fetch('/api/properties'),
-        fetch('/api/services'),
-        fetch('/api/statuses')
+        fetch('/api/tasks', { cache: 'no-store', credentials: 'include' }),
+        fetch('/api/customers', { cache: 'no-store', credentials: 'include' }),
+        fetch('/api/properties', { cache: 'no-store', credentials: 'include' }),
+        fetch('/api/services', { cache: 'no-store', credentials: 'include' }),
+        fetch('/api/statuses', { cache: 'no-store', credentials: 'include' })
       ])
 
       if (tasksRes.ok && customersRes.ok && propertiesRes.ok && servicesRes.ok && statusesRes.ok) {
@@ -134,6 +131,33 @@ export default function TasksPage() {
     } finally {
       setLoading(false)
     }
+  }
+  if (isAuthenticated === null) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '100vh',
+        background: 'var(--kline-gray-light)'
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{
+            width: '60px',
+            height: '60px',
+            background: 'var(--kline-red)',
+            borderRadius: '8px',
+            margin: '0 auto 1rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            <span style={{ color: 'white', fontWeight: 'bold', fontSize: '1.5rem' }}>K</span>
+          </div>
+          <p style={{ color: 'var(--kline-text-light)' }}>Checking session...</p>
+        </div>
+      </div>
+    )
   }
 
   // 🔐 REDIRECCIÓN SI NO ESTÁ AUTENTICADO (AÑADIDO)
