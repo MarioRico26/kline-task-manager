@@ -188,6 +188,19 @@ useEffect(() => {
       </div>
     )
   }
+  if (isAuthenticated === true && loading) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '100vh',
+        background: 'var(--kline-gray-light)'
+      }}>
+        <p style={{ color: 'var(--kline-text-light)' }}>Loading tasks...</p>
+      </div>
+    )
+  }
 
   const handleLogout = () => {
     document.cookie = 'user-id=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;'

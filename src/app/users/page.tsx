@@ -21,29 +21,7 @@ export default function UsersPage() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null) // 🔐 NUEVO
   const router = useRouter()
 
-  // 🔐 VERIFICACIÓN DE AUTENTICACIÓN (AÑADIDO)
-  useEffect(() => {
-    const checkAuth = () => {
-      const userId = document.cookie
-        .split('; ')
-        .find(row => row.startsWith('user-id='))
-        ?.split('=')[1]
-
-      if (!userId) {
-        console.log('🚫 NO HAY SESIÓN - Redirigiendo a login')
-        router.push('/auth/login')
-        setIsAuthenticated(false)
-        return false
-      }
-      
-      setIsAuthenticated(true)
-      return true
-    }
-
-    if (checkAuth()) {
-      fetchUsers()
-    }
-  }, [router])
+  
 
   const fetchUsers = async () => {
     try {
@@ -61,34 +39,101 @@ export default function UsersPage() {
     }
   }
 
-  // 🔐 REDIRECCIÓN SI NO ESTÁ AUTENTICADO (AÑADIDO)
-  if (isAuthenticated === false) {
-    return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        height: '100vh',
-        background: 'var(--kline-gray-light)'
-      }}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{
-            width: '60px',
-            height: '60px',
-            background: 'var(--kline-red)',
-            borderRadius: '8px',
-            margin: '0 auto 1rem',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}>
-            <span style={{ color: 'white', fontWeight: 'bold', fontSize: '1.5rem' }}>K</span>
-          </div>
-          <p style={{ color: 'var(--kline-text-light)' }}>Redirecting to login...</p>
-        </div>
-      </div>
-    )
+  // ✅ Chequeo de sesión una sola vez al cargar
+useEffect(() => {
+  const userId = document.cookie
+    .split('; ')
+    .find(row => row.startsWith('user-id='))
+    ?.split('=')[1]
+
+  if (!userId) {
+    setIsAuthenticated(false)
+    router.push('/auth/login')
+    return
   }
+  
+  setIsAuthenticated(true)
+}, [router])
+
+// ✅ Cargar datos solo cuando ya estamos seguros que hay login
+useEffect(() => {
+  if (isAuthenticated === true) {
+    fetchUsers()
+  }
+}, [isAuthenticated])
+
+// ✅ Mostrar pantalla "Checking session..." mientras no sabemos
+if (isAuthenticated === null) {
+  return (
+    <div style={{ 
+      display: 'flex', 
+      justifyContent: 'center', 
+      alignItems: 'center', 
+      height: '100vh',
+      background: 'var(--kline-gray-light)'
+    }}>
+      <div style={{ textAlign: 'center' }}>
+        <div style={{
+          width: '60px',
+          height: '60px',
+          background: 'var(--kline-red)',
+          borderRadius: '8px',
+          margin: '0 auto 1rem',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}>
+          <span style={{ color: 'white', fontWeight: 'bold', fontSize: '1.5rem' }}>K</span>
+        </div>
+        <p style={{ color: 'var(--kline-text-light)' }}>Checking session...</p>
+      </div>
+    </div>
+  )
+}
+
+// ✅ Pantalla si ya sabemos que no hay sesión
+if (isAuthenticated === false) {
+  return (
+    <div style={{ 
+      display: 'flex', 
+      justifyContent: 'center', 
+      alignItems: 'center', 
+      height: '100vh',
+      background: 'var(--kline-gray-light)'
+    }}>
+      <div style={{ textAlign: 'center' }}>
+        <div style={{
+          width: '60px',
+          height: '60px',
+          background: 'var(--kline-red)',
+          borderRadius: '8px',
+          margin: '0 auto 1rem',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}>
+          <span style={{ color: 'white', fontWeight: 'bold', fontSize: '1.5rem' }}>K</span>
+        </div>
+        <p style={{ color: 'var(--kline-text-light)' }}>Redirecting to login...</p>
+      </div>
+    </div>
+  )
+}
+
+// ✅ Mostrar loader de datos solo si ya estamos autenticados y aún cargando
+if (isAuthenticated === true && loading) {
+  return (
+    <div style={{ 
+      display: 'flex', 
+      justifyContent: 'center', 
+      alignItems: 'center', 
+      height: '100vh',
+      background: 'var(--kline-gray-light)'
+    }}>
+      <p style={{ color: 'var(--kline-text-light)' }}>Loading users...</p>
+    </div>
+  )
+}
 
   const handleLogout = () => {
     document.cookie = 'user-id=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;'
