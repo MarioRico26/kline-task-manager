@@ -78,20 +78,28 @@ export default function TasksPage() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null) // 🔐 NUEVO
   const router = useRouter()
 
-  // ✅ Chequeo de sesión una sola vez al cargar
-useEffect(() => {
-  const userId = document.cookie
-    .split('; ')
-    .find(row => row.startsWith('user-id='))
-    ?.split('=')[1]
-
-  if (!userId) {
-    setIsAuthenticated(false)
-    router.push('/auth/login')
-    return
-  }
-  setIsAuthenticated(true)
-}, [router])
+  useEffect(() => {
+    async function checkAuth() {
+      try {
+        const res = await fetch('/api/auth/check', {
+          credentials: 'include',
+          cache: 'no-store'
+        })
+  
+        if (res.ok) {
+          setIsAuthenticated(true)
+        } else {
+          setIsAuthenticated(false)
+          router.push('/auth/login')
+        }
+      } catch (error) {
+        setIsAuthenticated(false)
+        router.push('/auth/login')
+      }
+    }
+  
+    checkAuth()
+  }, [router])
 
 // ✅ Cargar datos solo cuando ya estamos seguros que hay login
 useEffect(() => {

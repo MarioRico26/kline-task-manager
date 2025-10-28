@@ -39,21 +39,28 @@ export default function UsersPage() {
     }
   }
 
-  // ✅ Chequeo de sesión una sola vez al cargar
-useEffect(() => {
-  const userId = document.cookie
-    .split('; ')
-    .find(row => row.startsWith('user-id='))
-    ?.split('=')[1]
-
-  if (!userId) {
-    setIsAuthenticated(false)
-    router.push('/auth/login')
-    return
-  }
+  useEffect(() => {
+    async function checkAuth() {
+      try {
+        const res = await fetch('/api/auth/check', {
+          credentials: 'include',
+          cache: 'no-store'
+        })
   
-  setIsAuthenticated(true)
-}, [router])
+        if (res.ok) {
+          setIsAuthenticated(true)
+        } else {
+          setIsAuthenticated(false)
+          router.push('/auth/login')
+        }
+      } catch (error) {
+        setIsAuthenticated(false)
+        router.push('/auth/login')
+      }
+    }
+  
+    checkAuth()
+  }, [router])
 
 // ✅ Cargar datos solo cuando ya estamos seguros que hay login
 useEffect(() => {
