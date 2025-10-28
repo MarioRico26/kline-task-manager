@@ -28,32 +28,12 @@ interface DashboardStats {
 export default function Dashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [loading, setLoading] = useState(true)
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
   const [hoveredCard, setHoveredCard] = useState<number | null>(null)
   const router = useRouter()
 
-  // 🔐 VERIFICACIÓN DE AUTENTICACIÓN
   useEffect(() => {
-    const checkAuth = () => {
-      const userId = document.cookie
-        .split('; ')
-        .find(row => row.startsWith('user-id='))
-        ?.split('=')[1]
-
-      if (!userId) {
-        router.push('/auth/login')
-        setIsAuthenticated(false)
-        return false
-      }
-      
-      setIsAuthenticated(true)
-      return true
-    }
-
-    if (checkAuth()) {
-      fetchDashboardData()
-    }
-  }, [router])
+    fetchDashboardData()
+  }, [])
 
   const fetchDashboardData = async () => {
     try {
@@ -68,37 +48,6 @@ export default function Dashboard() {
     } finally {
       setLoading(false)
     }
-  }
-
-  // 🔐 REDIRECCIÓN SI NO ESTÁ AUTENTICADO
-  if (isAuthenticated === false) {
-    return (
-      <div style={{ 
-        minHeight: '100vh', 
-        background: 'var(--kline-gray-light)',
-        display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'center',
-        fontFamily: 'system-ui, -apple-system, sans-serif'
-      }}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{
-            width: '60px',
-            height: '60px',
-            background: 'var(--kline-red)',
-            borderRadius: '12px',
-            margin: '0 auto 16px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 4px 15px rgba(227, 6, 19, 0.3)'
-          }}>
-            <span style={{ color: 'white', fontWeight: 'bold', fontSize: '1.5rem' }}>K</span>
-          </div>
-          <p style={{ color: 'var(--kline-text-light)', fontSize: '1rem' }}>Redirecting to login...</p>
-        </div>
-      </div>
-    )
   }
 
   const handleLogout = () => {

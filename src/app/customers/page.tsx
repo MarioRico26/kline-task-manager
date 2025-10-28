@@ -22,29 +22,10 @@ export default function CustomersPage() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
   const router = useRouter()
 
-  // 🔐 VERIFICACIÓN DE AUTENTICACIÓN
-  useEffect(() => {
-    const checkAuth = () => {
-      const userId = document.cookie
-        .split('; ')
-        .find(row => row.startsWith('user-id='))
-        ?.split('=')[1]
-
-      if (!userId) {
-        console.log('🚫 NO HAY SESIÓN - Redirigiendo a login')
-        router.push('/auth/login')
-        setIsAuthenticated(false)
-        return false
-      }
-      
-      setIsAuthenticated(true)
-      return true
-    }
-
-    if (checkAuth()) {
-      fetchCustomers()
-    }
-  }, [router])
+  // ✅ Con middleware, solo cargamos data
+useEffect(() => {
+  fetchCustomers()
+}, [])
 
   const fetchCustomers = async () => {
     try {
