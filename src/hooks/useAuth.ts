@@ -3,25 +3,23 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 export function useAuth(redirectTo: string = '/auth/login') {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [loading, setLoading] = useState(true)
   const router = useRouter()
 
   useEffect(() => {
-    const checkSession = () => {
-      const cookie = document.cookie
-        .split('; ')
-        .find(row => row.startsWith('user-id='))
+    const cookieExists = document.cookie
+      .split('; ')
+      .some(row => row.startsWith('user-id='))
 
-      if (!cookie) {
-        setIsAuthenticated(false)
-        router.replace(redirectTo)
-      } else {
-        setIsAuthenticated(true)
-      }
+    if (!cookieExists) {
+      router.replace(redirectTo)
+    } else {
+      setIsAuthenticated(true)
     }
 
-    checkSession()
+    setLoading(false)
   }, [redirectTo, router])
 
-  return { isAuthenticated }
+  return { isAuthenticated, loading }
 }

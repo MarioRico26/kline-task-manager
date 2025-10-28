@@ -28,12 +28,8 @@ function LoginForm() {
       const data = await res.json()
       
       if (res.ok && data.user) {
-        // ❌ QUITAR ESTA LÍNEA:
-        // document.cookie = `user-id=${data.user.id}; path=/; max-age=86400; SameSite=Lax`
-  
-        // ✅ Solo redirect. Cookie ya está puesta por el servidor.
-        router.push('/dashboard')
-        router.refresh()
+        router.replace('/dashboard')
+        return
       } else {
         setError(data.error || 'Invalid credentials')
       }
