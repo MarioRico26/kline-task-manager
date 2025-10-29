@@ -385,69 +385,69 @@ export default function Dashboard() {
               }}>
                 Monitor your service operations and performance metrics
               </p>
-              {/* Quick Navigation Buttons */}
-<div style={{ 
-  display: 'flex',
-  gap: '12px',
-  marginTop: '20px',
-  marginBottom: '35px'
-}}>
-  <button
-    onClick={() => router.push('/customers')}
-    style={{
-      padding: '10px 18px',
-      background: 'var(--kline-red)',
-      color: 'white',
-      borderRadius: '8px',
-      border: 'none',
-      cursor: 'pointer',
-      fontWeight: '600',
-      fontSize: '0.9rem',
-      transition: 'opacity 0.3s ease'
-    }}
-    onMouseOver={(e) => { e.currentTarget.style.opacity = '0.85' }}
-    onMouseOut={(e) => { e.currentTarget.style.opacity = '1' }}
-  >
-    + New Customer
-  </button>
+                    {/* Quick Navigation Buttons */}
+      <div style={{ 
+        display: 'flex',
+        gap: '12px',
+        marginTop: '20px',
+        marginBottom: '35px'
+      }}>
+        <button
+          onClick={() => router.push('/customers')}
+          style={{
+            padding: '10px 18px',
+            background: 'var(--kline-red)',
+            color: 'white',
+            borderRadius: '8px',
+            border: 'none',
+            cursor: 'pointer',
+            fontWeight: '600',
+            fontSize: '0.9rem',
+            transition: 'opacity 0.3s ease'
+          }}
+          onMouseOver={(e) => { e.currentTarget.style.opacity = '0.85' }}
+          onMouseOut={(e) => { e.currentTarget.style.opacity = '1' }}
+        >
+          + New Customer
+        </button>
 
-  <button
-    onClick={() => router.push('/properties')}
-    style={{
-      padding: '10px 18px',
-      background: 'var(--kline-blue)',
-      color: 'white',
-      borderRadius: '8px',
-      border: 'none',
-      cursor: 'pointer',
-      fontWeight: '600',
-      fontSize: '0.9rem',
-      transition: 'opacity 0.3s ease'
-    }}
-    onMouseOver={(e) => { e.currentTarget.style.opacity = '0.85' }}
-    onMouseOut={(e) => { e.currentTarget.style.opacity = '1' }}
-  >
-    + New Property
-  </button>
+        <button
+          onClick={() => router.push('/properties')}
+          style={{
+            padding: '10px 18px',
+            background: 'var(--kline-blue)',
+            color: 'white',
+            borderRadius: '8px',
+            border: 'none',
+            cursor: 'pointer',
+            fontWeight: '600',
+            fontSize: '0.9rem',
+            transition: 'opacity 0.3s ease'
+          }}
+          onMouseOver={(e) => { e.currentTarget.style.opacity = '0.85' }}
+          onMouseOut={(e) => { e.currentTarget.style.opacity = '1' }}
+        >
+          + New Property
+        </button>
 
-  <button
-    onClick={() => router.push('/tasks/new')}
-    style={{
-      padding: '10px 18px',
-      background: '#198754',
-      color: 'white',
-      borderRadius: '8px',
-      border: 'none',
-      cursor: 'pointer',
-      fontWeight: '600',
-      fontSize: '0.9rem',
-      transition: 'opacity 0.3s ease'
-    }}
-    onMouseOver={(e) => { e.currentTarget.style.opacity = '0.85' }}
-    onMouseOut={(e) => { e.currentTarget.style.opacity = '1' }}
-  >
-    + New Task
-  </button>
+        <button
+          onClick={() => router.push('/tasks/new')}
+          style={{
+            padding: '10px 18px',
+            background: '#198754',
+            color: 'white',
+            borderRadius: '8px',
+            border: 'none',
+            cursor: 'pointer',
+            fontWeight: '600',
+            fontSize: '0.9rem',
+            transition: 'opacity 0.3s ease'
+          }}
+          onMouseOver={(e) => { e.currentTarget.style.opacity = '0.85' }}
+          onMouseOut={(e) => { e.currentTarget.style.opacity = '1' }}
+        >
+          + New Task
+        </button>
 </div>
             </div>
             
