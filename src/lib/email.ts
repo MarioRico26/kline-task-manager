@@ -171,7 +171,7 @@ export async function sendTaskUpdateEmail(emailData: EmailData) {
                   <p><strong>📸 Service Photos <span class="image-count">${images.length}</span></strong></p>
                   <div class="thumbnail-grid">
                     ${thumbnails.map(img => `
-                      <img class="thumbnail" src="${img}" alt="Service photo" />
+                      <img class="thumbnail" src="${img.trim()}" alt="Service photo" style="display:block; max-width:100%; border-radius:6px;" />
                     `).join('')}
                   </div>
                   ${hasMoreImages ? `
