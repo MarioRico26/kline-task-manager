@@ -117,47 +117,50 @@ export async function POST(request: Request) {
       }
     }
 
-    // ✅ NOTIFICACIONES CORREGIDAS - CON AWAIT Y MEJOR MANEJO DE ERRORES
-    if (status.notifyClient) {
-      const phone = formatPhone(customer.phone)
-      const message = `📌 Service Update\n${service.name}\nStatus: ${status.name}`
+    // ✅ NOTIFICACIONES CORREGIDAS - CON DESCRIPCIÓN DEL SERVICIO
+if (status.notifyClient) {
+  const phone = formatPhone(customer.phone)
+  const message = `📌 Service Update\n${service.name}\nStatus: ${status.name}`
 
-      const notificationPromises = []
+  const notificationPromises = []
 
-      // ✅ Email (con await y mejor manejo de errores)
-      if (customer.email) {
-        notificationPromises.push(
-          sendTaskUpdateEmail({
-            to: customer.email,
-            subject: `Service Update: ${service.name}`,
-            customerName: customer.fullName,
-            service: `${service.name},${service.description}`,
-            property: `${property.address}, ${property.city}, ${property.state} ${property.zip}`,
-            status: status.name,
-            scheduledFor: task.scheduledFor?.toISOString() || null,
-            notes: task.notes,
-            images: uploadedImages
-          })
-          .then(() => console.log('✅ Email sent successfully'))
-          .catch(err => console.error('❌ Email failed:', err))
-        )
-      }
+  // ✅ Email
+  if (customer.email) {
+    notificationPromises.push(
+      sendTaskUpdateEmail({
+        to: customer.email,
+        subject: `Service Update: ${service.name}`,
+        customerName: customer.fullName,
+        service: {
+          name: service.name,
+          description: service.description || null
+        },
+        property: `${property.address}, ${property.city}, ${property.state} ${property.zip}`,
+        status: status.name,
+        scheduledFor: task.scheduledFor?.toISOString() || null,
+        notes: task.notes,
+        images: uploadedImages
+      })
+      .then(() => console.log('✅ Email sent successfully'))
+      .catch(err => console.error('❌ Email failed:', err))
+    )
+  }
 
-      // ✅ SMS (con await y mejor manejo de errores)
-      if (phone) {
-        notificationPromises.push(
-          sendSMS(phone, message)
-            .then(() => console.log('✅ SMS sent successfully'))
-            .catch(err => console.error('❌ SMS failed:', err))
-        )
-      }
+  // ✅ SMS
+  if (phone) {
+    notificationPromises.push(
+      sendSMS(phone, message)
+        .then(() => console.log('✅ SMS sent successfully'))
+        .catch(err => console.error('❌ SMS failed:', err))
+    )
+  }
 
-      // ✅ Esperar a que TODAS las notificaciones terminen
-      if (notificationPromises.length > 0) {
-        await Promise.allSettled(notificationPromises)
-        console.log('📧 All notifications processed')
-      }
-    }
+  // ✅ Esperar a que todas terminen
+  if (notificationPromises.length > 0) {
+    await Promise.allSettled(notificationPromises)
+    console.log('📩 All notifications processed')
+  }
+}
 
     console.log("✅ Task created + notifications sent (if enabled)")
     return NextResponse.json(task)
