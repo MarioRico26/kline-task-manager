@@ -161,7 +161,6 @@ export async function sendTaskUpdateEmail(emailData: EmailData) {
                <p><strong>Service:</strong> ${service.name}</p>
                 ${service.description ? `<p>${service.description}</p>` : ''}
                 <p><strong>Property:</strong> ${property}</p>
-                <p><strong>Property:</strong> ${service}</p>
                 <p><strong>Status:</strong> <span class="status-badge">${status}</span></p>
                 ${scheduledFor ? `<p><strong>Scheduled Date:</strong> ${new Date(scheduledFor).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>` : ''}
                 ${notes ? `<p><strong>Additional Notes:</strong> ${notes}</p>` : ''}
