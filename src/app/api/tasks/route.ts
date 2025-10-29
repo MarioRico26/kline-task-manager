@@ -116,30 +116,45 @@ export async function POST(request: Request) {
       }
     }
 
-    // ✅ Enviar email + SMS si el status tiene notifyClient
+    // ✅ NOTIFICACIONES CORREGIDAS - CON AWAIT Y MEJOR MANEJO DE ERRORES
     if (status.notifyClient) {
       const phone = formatPhone(customer.phone)
       const message = `📌 Service Update\n${service.name}\nStatus: ${status.name}`
 
-      // ✅ Email (sin bloquear)
+      const notificationPromises = []
+
+      // ✅ Email (con await y mejor manejo de errores)
       if (customer.email) {
-        sendTaskUpdateEmail({
-          to: customer.email,
-          subject: `Service Update: ${service.name}`,
-          customerName: customer.fullName,
-          service: service.name,
-          property: `${property.address}, ${property.city}, ${property.state} ${property.zip}`,
-          status: status.name,
-          scheduledFor: task.scheduledFor?.toISOString() || null,
-          notes: task.notes,
-          images: uploadedImages
-        }).catch(err => console.error("❌ Email failed:", err))
+        notificationPromises.push(
+          sendTaskUpdateEmail({
+            to: customer.email,
+            subject: `Service Update: ${service.name}`,
+            customerName: customer.fullName,
+            service: service.name,
+            property: `${property.address}, ${property.city}, ${property.state} ${property.zip}`,
+            status: status.name,
+            scheduledFor: task.scheduledFor?.toISOString() || null,
+            notes: task.notes,
+            images: uploadedImages
+          })
+          .then(() => console.log('✅ Email sent successfully'))
+          .catch(err => console.error('❌ Email failed:', err))
+        )
       }
 
-      // ✅ SMS (sin bloquear)
+      // ✅ SMS (con await y mejor manejo de errores)
       if (phone) {
-        sendSMS(phone, message)
-          .catch(err => console.error("❌ SMS failed:", err))
+        notificationPromises.push(
+          sendSMS(phone, message)
+            .then(() => console.log('✅ SMS sent successfully'))
+            .catch(err => console.error('❌ SMS failed:', err))
+        )
+      }
+
+      // ✅ Esperar a que TODAS las notificaciones terminen
+      if (notificationPromises.length > 0) {
+        await Promise.allSettled(notificationPromises)
+        console.log('📧 All notifications processed')
       }
     }
 
