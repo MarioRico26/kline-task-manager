@@ -35,7 +35,10 @@ interface EmailData {
   to: string;
   subject: string;
   customerName: string;
-  service: string;
+  service: {
+    name: string;
+    description?: string | null;
+  };
   property: string;
   status: string;
   scheduledFor: string | null;
@@ -145,7 +148,7 @@ export async function sendTaskUpdateEmail(emailData: EmailData) {
           <div class="container">
             <!-- Header -->
             <div class="header">
-              <h1>Kline Service Update</h1>
+              <h1>Kline Brothers - Service Update</h1>
             </div>
             
             <!-- Content -->
@@ -155,8 +158,10 @@ export async function sendTaskUpdateEmail(emailData: EmailData) {
               <p>We wanted to provide you with an update on your service request:</p>
               
               <div class="info-box">
-                <p><strong>Service:</strong> ${service}</p>
+               <p><strong>Service:</strong> ${service.name}</p>
+                ${service.description ? `<p>${service.description}</p>` : ''}
                 <p><strong>Property:</strong> ${property}</p>
+                <p><strong>Property:</strong> ${service}</p>
                 <p><strong>Status:</strong> <span class="status-badge">${status}</span></p>
                 ${scheduledFor ? `<p><strong>Scheduled Date:</strong> ${new Date(scheduledFor).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>` : ''}
                 ${notes ? `<p><strong>Additional Notes:</strong> ${notes}</p>` : ''}

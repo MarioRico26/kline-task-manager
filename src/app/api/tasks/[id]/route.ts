@@ -1,3 +1,4 @@
+//kline-task-manager/src/app/api/tasks/[id]/route.ts:
 import { NextRequest, NextResponse } from 'next/server'
 import { PrismaClient } from '@prisma/client'
 import { uploadFile } from '@/lib/upload'
@@ -90,7 +91,7 @@ export async function PUT(request: NextRequest) {
             to: existingTask.customer.email,
             subject: `Service Update: ${task.service.name}`,
             customerName: existingTask.customer.fullName,
-            service: task.service.name,
+            service: { name: task.service.name, description: task.service.description || '' },
             property: `${task.property.address}, ${task.property.city}, ${task.property.state} ${task.property.zip}`,
             status: newStatus.name,
             scheduledFor: task.scheduledFor?.toISOString() || null,

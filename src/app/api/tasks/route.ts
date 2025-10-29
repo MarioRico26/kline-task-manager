@@ -1,3 +1,4 @@
+//kline-task-manager/src/app/api/tasks/route.ts:
 import { NextResponse } from 'next/server'
 import { PrismaClient } from '@prisma/client'
 import { uploadFile } from '@/lib/upload'
@@ -130,7 +131,7 @@ export async function POST(request: Request) {
             to: customer.email,
             subject: `Service Update: ${service.name}`,
             customerName: customer.fullName,
-            service: service.name,
+            service: `${service.name},${service.description}`,
             property: `${property.address}, ${property.city}, ${property.state} ${property.zip}`,
             status: status.name,
             scheduledFor: task.scheduledFor?.toISOString() || null,
