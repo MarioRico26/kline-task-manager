@@ -1,3 +1,4 @@
+//kline-task-manager/src/lib/email.ts:
 import nodemailer from 'nodemailer';
 
 // DEBUG: Verificar qué variables se están cargando
@@ -197,7 +198,10 @@ export async function sendTaskUpdateEmail(emailData: EmailData) {
     `;
 
     const mailOptions = {
-      from: process.env.EMAIL_FROM || 'Kline Services <ricco.mario.nj@gmail.com>',
+      from: {
+        name: "Kline Service Update",
+        address: process.env.EMAIL_FROM as string
+      },
       to: to,
       subject: subject,
       html: htmlContent,
