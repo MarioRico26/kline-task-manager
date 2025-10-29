@@ -183,11 +183,11 @@ export async function sendTaskUpdateEmail(emailData: EmailData) {
                 </div>
               ` : ''}
 
-              <p>If you have any questions about this service update, please don't hesitate to reach out to us.</p>
+              <p>Please call 609-494-5838 with any questions. We look forward to working with you in the future. </p>
               
-              <p>Thank you for choosing Kline!</p>
+              <p>Thank you, Kline Bros. Landscaping & Pool Company.</p>
               
-              <p>Best regards,<br><strong>The Kline Brothers Team</strong></p>
+              <p>Disclaimer: This email is not monitored, and any replies will not be answered.</p>
             </div>
             
             <!-- Footer -->
