@@ -504,16 +504,30 @@ useEffect(() => {
 }
 
 // Create Customer Modal Component
-function CreateCustomerModal({ isOpen, onClose, onCustomerCreated }: { 
-  isOpen: boolean, 
-  onClose: () => void, 
-  onCustomerCreated: () => void 
+function CreateCustomerModal({
+  isOpen,
+  onClose,
+  onCustomerCreated
+}: {
+  isOpen: boolean
+  onClose: () => void
+  onCustomerCreated: () => void
 }) {
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
     phone: ''
   })
+
+  // 🔹 nueva sección para crear la primera propiedad
+  const [createProperty, setCreateProperty] = useState(true)
+  const [property, setProperty] = useState({
+    address: '',
+    city: '',
+    state: '',
+    zip: ''
+  })
+
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -523,11 +537,17 @@ function CreateCustomerModal({ isOpen, onClose, onCustomerCreated }: {
       setError('Please enter a valid email address')
       return false
     }
-
     const phoneDigits = formData.phone.replace(/\D/g, '')
     if (phoneDigits.length < 10) {
       setError('Please enter a valid phone number (at least 10 digits)')
       return false
+    }
+
+    if (createProperty) {
+      if (!property.address.trim() || !property.city.trim() || !property.state.trim() || !property.zip.trim()) {
+        setError('Please complete the property address (address, city, state, zip)')
+        return false
+      }
     }
 
     return true
@@ -536,32 +556,42 @@ function CreateCustomerModal({ isOpen, onClose, onCustomerCreated }: {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
-
-    if (!validateForm()) {
-      return
-    }
+    if (!validateForm()) return
 
     setLoading(true)
-
     try {
+      const payload: any = {
+        fullName: formData.fullName.trim(),
+        email: formData.email.trim(),
+        phone: formData.phone.replace(/\D/g, '')
+      }
+
+      if (createProperty) {
+        payload.property = {
+          address: property.address.trim(),
+          city: property.city.trim(),
+          state: property.state.trim(),
+          zip: property.zip.trim()
+        }
+      }
+
       const response = await fetch('/api/customers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...formData,
-          phone: formData.phone.replace(/\D/g, '')
-        })
+        body: JSON.stringify(payload)
       })
 
       if (response.ok) {
         onCustomerCreated()
         onClose()
         setFormData({ fullName: '', email: '', phone: '' })
+        setProperty({ address: '', city: '', state: '', zip: '' })
+        setCreateProperty(true)
       } else {
         const data = await response.json()
         setError(data.error || 'Error creating customer')
       }
-    } catch (error) {
+    } catch {
       setError('Network error')
     } finally {
       setLoading(false)
@@ -571,15 +601,9 @@ function CreateCustomerModal({ isOpen, onClose, onCustomerCreated }: {
   const handlePhoneChange = (value: string) => {
     const digits = value.replace(/\D/g, '')
     let formatted = value
-    
-    if (digits.length <= 3) {
-      formatted = digits
-    } else if (digits.length <= 6) {
-      formatted = `(${digits.slice(0, 3)}) ${digits.slice(3)}`
-    } else {
-      formatted = `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6, 10)}`
-    }
-    
+    if (digits.length <= 3) formatted = digits
+    else if (digits.length <= 6) formatted = `(${digits.slice(0, 3)}) ${digits.slice(3)}`
+    else formatted = `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6, 10)}`
     setFormData({ ...formData, phone: formatted })
   }
 
@@ -587,59 +611,33 @@ function CreateCustomerModal({ isOpen, onClose, onCustomerCreated }: {
 
   return (
     <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      background: 'rgba(0, 0, 0, 0.5)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 1000
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
     }}>
-      <div className="kline-card" style={{ 
-        width: '90%', 
-        maxWidth: '500px', 
-        padding: '2rem',
-        position: 'relative'
-      }}>
+      <div className="kline-card" style={{ width: '90%', maxWidth: 560, padding: '2rem', position: 'relative' }}>
         <button
           onClick={onClose}
-          style={{
-            position: 'absolute',
-            top: '1rem',
-            right: '1rem',
-            background: 'none',
-            border: 'none',
-            fontSize: '1.5rem',
-            cursor: 'pointer',
-            color: 'var(--kline-text-light)'
-          }}
-        >
+          style={{ position: 'absolute', top: '1rem', right: '1rem', background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: 'var(--kline-text-light)' }}>
           ×
         </button>
 
-        <h2 style={{ fontSize: '1.5rem', fontWeight: '700', marginBottom: '1.5rem', color: 'var(--kline-text)' }}>
+        <h2 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '1.25rem', color: 'var(--kline-text)' }}>
           Create New Customer
         </h2>
 
         {error && (
           <div style={{
-            background: 'rgba(227, 6, 19, 0.1)',
-            border: '1px solid var(--kline-red)',
-            color: 'var(--kline-red)',
-            padding: '1rem',
-            borderRadius: '8px',
-            marginBottom: '1rem'
+            background: 'rgba(227,6,19,0.08)', border: '1px solid var(--kline-red)',
+            color: 'var(--kline-red)', padding: '0.9rem', borderRadius: 8, marginBottom: '1rem'
           }}>
             {error}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+          {/* Customer fields */}
           <div>
-            <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '0.5rem', fontWeight: '600' }}>
+            <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: 6, fontWeight: 600 }}>
               Full Name *
             </label>
             <input
@@ -653,7 +651,7 @@ function CreateCustomerModal({ isOpen, onClose, onCustomerCreated }: {
           </div>
 
           <div>
-            <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '0.5rem', fontWeight: '600' }}>
+            <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: 6, fontWeight: 600 }}>
               Email Address *
             </label>
             <input
@@ -667,7 +665,7 @@ function CreateCustomerModal({ isOpen, onClose, onCustomerCreated }: {
           </div>
 
           <div>
-            <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '0.5rem', fontWeight: '600' }}>
+            <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: 6, fontWeight: 600 }}>
               Phone Number *
             </label>
             <input
@@ -680,7 +678,84 @@ function CreateCustomerModal({ isOpen, onClose, onCustomerCreated }: {
             />
           </div>
 
-          <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end', marginTop: '1rem' }}>
+          {/* Toggle property */}
+          <div style={{ marginTop: '0.5rem' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', userSelect: 'none' }}>
+              <input
+                type="checkbox"
+                checked={createProperty}
+                onChange={(e) => setCreateProperty(e.target.checked)}
+              />
+              <span style={{ color: 'var(--kline-text)', fontWeight: 600 }}>Create first property now</span>
+            </label>
+          </div>
+
+          {/* Property fields */}
+          {createProperty && (
+            <div className="kline-card" style={{ padding: '1rem', border: '1px solid var(--kline-gray)' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '0.9rem' }}>
+                <div>
+                  <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: 6, fontWeight: 600 }}>
+                    Address *
+                  </label>
+                  <input
+                    type="text"
+                    value={property.address}
+                    onChange={(e) => setProperty({ ...property, address: e.target.value })}
+                    className="kline-input"
+                    placeholder="123 Main St"
+                    required
+                  />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 120px', gap: '0.9rem' }}>
+                  <div>
+                    <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: 6, fontWeight: 600 }}>
+                      City *
+                    </label>
+                    <input
+                      type="text"
+                      value={property.city}
+                      onChange={(e) => setProperty({ ...property, city: e.target.value })}
+                      className="kline-input"
+                      placeholder="Manahawkin"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: 6, fontWeight: 600 }}>
+                      State *
+                    </label>
+                    <input
+                      type="text"
+                      value={property.state}
+                      onChange={(e) => setProperty({ ...property, state: e.target.value })}
+                      className="kline-input"
+                      placeholder="NJ"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: 6, fontWeight: 600 }}>
+                      ZIP *
+                    </label>
+                    <input
+                      type="text"
+                      value={property.zip}
+                      onChange={(e) => setProperty({ ...property, zip: e.target.value })}
+                      className="kline-input"
+                      placeholder="08050"
+                      required
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
             <button
               type="button"
               onClick={onClose}
@@ -691,7 +766,7 @@ function CreateCustomerModal({ isOpen, onClose, onCustomerCreated }: {
                 padding: '0.8rem 1.5rem',
                 borderRadius: '8px',
                 cursor: 'pointer',
-                fontWeight: '600',
+                fontWeight: 600,
                 fontSize: '0.9rem'
               }}
             >
