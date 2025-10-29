@@ -1,7 +1,10 @@
+//kline-task-manager/src/app/api/tasks/route.ts:
 import { NextResponse } from 'next/server'
 import { PrismaClient } from '@prisma/client'
 import { uploadFile } from '@/lib/upload'
 import { sendTaskUpdateEmail } from '@/lib/email'
+import { sendSMS } from '@/lib/sendSms'
+import { formatPhone } from '@/lib/formatPhone'
 
 const prisma = new PrismaClient()
 
@@ -144,25 +147,29 @@ export async function POST(request: Request) {
     }
 
     // Enviar email si el status notifica al cliente
-    if (status.notifyClient && customer.email) {
-      try {
-        const emailData = {
+    if (status.notifyClient) {
+      const phone = formatPhone(customer.phone)
+      const message = `📌 Service Update\n${service.name}\nStatus: ${status.name}`
+    
+      // Email
+      if (customer.email) {
+        sendTaskUpdateEmail({
           to: customer.email,
           subject: `Service Update: ${service.name}`,
           customerName: customer.fullName,
           service: service.name,
-          property: `${property.address}, ${property.city}, ${property.state} ${property.zip}`,
+          property: `${property.address}, ${property.city}, ${property.state}`,
           status: status.name,
           scheduledFor: task.scheduledFor?.toISOString() || null,
           notes: task.notes,
           images: uploadedImages
-        }
-
-        await sendTaskUpdateEmail(emailData)
-        console.log('Email sent successfully to:', customer.email)
-      } catch (emailError) {
-        console.error('Failed to send email:', emailError)
-        // No fallar la creación de la tarea si el email falla
+        }).catch(e => console.error("Email failed:", e))
+      }
+    
+      // SMS
+      if (phone) {
+        sendSMS(phone, message)
+          .catch(e => console.error("SMS failed:", e))
       }
     }
 

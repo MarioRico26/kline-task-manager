@@ -1,7 +1,10 @@
+//kline-task-manager/src/app/api/tasks/[id]/route.ts:
 import { NextRequest, NextResponse } from 'next/server'
 import { PrismaClient } from '@prisma/client'
 import { uploadFile } from '@/lib/upload'
 import { sendTaskUpdateEmail } from '@/lib/email'
+import { sendSMS } from '@/lib/sendSms'
+import { formatPhone } from '@/lib/formatPhone'
 
 const prisma = new PrismaClient()
 
@@ -83,27 +86,31 @@ export async function PUT(request: NextRequest) {
       }
     }
 
-    // Enviar email si el status cambió y notifica al cliente
-    if (newStatus?.notifyClient && existingTask.customer.email) {
-      try {
-        const emailData = {
-          to: existingTask.customer.email,
-          subject: `Service Update: ${task.service.name}`,
-          customerName: existingTask.customer.fullName,
-          service: task.service.name,
-          property: `${task.property.address}, ${task.property.city}, ${task.property.state} ${task.property.zip}`,
-          status: newStatus.name,
-          scheduledFor: task.scheduledFor?.toISOString() || null,
-          notes: task.notes,
-          images: uploadedImages
-        }
+// ✅ Enviar email + SMS si el nuevo estado notifica al cliente
+if (newStatus?.notifyClient) {
+  const phone = formatPhone(existingTask.customer.phone)
+  const message = `📌 Service Update\n${task.service.name}\nStatus: ${newStatus.name}`
 
-        await sendTaskUpdateEmail(emailData)
-        console.log('Update email sent successfully to:', existingTask.customer.email)
-      } catch (emailError) {
-        console.error('Failed to send update email:', emailError)
-      }
-    }
+  // Email
+  sendTaskUpdateEmail({
+    to: existingTask.customer.email,
+    subject: `Service Update: ${task.service.name}`,
+    customerName: existingTask.customer.fullName,
+    service: task.service.name,
+    property: `${task.property.address}, ${task.property.city}, ${task.property.state}`,
+    status: newStatus.name,
+    scheduledFor: task.scheduledFor?.toISOString() || null,
+    notes: task.notes,
+    images: uploadedImages
+  }).catch(e => console.error("Email failed:", e))
+
+  // SMS
+  if (phone) {
+    sendSMS(phone, message)
+      .catch(e => console.error("SMS failed:", e))
+  }
+}
+    
 
     return NextResponse.json(task)
   } catch (error) {
