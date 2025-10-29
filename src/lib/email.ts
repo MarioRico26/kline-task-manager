@@ -187,7 +187,7 @@ export async function sendTaskUpdateEmail(emailData: EmailData) {
               
               <p>Thank you, Kline Bros. Landscaping & Pool Company.</p>
               
-              <p>Disclaimer: This email is not monitored, and any replies will not be answered.</p>
+              <p><strong>Disclaimer: This email is not monitored, and any replies will not be answered.</strong></p>
             </div>
             
             <!-- Footer -->
