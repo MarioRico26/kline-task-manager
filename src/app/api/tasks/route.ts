@@ -1,4 +1,3 @@
-//kline-task-manager/src/app/api/tasks/route.ts:
 import { NextResponse } from 'next/server'
 import { PrismaClient } from '@prisma/client'
 import { uploadFile } from '@/lib/upload'
@@ -18,7 +17,8 @@ export async function GET() {
           select: {
             id: true,
             fullName: true,
-            email: true
+            email: true,
+            phone: true
           }
         },
         property: {
@@ -26,39 +26,20 @@ export async function GET() {
             id: true,
             address: true,
             city: true,
-            state: true
+            state: true,
+            zip: true
           }
         },
-        service: {
-          select: {
-            id: true,
-            name: true,
-            description: true
-          }
-        },
-        status: {
-          select: {
-            id: true,
-            name: true,
-            color: true,
-            notifyClient: true
-          }
-        },
-        media: {
-          select: {
-            id: true,
-            url: true
-          }
-        }
+        service: true,
+        status: true,
+        media: true
       },
-      orderBy: {
-        createdAt: 'desc'
-      }
+      orderBy: { createdAt: 'desc' }
     })
 
     console.log(`✅ Found ${tasks.length} tasks`)
     return NextResponse.json(tasks)
-    
+
   } catch (error) {
     console.error('❌ Error fetching tasks:', error)
     return NextResponse.json(
@@ -80,15 +61,10 @@ export async function POST(request: Request) {
     const scheduledFor = formData.get('scheduledFor') as string
     const files = formData.getAll('files') as File[]
 
-    // Validar datos requeridos
     if (!customerId || !propertyId || !serviceId || !statusId) {
-      return NextResponse.json(
-        { error: 'Missing required fields' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
-    // Obtener datos relacionados
     const [customer, property, service, status] = await Promise.all([
       prisma.customer.findUnique({ where: { id: customerId } }),
       prisma.property.findUnique({ where: { id: propertyId } }),
@@ -103,7 +79,6 @@ export async function POST(request: Request) {
       )
     }
 
-    // Crear la tarea
     const task = await prisma.task.create({
       data: {
         customerId,
@@ -111,7 +86,7 @@ export async function POST(request: Request) {
         serviceId,
         statusId,
         notes: notes || null,
-        scheduledFor: scheduledFor ? new Date(scheduledFor) : null,
+        scheduledFor: scheduledFor ? new Date(scheduledFor) : null
       },
       include: {
         customer: true,
@@ -122,62 +97,59 @@ export async function POST(request: Request) {
       }
     })
 
-    // Subir imágenes si existen
     const uploadedImages: string[] = []
-    if (files && files.length > 0) {
+    if (files?.length > 0) {
       for (const file of files) {
         if (file.size > 0) {
           try {
             const imageUrl = await uploadFile(file, task.id)
             
             await prisma.taskMedia.create({
-              data: {
-                url: imageUrl,
-                taskId: task.id,
-              }
+              data: { url: imageUrl, taskId: task.id }
             })
-            
+
             uploadedImages.push(imageUrl)
-          } catch (uploadError) {
-            console.error('Error uploading file:', uploadError)
-            // Continuar con otras imágenes incluso si una falla
+          } catch (uploadErr) {
+            console.error("⚠ Error uploading file:", uploadErr)
           }
         }
       }
     }
 
-    // Enviar email si el status notifica al cliente
+    // ✅ Enviar email + SMS si el status tiene notifyClient
     if (status.notifyClient) {
       const phone = formatPhone(customer.phone)
       const message = `📌 Service Update\n${service.name}\nStatus: ${status.name}`
-    
-      // Email
+
+      // ✅ Email (sin bloquear)
       if (customer.email) {
         sendTaskUpdateEmail({
           to: customer.email,
           subject: `Service Update: ${service.name}`,
           customerName: customer.fullName,
           service: service.name,
-          property: `${property.address}, ${property.city}, ${property.state}`,
+          property: `${property.address}, ${property.city}, ${property.state} ${property.zip}`,
           status: status.name,
           scheduledFor: task.scheduledFor?.toISOString() || null,
           notes: task.notes,
           images: uploadedImages
-        }).catch(e => console.error("Email failed:", e))
+        }).catch(err => console.error("❌ Email failed:", err))
       }
-    
-      // SMS
+
+      // ✅ SMS (sin bloquear)
       if (phone) {
         sendSMS(phone, message)
-          .catch(e => console.error("SMS failed:", e))
+          .catch(err => console.error("❌ SMS failed:", err))
       }
     }
 
+    console.log("✅ Task created + notifications sent (if enabled)")
     return NextResponse.json(task)
+
   } catch (error) {
-    console.error('Error creating task:', error)
+    console.error("❌ Error creating task:", error)
     return NextResponse.json(
-      { error: 'Internal server error' }, 
+      { error: 'Internal server error' },
       { status: 500 }
     )
   }
