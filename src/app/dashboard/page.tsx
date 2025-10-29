@@ -400,7 +400,7 @@ export default function Dashboard() {
 >
   {/* Customer */}
   <button
-    onClick={() => router.push('/customers/new')}
+    onClick={() => router.push('/customers')}
     style={{
       padding: '12px 22px',
       background: 'var(--kline-red)',
@@ -420,7 +420,7 @@ export default function Dashboard() {
 
   {/* Property */}
   <button
-    onClick={() => router.push('/properties/new')}
+    onClick={() => router.push('/properties')}
     style={{
       padding: '12px 22px',
       background: '#fd7e14',        // ✅ naranja visible
@@ -440,7 +440,7 @@ export default function Dashboard() {
 
   {/* Task */}
   <button
-    onClick={() => router.push('/tasks/new')}
+    onClick={() => router.push('/tasks')}
     style={{
       padding: '12px 22px',
       background: '#198754',
