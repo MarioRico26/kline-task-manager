@@ -1,3 +1,4 @@
+// kline-task-manager/src/lib/sendSms.ts
 import twilio from 'twilio'
 import { formatPhone } from './formatPhone'
 
@@ -7,20 +8,30 @@ const fromNumber = process.env.TWILIO_PHONE_NUMBER!
 
 const client = twilio(accountSid, authToken)
 
-// ✅ Plantilla genérica por ahora
-export function defaultTaskMessage(service: string, status: string) {
+// ✅ Clean professional SMS template
+export function buildTaskSMS(
+  customerName: string,
+  serviceName: string,
+  serviceDescription: string | null,
+  propertyAddress: string,
+  propertyCity: string,
+  status: string
+) {
   return `
-Kline Service Update:
-${service}
+Hi ${customerName},
+
+${serviceName}${
+    serviceDescription ? ` - ${serviceDescription}` : ''
+  } at ${propertyAddress}, ${propertyCity}
+
 Status: ${status}
 
-Questions? Call 609-494-5838.
-Thank you!
-Kline Bros. Landscaping & Pool Co.
+Thank you for choosing Kline Bros.
+Call us at 609-494-5838 for any questions.
   `.trim()
 }
 
-// ✅ Función universal para enviar SMS
+// ✅ SMS Sender
 export async function sendSMS(to: string, message: string) {
   const phone = formatPhone(to)
 
@@ -30,13 +41,8 @@ export async function sendSMS(to: string, message: string) {
   console.log("✉️ Text:", message)
 
   if (!phone) {
-    console.error("❌ Phone number missing or invalid.")
+    console.error("❌ Invalid phone number.")
     return { success: false, error: "Invalid phone number" }
-  }
-
-  if (!fromNumber) {
-    console.error("❌ TWILIO_PHONE_NUMBER missing in environment.")
-    return { success: false, error: "No Twilio number configured" }
   }
 
   try {
@@ -46,15 +52,11 @@ export async function sendSMS(to: string, message: string) {
       to: phone,
     })
 
-    console.log("✅ SMS sent successfully:", result.sid)
+    console.log("✅ SMS sent:", result.sid)
     return { success: true, sid: result.sid }
 
   } catch (error: any) {
-    console.error("❌ Error sending SMS:")
-    console.error("🧾 Code:", error.code)
-    console.error("📌 Message:", error.message)
-    console.error("🔍 More:", error.moreInfo || "N/A")
-
+    console.error("❌ SMS failed:", error)
     return { success: false, error: error.message }
   }
 }
