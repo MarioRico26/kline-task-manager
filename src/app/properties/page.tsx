@@ -179,56 +179,56 @@ export default function PropertiesPage() {
       <main style={{ maxWidth: '1200px', margin: '2rem auto', padding: '0 1rem' }}>
         {/* Action Bar */}
         <div className="kline-card" style={{ padding: '1.5rem', marginBottom: '2rem' }}>
+        </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
-            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
-              {/* Search */}
-              <div style={{ position: 'relative' }}>
-                <input
-                  type="text"
-                  placeholder="Search properties..."
-                  value={filter}
-                  onChange={(e) => setFilter(e.target.value)}
-                  className="kline-input"
-                  style={{ paddingLeft: '2.5rem', width: '300px', padding: '0.8rem 1rem 0.8rem 2.5rem' }}
-                />
-                <span style={{ 
-                  position: 'absolute', 
-                  left: '1rem', 
-                  top: '50%', 
-                  transform: 'translateY(-50%)',
-                  color: 'var(--kline-text-light)'
-                }}>
+              <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                  {/* Search */}
+                  <div style={{ position: 'relative' }}>
+                      <input
+                          type="text"
+                          placeholder="Search properties..."
+                          value={filter}
+                          onChange={(e) => setFilter(e.target.value)}
+                          className="kline-input"
+                          style={{ paddingLeft: '2.5rem', width: '300px', padding: '0.8rem 1rem 0.8rem 2.5rem' }}
+                      />
+                      <span style={{
+                          position: 'absolute',
+                          left: '1rem',
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          color: 'var(--kline-text-light)'
+                      }}>
                   🔍
                 </span>
+                  </div>
+
+                  {/* Customer Filter */}
+                  <select
+                      value={customerFilter}
+                      onChange={(e) => setCustomerFilter(e.target.value)}
+                      className="kline-input"
+                      style={{ width: '200px', padding: '0.8rem 1rem' }}
+                  >
+                      <option value="ALL">All Customers</option>
+                      {customers.map(customer => (
+                          <option key={customer.id} value={customer.id}>
+                              {customer.fullName}
+                          </option>
+                      ))}
+                  </select>
               </div>
 
-              {/* Customer Filter */}
-              <select 
-                value={customerFilter}
-                onChange={(e) => setCustomerFilter(e.target.value)}
-                className="kline-input"
-                style={{ width: '200px', padding: '0.8rem 1rem' }}
+              {/* Add Property Button */}
+              <button
+                  className="kline-btn-primary"
+                  style={{ padding: '0.8rem 1.5rem', fontSize: '0.9rem' }}
+                  onClick={() => setIsCreateModalOpen(true)}
+                  disabled={customers.length === 0}
               >
-                <option value="ALL">All Customers</option>
-                {customers.map(customer => (
-                  <option key={customer.id} value={customer.id}>
-                    {customer.fullName}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Add Property Button */}
-            <button 
-              className="kline-btn-primary"
-              style={{ padding: '0.8rem 1.5rem', fontSize: '0.9rem' }}
-              onClick={() => setIsCreateModalOpen(true)}
-              disabled={customers.length === 0}
-            >
-              {customers.length === 0 ? 'No Customers' : '+ New Property'}
-            </button>
+                  {customers.length === 0 ? 'No Customers' : '+ New Property'}
+              </button>
           </div>
-        </div>
 
         {/* Properties Table - Compact View */}
         {loading ? (
@@ -504,217 +504,239 @@ export default function PropertiesPage() {
 }
 
 // Create Property Modal Component
-function CreatePropertyModal({ isOpen, onClose, onPropertyCreated, customers }: { 
-  isOpen: boolean, 
-  onClose: () => void, 
-  onPropertyCreated: () => void,
-  customers: Customer[]
+function CreatePropertyModal({ isOpen, onClose, onPropertyCreated, customers }: {
+    isOpen: boolean,
+    onClose: () => void,
+    onPropertyCreated: () => void,
+    customers: Customer[]
 }) {
-  const [formData, setFormData] = useState({
-    address: '',
-    city: '',
-    state: '',
-    zip: '',
-    customerId: customers[0]?.id || ''
-  })
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+    const [formData, setFormData] = useState({
+        address: '',
+        city: '',
+        state: '',
+        zip: '',
+        customerId: customers[0]?.id || ''
+    })
+    const [loading, setLoading] = useState(false)
+    const [error, setError] = useState('')
+    const [customerSearch, setCustomerSearch] = useState('')
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-    setError('')
+    const filteredCustomers = customers.filter(c =>
+        c.fullName.toLowerCase().includes(customerSearch.toLowerCase()) ||
+        c.email.toLowerCase().includes(customerSearch.toLowerCase())
+    )
 
-    try {
-      const response = await fetch('/api/properties', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
-      })
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault()
+        setLoading(true)
+        setError('')
 
-      if (response.ok) {
-        onPropertyCreated()
-        onClose()
-        setFormData({
-          address: '',
-          city: '',
-          state: '',
-          zip: '',
-          customerId: customers[0]?.id || ''
-        })
-      } else {
-        const data = await response.json()
-        setError(data.error || 'Error creating property')
-      }
-    } catch (error) {
-      setError('Network error')
-    } finally {
-      setLoading(false)
+        try {
+            const response = await fetch('/api/properties', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(formData)
+            })
+
+            if (response.ok) {
+                onPropertyCreated()
+                onClose()
+                setFormData({
+                    address: '',
+                    city: '',
+                    state: '',
+                    zip: '',
+                    customerId: customers[0]?.id || ''
+                })
+                setCustomerSearch('')
+            } else {
+                const data = await response.json()
+                setError(data.error || 'Error creating property')
+            }
+        } catch (error) {
+            setError('Network error')
+        } finally {
+            setLoading(false)
+        }
     }
-  }
 
-  if (!isOpen) return null
+    if (!isOpen) return null
 
-  return (
-    <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      background: 'rgba(0, 0, 0, 0.5)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 1000
-    }}>
-      <div className="kline-card" style={{ 
-        width: '90%', 
-        maxWidth: '500px', 
-        padding: '2rem',
-        position: 'relative'
-      }}>
-        <button
-          onClick={onClose}
-          style={{
-            position: 'absolute',
-            top: '1rem',
-            right: '1rem',
-            background: 'none',
-            border: 'none',
-            fontSize: '1.5rem',
-            cursor: 'pointer',
-            color: 'var(--kline-text-light)'
-          }}
-        >
-          ×
-        </button>
+    return (
+        <div style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000
+        }}>
+            <div className="kline-card" style={{
+                width: '90%',
+                maxWidth: '500px',
+                padding: '2rem',
+                position: 'relative'
+            }}>
+                <button
+                    onClick={onClose}
+                    style={{
+                        position: 'absolute',
+                        top: '1rem',
+                        right: '1rem',
+                        background: 'none',
+                        border: 'none',
+                        fontSize: '1.5rem',
+                        cursor: 'pointer',
+                        color: 'var(--kline-text-light)'
+                    }}
+                >
+                    ×
+                </button>
 
-        <h2 style={{ fontSize: '1.5rem', fontWeight: '700', marginBottom: '1.5rem', color: 'var(--kline-text)' }}>
-          Create New Property
-        </h2>
+                <h2 style={{ fontSize: '1.5rem', fontWeight: '700', marginBottom: '1.5rem', color: 'var(--kline-text)' }}>
+                    Create New Property
+                </h2>
 
-        {error && (
-          <div style={{
-            background: 'rgba(227, 6, 19, 0.1)',
-            border: '1px solid var(--kline-red)',
-            color: 'var(--kline-red)',
-            padding: '1rem',
-            borderRadius: '8px',
-            marginBottom: '1rem'
-          }}>
-            {error}
-          </div>
-        )}
+                {error && (
+                    <div style={{
+                        background: 'rgba(227, 6, 19, 0.1)',
+                        border: '1px solid var(--kline-red)',
+                        color: 'var(--kline-red)',
+                        padding: '1rem',
+                        borderRadius: '8px',
+                        marginBottom: '1rem'
+                    }}>
+                        {error}
+                    </div>
+                )}
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-          <div>
-            <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '0.5rem', fontWeight: '600' }}>
-              Customer *
-            </label>
-            <select 
-              value={formData.customerId}
-              onChange={(e) => setFormData({ ...formData, customerId: e.target.value })}
-              className="kline-input"
-              required
-            >
-              <option value="">Select a customer</option>
-              {customers.map(customer => (
-                <option key={customer.id} value={customer.id}>
-                  {customer.fullName} ({customer.email})
-                </option>
-              ))}
-            </select>
-          </div>
+                {/* ✅ Buscador de clientes */}
+                <input
+                    type="text"
+                    placeholder="Search customer..."
+                    value={customerSearch}
+                    onChange={(e) => setCustomerSearch(e.target.value)}
+                    className="kline-input"
+                    style={{ marginBottom: '1rem' }}
+                />
 
-          <div>
-            <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '0.5rem', fontWeight: '600' }}>
-              Address *
-            </label>
-            <input
-              type="text"
-              value={formData.address}
-              onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-              className="kline-input"
-              placeholder="123 Main Street"
-              required
-            />
-          </div>
+                <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                    <div>
+                        <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '0.5rem', fontWeight: '600' }}>
+                            Customer *
+                        </label>
+                        <select
+                            value={formData.customerId}
+                            onChange={(e) => setFormData({ ...formData, customerId: e.target.value })}
+                            className="kline-input"
+                            required
+                        >
+                            {filteredCustomers.map(customer => (
+                                <option key={customer.id} value={customer.id}>
+                                    {customer.fullName} ({customer.email})
+                                </option>
+                            ))}
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-            <div>
-              <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '0.5rem', fontWeight: '600' }}>
-                City *
-              </label>
-              <input
-                type="text"
-                value={formData.city}
-                onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                className="kline-input"
-                placeholder="City"
-                required
-              />
+                            {filteredCustomers.length === 0 && (
+                                <option value="">No matches...</option>
+                            )}
+                        </select>
+                    </div>
+
+                    {/* Rest of your fields stay identical */}
+                    <div>
+                        <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '0.5rem', fontWeight: '600' }}>
+                            Address *
+                        </label>
+                        <input
+                            type="text"
+                            value={formData.address}
+                            onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                            className="kline-input"
+                            placeholder="123 Main Street"
+                            required
+                        />
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                        <div>
+                            <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '0.5rem', fontWeight: '600' }}>
+                                City *
+                            </label>
+                            <input
+                                type="text"
+                                value={formData.city}
+                                onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                                className="kline-input"
+                                placeholder="City"
+                                required
+                            />
+                        </div>
+                        <div>
+                            <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '0.5rem', fontWeight: '600' }}>
+                                State *
+                            </label>
+                            <input
+                                type="text"
+                                value={formData.state}
+                                onChange={(e) => setFormData({ ...formData, state: e.target.value })}
+                                className="kline-input"
+                                placeholder="State"
+                                required
+                            />
+                        </div>
+                    </div>
+
+                    <div>
+                        <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '0.5rem', fontWeight: '600' }}>
+                            ZIP Code *
+                        </label>
+                        <input
+                            type="text"
+                            value={formData.zip}
+                            onChange={(e) => setFormData({ ...formData, zip: e.target.value })}
+                            className="kline-input"
+                            placeholder="12345"
+                            required
+                        />
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end', marginTop: '1rem' }}>
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            style={{
+                                background: 'transparent',
+                                border: '2px solid var(--kline-text-light)',
+                                color: 'var(--kline-text-light)',
+                                padding: '0.8rem 1.5rem',
+                                borderRadius: '8px',
+                                cursor: 'pointer',
+                                fontWeight: '600',
+                                fontSize: '0.9rem'
+                            }}
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="submit"
+                            disabled={loading}
+                            className="kline-btn-primary"
+                            style={{ padding: '0.8rem 1.5rem', fontSize: '0.9rem' }}
+                        >
+                            {loading ? 'Creating...' : 'Create Property'}
+                        </button>
+                    </div>
+                </form>
             </div>
-            <div>
-              <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '0.5rem', fontWeight: '600' }}>
-                State *
-              </label>
-              <input
-                type="text"
-                value={formData.state}
-                onChange={(e) => setFormData({ ...formData, state: e.target.value })}
-                className="kline-input"
-                placeholder="State"
-                required
-              />
-            </div>
-          </div>
-
-          <div>
-            <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '0.5rem', fontWeight: '600' }}>
-              ZIP Code *
-            </label>
-            <input
-              type="text"
-              value={formData.zip}
-              onChange={(e) => setFormData({ ...formData, zip: e.target.value })}
-              className="kline-input"
-              placeholder="12345"
-              required
-            />
-          </div>
-
-          <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end', marginTop: '1rem' }}>
-            <button
-              type="button"
-              onClick={onClose}
-              style={{
-                background: 'transparent',
-                border: '2px solid var(--kline-text-light)',
-                color: 'var(--kline-text-light)',
-                padding: '0.8rem 1.5rem',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                fontWeight: '600',
-                fontSize: '0.9rem'
-              }}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="kline-btn-primary"
-              style={{ padding: '0.8rem 1.5rem', fontSize: '0.9rem' }}
-            >
-              {loading ? 'Creating...' : 'Create Property'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  )
+        </div>
+    )
 }
+
 
 // Edit Property Modal Component
 function EditPropertyModal({ property, onClose, onPropertyUpdated, customers }: { 
