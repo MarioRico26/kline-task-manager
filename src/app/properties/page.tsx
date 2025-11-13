@@ -472,14 +472,20 @@ export default function PropertiesPage() {
       </main>
 
       {/* Create Property Modal */}
-      {isCreateModalOpen && (
-        <CreatePropertyModal
-          isOpen={isCreateModalOpen}
-          onClose={() => setIsCreateModalOpen(false)}
-          onPropertyCreated={fetchData}
-          customers={customers}
-        />
-      )}
+        {isCreateModalOpen && (
+            <CreatePropertyModal
+                isOpen={isCreateModalOpen}
+                onClose={() => setIsCreateModalOpen(false)}
+                onPropertyCreated={fetchData}
+                customers={filter.trim()
+                    ? customers.filter(c =>
+                        c.fullName.toLowerCase().includes(filter.toLowerCase()) ||
+                        c.email.toLowerCase().includes(filter.toLowerCase())
+                    )
+                    : customers
+                }
+            />
+        )}
 
       {/* Edit Property Modal */}
       {editingProperty && (
@@ -515,16 +521,29 @@ function CreatePropertyModal({ isOpen, onClose, onPropertyCreated, customers }: 
         city: '',
         state: '',
         zip: '',
-        customerId: customers[0]?.id || ''
+        customerId: customers[0]?.id ?? ''
     })
+
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState('')
     const [customerSearch, setCustomerSearch] = useState('')
+
+    useEffect(() => {
+        if (!formData.customerId && customers.length > 0) {
+            setFormData(prev => ({ ...prev, customerId: customers[0].id }))
+        }
+    }, [customers])
 
     const filteredCustomers = customers.filter(c =>
         c.fullName.toLowerCase().includes(customerSearch.toLowerCase()) ||
         c.email.toLowerCase().includes(customerSearch.toLowerCase())
     )
+
+    useEffect(() => {
+        if (filteredCustomers.length === 1) {
+            setFormData(prev => ({ ...prev, customerId: filteredCustomers[0].id }))
+        }
+    }, [customerSearch])
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -624,6 +643,8 @@ function CreatePropertyModal({ isOpen, onClose, onPropertyCreated, customers }: 
                     style={{ marginBottom: '1rem' }}
                 />
 
+
+
                 <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                     <div>
                         <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '0.5rem', fontWeight: '600' }}>
@@ -635,17 +656,17 @@ function CreatePropertyModal({ isOpen, onClose, onPropertyCreated, customers }: 
                             className="kline-input"
                             required
                         >
-                            {filteredCustomers.map(customer => (
+                            {filteredCustomers.length === 0 && <option value="">No customers found</option>}
+
+                            {filteredCustomers.length > 0 && filteredCustomers.map(customer => (
                                 <option key={customer.id} value={customer.id}>
                                     {customer.fullName} ({customer.email})
                                 </option>
                             ))}
-
-                            {filteredCustomers.length === 0 && (
-                                <option value="">No matches...</option>
-                            )}
                         </select>
                     </div>
+
+
 
                     {/* Rest of your fields stay identical */}
                     <div>
