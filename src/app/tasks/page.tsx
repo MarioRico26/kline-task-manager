@@ -745,401 +745,546 @@ useEffect(() => {
 }
 
 // Create Task Modal Component
-function CreateTaskModal({ isOpen, onClose, onTaskCreated, customers, properties, services, statuses }: {
-    isOpen: boolean,
-    onClose: () => void,
-    onTaskCreated: () => void,
-    customers: Customer[],
-    properties: Property[],
-    services: Service[],
-    statuses: TaskStatus[]
+// Create Task Modal Component (Property-first, Human-proof)
+function CreateTaskModal({
+  isOpen,
+  onClose,
+  onTaskCreated,
+  customers,
+  properties,
+  services,
+  statuses
+}: {
+  isOpen: boolean
+  onClose: () => void
+  onTaskCreated: () => void
+  customers: Customer[]
+  properties: Property[]
+  services: Service[]
+  statuses: TaskStatus[]
 }) {
-    const [formData, setFormData] = useState({
-        customerId: '',
-        customerSearch: '',
-        propertyId: '',
-        serviceId: services[0]?.id || '',
-        statusId: statuses[0]?.id || '',
-        notes: '',
-        scheduledFor: '',
-        files: [] as File[]
-    })
+  const [formData, setFormData] = useState({
+    customerId: '',
+    customerName: '', // ✅ read-only display
+    propertyId: '',
+    propertySearch: '',
 
-    const [loading, setLoading] = useState(false)
-    const [error, setError] = useState('')
-    const [customerProperties, setCustomerProperties] = useState<Property[]>([])
+    serviceId: services[0]?.id || '',
+    statusId: statuses[0]?.id || '',
+    notes: '',
+    scheduledFor: '',
+    files: [] as File[]
+  })
 
-    // Filtra propiedades cuando cambia el cliente
-    useEffect(() => {
-        if (formData.customerId) {
-            const filtered = properties.filter(p => p.customerId === formData.customerId)
-            setCustomerProperties(filtered)
-            if (filtered.length > 0 && !formData.propertyId) {
-                setFormData(prev => ({ ...prev, propertyId: filtered[0].id }))
-            }
-        } else {
-            setCustomerProperties([])
-        }
-    }, [formData.customerId, properties])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault()
-        setLoading(true)
-        setError('')
+  const [showPropertyDropdown, setShowPropertyDropdown] = useState(false)
 
-        try {
-            const formDataToSend = new FormData()
-            formDataToSend.append('customerId', formData.customerId)
-            formDataToSend.append('propertyId', formData.propertyId)
-            formDataToSend.append('serviceId', formData.serviceId)
-            formDataToSend.append('statusId', formData.statusId)
-            formDataToSend.append('notes', formData.notes)
-            if (formData.scheduledFor) formDataToSend.append('scheduledFor', formData.scheduledFor)
-            formData.files.forEach(file => formDataToSend.append('files', file))
+  // Helpers
+  const getCustomerById = (id: string) => customers.find(c => c.id === id)
+  const getPropertyById = (id: string) => properties.find(p => p.id === id)
 
-            const response = await fetch('/api/tasks', {
-                method: 'POST',
-                body: formDataToSend
-            })
+  const formatPropertyLabel = (p: Property) => `${p.address}, ${p.city}, ${p.state}`
 
-            if (response.ok) {
-                onTaskCreated()
-                onClose()
-                setFormData({
-                    customerId: '',
-                    customerSearch: '',
-                    propertyId: '',
-                    serviceId: services[0]?.id || '',
-                    statusId: statuses[0]?.id || '',
-                    notes: '',
-                    scheduledFor: '',
-                    files: []
-                })
-                setCustomerProperties([])
-            } else {
-                const data = await response.json()
-                setError(data.error || 'Error creating task')
-            }
-        } catch {
-            setError('Network error')
-        } finally {
-            setLoading(false)
-        }
+  const filteredProperties = (() => {
+    const q = formData.propertySearch.trim().toLowerCase()
+    if (!q) return properties.slice(0, 25)
+
+    return properties
+      .filter(p => {
+        const c = customers.find(x => x.id === p.customerId)
+        const customerText = c ? `${c.fullName} ${c.email}`.toLowerCase() : ''
+        const propText = `${p.address} ${p.city} ${p.state}`.toLowerCase()
+        return propText.includes(q) || customerText.includes(q)
+      })
+      .slice(0, 50)
+  })()
+
+  const selectProperty = (p: Property) => {
+    const c = getCustomerById(p.customerId)
+    setFormData(prev => ({
+      ...prev,
+      propertyId: p.id,
+      propertySearch: formatPropertyLabel(p),
+      customerId: p.customerId,
+      customerName: c ? c.fullName : 'Unknown customer'
+    }))
+    setShowPropertyDropdown(false)
+  }
+
+  const clearProperty = () => {
+    setFormData(prev => ({
+      ...prev,
+      propertyId: '',
+      propertySearch: '',
+      customerId: '',
+      customerName: ''
+    }))
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    setError('')
+
+    try {
+      // ✅ hard guardrails
+      if (!formData.propertyId) {
+        setError('Please select a property (address).')
+        setLoading(false)
+        return
+      }
+      if (!formData.customerId) {
+        setError('Customer is missing. Please re-select the property.')
+        setLoading(false)
+        return
+      }
+
+      const formDataToSend = new FormData()
+      formDataToSend.append('customerId', formData.customerId)
+      formDataToSend.append('propertyId', formData.propertyId)
+      formDataToSend.append('serviceId', formData.serviceId)
+      formDataToSend.append('statusId', formData.statusId)
+      formDataToSend.append('notes', formData.notes)
+      if (formData.scheduledFor) formDataToSend.append('scheduledFor', formData.scheduledFor)
+
+      // Append files
+      formData.files.forEach(file => {
+        formDataToSend.append('files', file)
+      })
+
+      const response = await fetch('/api/tasks', {
+        method: 'POST',
+        body: formDataToSend
+      })
+
+      if (response.ok) {
+        onTaskCreated()
+        onClose()
+
+        setFormData({
+          customerId: '',
+          customerName: '',
+          propertyId: '',
+          propertySearch: '',
+          serviceId: services[0]?.id || '',
+          statusId: statuses[0]?.id || '',
+          notes: '',
+          scheduledFor: '',
+          files: []
+        })
+        setShowPropertyDropdown(false)
+      } else {
+        const data = await response.json()
+        setError(data.error || 'Error creating task')
+      }
+    } catch {
+      setError('Network error')
+    } finally {
+      setLoading(false)
     }
+  }
 
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files) {
-            setFormData(prev => ({ ...prev, files: Array.from(e.target.files!) }))
-        }
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      setFormData(prev => ({
+        ...prev,
+        files: Array.from(e.target.files!)
+      }))
     }
+  }
 
-    const removeFile = (index: number) => {
-        setFormData(prev => ({
-            ...prev,
-            files: prev.files.filter((_, i) => i !== index)
-        }))
-    }
+  const removeFile = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      files: prev.files.filter((_, i) => i !== index)
+    }))
+  }
 
-    if (!isOpen) return null
+  if (!isOpen) return null
 
-    return (
-        <div style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: 'rgba(0, 0, 0, 0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000
-        }}>
-            <div className="kline-card" style={{
-                width: '90%',
-                maxWidth: '600px',
-                padding: '2rem',
-                position: 'relative',
-                maxHeight: '90vh',
-                overflowY: 'auto'
-            }}>
+  const selectedProperty = formData.propertyId ? getPropertyById(formData.propertyId) : null
+  const selectedCustomer = formData.customerId ? getCustomerById(formData.customerId) : null
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: 'rgba(0, 0, 0, 0.5)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1000
+      }}
+      onClick={() => setShowPropertyDropdown(false)}
+    >
+      <div
+        className="kline-card"
+        style={{
+          width: '90%',
+          maxWidth: '600px',
+          padding: '2rem',
+          position: 'relative',
+          maxHeight: '90vh',
+          overflowY: 'auto'
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          onClick={onClose}
+          style={{
+            position: 'absolute',
+            top: '1rem',
+            right: '1rem',
+            background: 'none',
+            border: 'none',
+            fontSize: '1.5rem',
+            cursor: 'pointer',
+            color: 'var(--kline-text-light)'
+          }}
+        >
+          ×
+        </button>
+
+        <h2 style={{ fontSize: '1.5rem', fontWeight: '700', marginBottom: '1.5rem', color: 'var(--kline-text)' }}>
+          Create New Task
+        </h2>
+
+        {error && (
+          <div
+            style={{
+              background: 'rgba(227, 6, 19, 0.1)',
+              border: '1px solid var(--kline-red)',
+              color: 'var(--kline-red)',
+              padding: '1rem',
+              borderRadius: '8px',
+              marginBottom: '1rem'
+            }}
+          >
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          {/* ✅ Property FIRST */}
+          <div>
+            <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '0.5rem', fontWeight: '600' }}>
+              Property (Address) *
+            </label>
+
+            <div style={{ position: 'relative' }}>
+              <input
+                type="text"
+                placeholder="Search address, city, state, or customer..."
+                value={formData.propertySearch}
+                onChange={(e) => {
+                  const val = e.target.value
+                  // if user edits after selecting, we clear selection to prevent mismatch
+                  setFormData(prev => ({
+                    ...prev,
+                    propertySearch: val
+                  }))
+                  setShowPropertyDropdown(true)
+
+                  // Human-proof behavior: if they change the text, nuke the selected ids
+                  if (formData.propertyId) {
+                    clearProperty()
+                    setFormData(prev => ({ ...prev, propertySearch: val }))
+                  }
+                }}
+                onFocus={() => setShowPropertyDropdown(true)}
+                className="kline-input"
+                style={{ width: '100%', paddingRight: '2rem' }}
+              />
+
+              <span
+                style={{
+                  position: 'absolute',
+                  right: '0.8rem',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  color: 'var(--kline-text-light)',
+                  pointerEvents: 'none'
+                }}
+              >
+                ⌄
+              </span>
+
+              {formData.propertyId && (
                 <button
-                    onClick={onClose}
-                    style={{
-                        position: 'absolute',
-                        top: '1rem',
-                        right: '1rem',
-                        background: 'none',
-                        border: 'none',
-                        fontSize: '1.5rem',
-                        cursor: 'pointer',
-                        color: 'var(--kline-text-light)'
-                    }}
+                  type="button"
+                  onClick={clearProperty}
+                  style={{
+                    position: 'absolute',
+                    right: '2rem',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: 'var(--kline-text-light)',
+                    fontSize: '0.9rem'
+                  }}
+                  title="Clear selection"
                 >
-                    ×
+                  Clear
                 </button>
+              )}
 
-                <h2 style={{ fontSize: '1.5rem', fontWeight: '700', marginBottom: '1.5rem', color: 'var(--kline-text)' }}>
-                    Create New Task
-                </h2>
-
-                {error && (
-                    <div style={{
-                        background: 'rgba(227, 6, 19, 0.1)',
-                        border: '1px solid var(--kline-red)',
-                        color: 'var(--kline-red)',
-                        padding: '1rem',
-                        borderRadius: '8px',
-                        marginBottom: '1rem'
-                    }}>
-                        {error}
+              {showPropertyDropdown && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    background: 'white',
+                    border: '1px solid var(--kline-gray)',
+                    borderRadius: '6px',
+                    marginTop: '0.25rem',
+                    width: '100%',
+                    maxHeight: '220px',
+                    overflowY: 'auto',
+                    zIndex: 10,
+                    boxShadow: '0 4px 10px rgba(0,0,0,0.1)'
+                  }}
+                >
+                  {filteredProperties.length === 0 ? (
+                    <div style={{ padding: '0.8rem 1rem', color: 'var(--kline-text-light)', fontSize: '0.85rem' }}>
+                      No matching properties.
                     </div>
-                )}
+                  ) : (
+                    filteredProperties.map(p => {
+                      const c = getCustomerById(p.customerId)
+                      const isSelected = formData.propertyId === p.id
 
-                <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                    {/* Customer Search + Dropdown */}
-                    <div>
-                        <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '0.5rem', fontWeight: '600' }}>
-                            Customer *
-                        </label>
-                        <div style={{ position: 'relative' }}>
-                            <input
-                                type="text"
-                                placeholder="Search customer..."
-                                value={formData.customerSearch}
-                                onChange={(e) => setFormData(prev => ({ ...prev, customerSearch: e.target.value }))}
-                                className="kline-input"
-                                style={{ width: '100%', paddingRight: '2rem' }}
-                            />
-                            {formData.customerSearch && (
-                                <div style={{
-                                    position: 'absolute',
-                                    background: 'white',
-                                    border: '1px solid var(--kline-gray)',
-                                    borderRadius: '6px',
-                                    marginTop: '0.25rem',
-                                    width: '100%',
-                                    maxHeight: '180px',
-                                    overflowY: 'auto',
-                                    zIndex: 10,
-                                    boxShadow: '0 4px 10px rgba(0,0,0,0.1)'
-                                }}>
-                                    {customers
-                                        .filter(c =>
-                                            c.fullName.toLowerCase().includes(formData.customerSearch.toLowerCase()) ||
-                                            c.email.toLowerCase().includes(formData.customerSearch.toLowerCase())
-                                        )
-                                        .map(c => (
-                                            <div
-                                                key={c.id}
-                                                onClick={() => {
-                                                    const filtered = properties.filter(p => p.customerId === c.id)
-                                                    setCustomerProperties(filtered)
-                                                    setFormData(prev => ({
-                                                        ...prev,
-                                                        customerId: c.id,
-                                                        customerSearch: c.fullName,
-                                                        propertyId: filtered[0]?.id || ''
-                                                    }))
-                                                }}
-                                                style={{
-                                                    padding: '0.6rem 1rem',
-                                                    cursor: 'pointer',
-                                                    background: formData.customerId === c.id ? 'var(--kline-gray-light)' : 'white'
-                                                }}
-                                                onMouseOver={(e) => e.currentTarget.style.background = 'var(--kline-gray-light)'}
-                                                onMouseOut={(e) => {
-                                                    e.currentTarget.style.background = formData.customerId === c.id
-                                                        ? 'var(--kline-gray-light)'
-                                                        : 'white'
-                                                }}
-                                            >
-                                                <strong>{c.fullName}</strong>{' '}
-                                                <span style={{ color: 'var(--kline-text-light)', fontSize: '0.8rem' }}>
-                          ({c.email})
-                        </span>
-                                            </div>
-                                        ))}
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Property */}
-                    <div>
-                        <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '0.5rem', fontWeight: '600' }}>
-                            Property *
-                        </label>
-                        <select
-                            value={formData.propertyId}
-                            onChange={(e) => setFormData({ ...formData, propertyId: e.target.value })}
-                            className="kline-input"
-                            required
-                            disabled={customerProperties.length === 0}
+                      return (
+                        <div
+                          key={p.id}
+                          onClick={() => selectProperty(p)}
+                          style={{
+                            padding: '0.6rem 1rem',
+                            cursor: 'pointer',
+                            background: isSelected ? 'var(--kline-gray-light)' : 'white'
+                          }}
+                          onMouseOver={(e) => (e.currentTarget.style.background = 'var(--kline-gray-light)')}
+                          onMouseOut={(e) => {
+                            e.currentTarget.style.background = isSelected ? 'var(--kline-gray-light)' : 'white'
+                          }}
                         >
-                            <option value="">Select a property</option>
-                            {customerProperties.map(property => (
-                                <option key={property.id} value={property.id}>
-                                    {property.address}, {property.city}, {property.state}
-                                </option>
-                            ))}
-                        </select>
-                        {customerProperties.length === 0 && formData.customerId && (
-                            <div style={{ color: 'var(--kline-red)', fontSize: '0.8rem', marginTop: '0.5rem' }}>
-                                This customer has no properties. Please add properties first.
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Service / Status */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                        <div>
-                            <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '0.5rem', fontWeight: '600' }}>
-                                Service *
-                            </label>
-                            <select
-                                value={formData.serviceId}
-                                onChange={(e) => setFormData({ ...formData, serviceId: e.target.value })}
-                                className="kline-input"
-                                required
-                            >
-                                <option value="">Select a service</option>
-                                {services.map(service => (
-                                    <option key={service.id} value={service.id}>
-                                        {service.name}
-                                    </option>
-                                ))}
-                            </select>
+                          <div style={{ fontWeight: 700 }}>{formatPropertyLabel(p)}</div>
+                          <div style={{ color: 'var(--kline-text-light)', fontSize: '0.8rem' }}>
+                            {c ? c.fullName : 'Unknown customer'}
+                          </div>
                         </div>
-                        <div>
-                            <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '0.5rem', fontWeight: '600' }}>
-                                Status *
-                            </label>
-                            <select
-                                value={formData.statusId}
-                                onChange={(e) => setFormData({ ...formData, statusId: e.target.value })}
-                                className="kline-input"
-                                required
-                            >
-                                <option value="">Select a status</option>
-                                {statuses.map(status => (
-                                    <option key={status.id} value={status.id}>
-                                        {status.name} {status.notifyClient ? '(Notifies Customer)' : ''}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-                    </div>
-
-                    {/* Scheduled For */}
-                    <div>
-                        <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '0.5rem', fontWeight: '600' }}>
-                            Scheduled For
-                        </label>
-                        <input
-                            type="datetime-local"
-                            value={formData.scheduledFor}
-                            onChange={(e) => setFormData({ ...formData, scheduledFor: e.target.value })}
-                            className="kline-input"
-                        />
-                    </div>
-
-                    {/* Notes */}
-                    <div>
-                        <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '0.5rem', fontWeight: '600' }}>
-                            Notes
-                        </label>
-                        <textarea
-                            value={formData.notes}
-                            onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                            className="kline-input"
-                            placeholder="Add any notes about this task..."
-                            rows={3}
-                            style={{ resize: 'vertical' }}
-                        />
-                    </div>
-
-                    {/* Attach Images */}
-                    <div>
-                        <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '0.5rem', fontWeight: '600' }}>
-                            Attach Images
-                        </label>
-                        <input
-                            type="file"
-                            multiple
-                            accept="image/*"
-                            onChange={handleFileChange}
-                            className="kline-input"
-                            style={{ padding: '0.5rem' }}
-                        />
-                        {formData.files.length > 0 && (
-                            <div style={{ marginTop: '0.5rem' }}>
-                                <div style={{ fontSize: '0.8rem', color: 'var(--kline-text-light)', marginBottom: '0.5rem' }}>
-                                    Selected files:
-                                </div>
-                                {formData.files.map((file, index) => (
-                                    <div key={index} style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '0.5rem',
-                                        padding: '0.5rem',
-                                        background: 'var(--kline-gray-light)',
-                                        borderRadius: '6px',
-                                        marginBottom: '0.25rem'
-                                    }}>
-                                        <span style={{ fontSize: '0.8rem' }}>{file.name}</span>
-                                        <button
-                                            type="button"
-                                            onClick={() => removeFile(index)}
-                                            style={{
-                                                background: 'var(--kline-red)',
-                                                border: 'none',
-                                                color: 'white',
-                                                borderRadius: '4px',
-                                                padding: '0.2rem 0.5rem',
-                                                fontSize: '0.7rem',
-                                                cursor: 'pointer'
-                                            }}
-                                        >
-                                            Remove
-                                        </button>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Buttons */}
-                    <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end', marginTop: '1rem' }}>
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            style={{
-                                background: 'transparent',
-                                border: '2px solid var(--kline-text-light)',
-                                color: 'var(--kline-text-light)',
-                                padding: '0.8rem 1.5rem',
-                                borderRadius: '8px',
-                                cursor: 'pointer',
-                                fontWeight: '600',
-                                fontSize: '0.9rem'
-                            }}
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            type="submit"
-                            disabled={loading}
-                            className="kline-btn-primary"
-                            style={{ padding: '0.8rem 1.5rem', fontSize: '0.9rem' }}
-                        >
-                            {loading ? 'Creating...' : 'Create Task'}
-                        </button>
-                    </div>
-                </form>
+                      )
+                    })
+                  )}
+                </div>
+              )}
             </div>
-        </div>
-    )
+
+            {!formData.propertyId && (
+              <div style={{ color: 'var(--kline-text-light)', fontSize: '0.8rem', marginTop: '0.5rem' }}>
+                Select an address to auto-link the customer.
+              </div>
+            )}
+          </div>
+
+          {/* ✅ Customer READ-ONLY */}
+          <div>
+            <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '0.5rem', fontWeight: '600' }}>
+              Customer (Auto)
+            </label>
+
+            <input
+              type="text"
+              value={
+                selectedCustomer
+                  ? `${selectedCustomer.fullName} (${selectedCustomer.email})`
+                  : formData.customerName || ''
+              }
+              className="kline-input"
+              readOnly
+              disabled
+              style={{ opacity: 0.85, cursor: 'not-allowed' }}
+              placeholder="Select a property first"
+            />
+
+            {formData.propertyId && !selectedCustomer && (
+              <div style={{ color: 'var(--kline-red)', fontSize: '0.8rem', marginTop: '0.5rem' }}>
+                Customer not found for this property. (Data issue)
+              </div>
+            )}
+          </div>
+
+          {/* Service / Status */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+            <div>
+              <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '0.5rem', fontWeight: '600' }}>
+                Service *
+              </label>
+              <select
+                value={formData.serviceId}
+                onChange={(e) => setFormData({ ...formData, serviceId: e.target.value })}
+                className="kline-input"
+                required
+                disabled={!formData.propertyId}
+              >
+                <option value="">Select a service</option>
+                {services.map(service => (
+                  <option key={service.id} value={service.id}>
+                    {service.name}
+                  </option>
+                ))}
+              </select>
+              {!formData.propertyId && (
+                <div style={{ color: 'var(--kline-text-light)', fontSize: '0.8rem', marginTop: '0.5rem' }}>
+                  Select a property first.
+                </div>
+              )}
+            </div>
+
+            <div>
+              <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '0.5rem', fontWeight: '600' }}>
+                Status *
+              </label>
+              <select
+                value={formData.statusId}
+                onChange={(e) => setFormData({ ...formData, statusId: e.target.value })}
+                className="kline-input"
+                required
+                disabled={!formData.propertyId}
+              >
+                <option value="">Select a status</option>
+                {statuses.map(status => (
+                  <option key={status.id} value={status.id}>
+                    {status.name} {status.notifyClient ? '(Notifies Customer)' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Scheduled For */}
+          <div>
+            <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '0.5rem', fontWeight: '600' }}>
+              Scheduled For
+            </label>
+            <input
+              type="datetime-local"
+              value={formData.scheduledFor}
+              onChange={(e) => setFormData({ ...formData, scheduledFor: e.target.value })}
+              className="kline-input"
+              disabled={!formData.propertyId}
+            />
+          </div>
+
+          {/* Notes */}
+          <div>
+            <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '0.5rem', fontWeight: '600' }}>
+              Notes
+            </label>
+            <textarea
+              value={formData.notes}
+              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+              className="kline-input"
+              placeholder="Add any notes about this task..."
+              rows={3}
+              style={{ resize: 'vertical' }}
+              disabled={!formData.propertyId}
+            />
+          </div>
+
+          {/* Attach Images */}
+          <div>
+            <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '0.5rem', fontWeight: '600' }}>
+              Attach Images
+            </label>
+            <input
+              type="file"
+              multiple
+              accept="image/*"
+              onChange={handleFileChange}
+              className="kline-input"
+              style={{ padding: '0.5rem' }}
+              disabled={!formData.propertyId}
+            />
+
+            {formData.files.length > 0 && (
+              <div style={{ marginTop: '0.5rem' }}>
+                <div style={{ fontSize: '0.8rem', color: 'var(--kline-text-light)', marginBottom: '0.5rem' }}>
+                  Selected files:
+                </div>
+                {formData.files.map((file, index) => (
+                  <div
+                    key={index}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      padding: '0.5rem',
+                      background: 'var(--kline-gray-light)',
+                      borderRadius: '6px',
+                      marginBottom: '0.25rem'
+                    }}
+                  >
+                    <span style={{ fontSize: '0.8rem' }}>{file.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => removeFile(index)}
+                      style={{
+                        background: 'var(--kline-red)',
+                        border: 'none',
+                        color: 'white',
+                        borderRadius: '4px',
+                        padding: '0.2rem 0.5rem',
+                        fontSize: '0.7rem',
+                        cursor: 'pointer'
+                      }}
+                      disabled={!formData.propertyId}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Buttons */}
+          <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end', marginTop: '1rem' }}>
+            <button
+              type="button"
+              onClick={onClose}
+              style={{
+                background: 'transparent',
+                border: '2px solid var(--kline-text-light)',
+                color: 'var(--kline-text-light)',
+                padding: '0.8rem 1.5rem',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontWeight: '600',
+                fontSize: '0.9rem'
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={loading || !formData.propertyId}
+              className="kline-btn-primary"
+              style={{ padding: '0.8rem 1.5rem', fontSize: '0.9rem' }}
+            >
+              {loading ? 'Creating...' : 'Create Task'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
 }
 
 // Edit Task Modal Component
