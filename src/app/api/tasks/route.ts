@@ -1,84 +1,31 @@
-//kline-task-manager/src/app/api/tasks/route.ts:
-import { NextResponse } from 'next/server'
-import { PrismaClient } from '@prisma/client'
-import { uploadFile } from '@/lib/upload'
-import { sendTaskUpdateEmail } from '@/lib/email'
-import { sendSMS } from '@/lib/sendSms'
-import { formatPhone } from '@/lib/formatPhone'
+// kline-task-manager/src/app/api/tasks/route.ts
+import { NextRequest, NextResponse } from "next/server"
+import { PrismaClient } from "@prisma/client"
+import { uploadFile } from "@/lib/upload"
+import { sendTaskUpdateEmail } from "@/lib/email"
+import { sendSMS, buildTaskSMS } from "@/lib/sendSms"
 
-const prisma = new PrismaClient()
+const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient }
+const prisma = globalForPrisma.prisma ?? new PrismaClient()
+if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma
 
-export async function GET() {
-  try {
-    console.log('🔄 Fetching tasks from database...')
-    
-    const tasks = await prisma.task.findMany({
-      include: {
-        customer: {
-          select: {
-            id: true,
-            fullName: true,
-            email: true,
-            phone: true
-          }
-        },
-        property: {
-          select: {
-            id: true,
-            address: true,
-            city: true,
-            state: true,
-            zip: true
-          }
-        },
-        service: true,
-        status: true,
-        media: true
-      },
-      orderBy: { createdAt: 'desc' }
-    })
-
-    console.log(`✅ Found ${tasks.length} tasks`)
-    return NextResponse.json(tasks)
-
-  } catch (error) {
-    console.error('❌ Error fetching tasks:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
-  }
-}
-
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData()
-    
-    const customerId = formData.get('customerId') as string
-    const propertyId = formData.get('propertyId') as string
-    const serviceId = formData.get('serviceId') as string
-    const statusId = formData.get('statusId') as string
-    const notes = formData.get('notes') as string
-    const scheduledFor = formData.get('scheduledFor') as string
-    const files = formData.getAll('files') as File[]
+
+    const customerId = formData.get("customerId") as string
+    const propertyId = formData.get("propertyId") as string
+    const serviceId = formData.get("serviceId") as string
+    const statusId = formData.get("statusId") as string
+    const notes = formData.get("notes") as string
+    const scheduledFor = formData.get("scheduledFor") as string
+    const files = formData.getAll("files") as File[]
 
     if (!customerId || !propertyId || !serviceId || !statusId) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
 
-    const [customer, property, service, status] = await Promise.all([
-      prisma.customer.findUnique({ where: { id: customerId } }),
-      prisma.property.findUnique({ where: { id: propertyId } }),
-      prisma.service.findUnique({ where: { id: serviceId } }),
-      prisma.taskStatus.findUnique({ where: { id: statusId } })
-    ])
-
-    if (!customer || !property || !service || !status) {
-      return NextResponse.json(
-        { error: 'Invalid customer, property, service, or status' },
-        { status: 400 }
-      )
-    }
+    const status = await prisma.taskStatus.findUnique({ where: { id: statusId } })
 
     const task = await prisma.task.create({
       data: {
@@ -87,89 +34,94 @@ export async function POST(request: Request) {
         serviceId,
         statusId,
         notes: notes || null,
-        scheduledFor: scheduledFor ? new Date(scheduledFor) : null
+        scheduledFor: scheduledFor ? new Date(scheduledFor) : null,
       },
       include: {
         customer: true,
         property: true,
         service: true,
         status: true,
-        media: true
-      }
+        media: true,
+      },
     })
 
+    // Upload images
     const uploadedImages: string[] = []
     if (files?.length > 0) {
       for (const file of files) {
         if (file.size > 0) {
           try {
-            const imageUrl = await uploadFile(file, task.id)
-            
+            const fileUrl = await uploadFile(file, task.id)
             await prisma.taskMedia.create({
-              data: { url: imageUrl, taskId: task.id }
+              data: { url: fileUrl, taskId: task.id },
             })
-
-            uploadedImages.push(imageUrl)
-          } catch (uploadErr) {
-            console.error("⚠ Error uploading file:", uploadErr)
+            uploadedImages.push(fileUrl)
+          } catch (err) {
+            console.error("⚠ Failed uploading a file:", err)
           }
         }
       }
     }
 
-    // ✅ NOTIFICACIONES CORREGIDAS - CON DESCRIPCIÓN DEL SERVICIO
-if (status.notifyClient) {
-  const phone = formatPhone(customer.phone)
-  const message = `📌 Service Update\n${service.name}\nStatus: ${status.name}`
+    // Notifications on create (si el status tiene notifyClient)
+    if (status?.notifyClient) {
+      const notificationPromises: Promise<any>[] = []
 
-  const notificationPromises = []
+      // EMAIL
+      if (task.customer.email) {
+        notificationPromises.push(
+          sendTaskUpdateEmail({
+            to: task.customer.email,
+            subject: `Service Update: ${task.service.name}`,
+            customerName: task.customer.fullName,
+            service: {
+              name: task.service.name,
+              description: task.service.description || null,
+            },
+            property: `${task.property.address}, ${task.property.city}, ${task.property.state} ${task.property.zip}`,
+            status: status.name,
+            scheduledFor: task.scheduledFor?.toISOString() || null,
+            notes: task.notes,
+            images: uploadedImages,
+          })
+        )
+      }
 
-  // ✅ Email
-  if (customer.email) {
-    notificationPromises.push(
-      sendTaskUpdateEmail({
-        to: customer.email,
-        subject: `Service Update: ${service.name}`,
-        customerName: customer.fullName,
-        service: {
-          name: service.name,
-          description: service.description || null
-        },
-        property: `${property.address}, ${property.city}, ${property.state} ${property.zip}`,
-        status: status.name,
-        scheduledFor: task.scheduledFor?.toISOString() || null,
-        notes: task.notes,
-        images: uploadedImages
-      })
-      .then(() => console.log('✅ Email sent successfully'))
-      .catch(err => console.error('❌ Email failed:', err))
-    )
-  }
+      // SMS (MISMO TEMPLATE)
+      if (task.customer.phone) {
+        const smsText = buildTaskSMS(
+          task.customer.fullName,
+          task.service.name,
+          task.service.description || null,
+          task.property.address,
+          task.property.city,
+          status.name
+        )
+        notificationPromises.push(sendSMS(task.customer.phone, smsText))
+      }
 
-  // ✅ SMS
-  if (phone) {
-    notificationPromises.push(
-      sendSMS(phone, message)
-        .then(() => console.log('✅ SMS sent successfully'))
-        .catch(err => console.error('❌ SMS failed:', err))
-    )
-  }
+      if (notificationPromises.length > 0) {
+        await Promise.allSettled(notificationPromises)
+        console.log("📧 All notifications processed")
+      }
+    }
 
-  // ✅ Esperar a que todas terminen
-  if (notificationPromises.length > 0) {
-    await Promise.allSettled(notificationPromises)
-    console.log('📩 All notifications processed')
+    return NextResponse.json(task)
+  } catch (error) {
+    console.error("❌ Error creating task:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
 
-    console.log("✅ Task created + notifications sent (if enabled)")
-    return NextResponse.json(task)
-
+export async function GET() {
+  try {
+    const tasks = await prisma.task.findMany({
+      orderBy: { createdAt: "desc" },
+      include: { customer: true, property: true, service: true, status: true, media: true },
+    })
+    return NextResponse.json(tasks)
   } catch (error) {
-    console.error("❌ Error creating task:", error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    console.error("❌ Error fetching tasks:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
