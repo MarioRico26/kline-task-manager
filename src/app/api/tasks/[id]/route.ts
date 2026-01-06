@@ -108,10 +108,7 @@ export async function PUT(request: NextRequest) {
         const smsText = buildTaskSMS(
           existingTask.customer.fullName,
           task.service.name,
-          task.service.description || null,
-          task.property.address,
-          task.property.city,
-          newStatus.name
+          task.service.description || null
         )
 
         notificationPromises.push(sendSMS(existingTask.customer.phone, smsText))

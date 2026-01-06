@@ -92,10 +92,7 @@ export async function POST(request: NextRequest) {
         const smsText = buildTaskSMS(
           task.customer.fullName,
           task.service.name,
-          task.service.description || null,
-          task.property.address,
-          task.property.city,
-          status.name
+          task.service.description || null
         )
         notificationPromises.push(sendSMS(task.customer.phone, smsText))
       }
