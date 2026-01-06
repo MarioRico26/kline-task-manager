@@ -745,7 +745,6 @@ useEffect(() => {
 }
 
 // Create Task Modal Component
-// Create Task Modal Component (Property-first, Human-proof)
 function CreateTaskModal({
   isOpen,
   onClose,
@@ -753,7 +752,7 @@ function CreateTaskModal({
   customers,
   properties,
   services,
-  statuses
+  statuses,
 }: {
   isOpen: boolean
   onClose: () => void
@@ -763,65 +762,87 @@ function CreateTaskModal({
   services: Service[]
   statuses: TaskStatus[]
 }) {
+  // Helpers
+  const getCompletedStatusId = () => {
+    const completed = statuses.find(
+      (s) => s.name?.toLowerCase().trim() === 'completed'
+    )
+    return completed?.id || statuses[0]?.id || ''
+  }
+
+  const getFirstCustomer = () => customers[0] || null
+  const getFirstServiceId = () => services[0]?.id || ''
+
   const [formData, setFormData] = useState({
     customerId: '',
-    customerName: '', // ✅ read-only display
+    customerSearch: '',
     propertyId: '',
-    propertySearch: '',
-
-    serviceId: services[0]?.id || '',
-    statusId: statuses[0]?.id || '',
+    serviceId: '',
+    statusId: '',
     notes: '',
     scheduledFor: '',
-    files: [] as File[]
+    files: [] as File[],
   })
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [customerProperties, setCustomerProperties] = useState<Property[]>([])
+  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false)
 
-  const [showPropertyDropdown, setShowPropertyDropdown] = useState(false)
+  // ✅ Initialize defaults WHEN modal opens (and whenever lists are ready)
+  useEffect(() => {
+    if (!isOpen) return
 
-  // Helpers
-  const getCustomerById = (id: string) => customers.find(c => c.id === id)
-  const getPropertyById = (id: string) => properties.find(p => p.id === id)
+    const firstCustomer = getFirstCustomer()
+    const defaultCustomerId = firstCustomer?.id || ''
+    const defaultCustomerName = firstCustomer?.fullName || ''
 
-  const formatPropertyLabel = (p: Property) => `${p.address}, ${p.city}, ${p.state}`
+    const defaultStatusId = getCompletedStatusId()
+    const defaultServiceId = getFirstServiceId()
 
-  const filteredProperties = (() => {
-    const q = formData.propertySearch.trim().toLowerCase()
-    if (!q) return properties.slice(0, 25)
+    const filteredProps = defaultCustomerId
+      ? properties.filter((p) => p.customerId === defaultCustomerId)
+      : []
 
-    return properties
-      .filter(p => {
-        const c = customers.find(x => x.id === p.customerId)
-        const customerText = c ? `${c.fullName} ${c.email}`.toLowerCase() : ''
-        const propText = `${p.address} ${p.city} ${p.state}`.toLowerCase()
-        return propText.includes(q) || customerText.includes(q)
-      })
-      .slice(0, 50)
-  })()
+    setCustomerProperties(filteredProps)
 
-  const selectProperty = (p: Property) => {
-    const c = getCustomerById(p.customerId)
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      propertyId: p.id,
-      propertySearch: formatPropertyLabel(p),
-      customerId: p.customerId,
-      customerName: c ? c.fullName : 'Unknown customer'
+      customerId: prev.customerId || defaultCustomerId,
+      customerSearch: prev.customerSearch || defaultCustomerName,
+      serviceId: prev.serviceId || defaultServiceId,
+      statusId: prev.statusId || defaultStatusId,
+      propertyId: prev.propertyId || filteredProps[0]?.id || '',
+      notes: prev.notes || '',
+      scheduledFor: prev.scheduledFor || '',
+      files: prev.files || [],
     }))
-    setShowPropertyDropdown(false)
-  }
 
-  const clearProperty = () => {
-    setFormData(prev => ({
-      ...prev,
-      propertyId: '',
-      propertySearch: '',
-      customerId: '',
-      customerName: ''
-    }))
-  }
+    // Reset UI bits
+    setError('')
+    setShowCustomerDropdown(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, customers.length, properties.length, services.length, statuses.length])
+
+  // ✅ Keep customerProperties in sync if customerId changes
+  useEffect(() => {
+    if (!isOpen) return
+
+    if (!formData.customerId) {
+      setCustomerProperties([])
+      setFormData((prev) => ({ ...prev, propertyId: '' }))
+      return
+    }
+
+    const filtered = properties.filter((p) => p.customerId === formData.customerId)
+    setCustomerProperties(filtered)
+
+    // Auto-select first property if current property isn't in filtered list
+    const stillValid = filtered.some((p) => p.id === formData.propertyId)
+    if (!stillValid) {
+      setFormData((prev) => ({ ...prev, propertyId: filtered[0]?.id || '' }))
+    }
+  }, [formData.customerId, properties, formData.propertyId, isOpen])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -829,17 +850,11 @@ function CreateTaskModal({
     setError('')
 
     try {
-      // ✅ hard guardrails
-      if (!formData.propertyId) {
-        setError('Please select a property (address).')
-        setLoading(false)
-        return
-      }
-      if (!formData.customerId) {
-        setError('Customer is missing. Please re-select the property.')
-        setLoading(false)
-        return
-      }
+      // Basic validation
+      if (!formData.customerId) return setError('Please select a customer.')
+      if (!formData.propertyId) return setError('Please select a property.')
+      if (!formData.serviceId) return setError('Please select a service.')
+      if (!formData.statusId) return setError('Please select a status.')
 
       const formDataToSend = new FormData()
       formDataToSend.append('customerId', formData.customerId)
@@ -847,39 +862,48 @@ function CreateTaskModal({
       formDataToSend.append('serviceId', formData.serviceId)
       formDataToSend.append('statusId', formData.statusId)
       formDataToSend.append('notes', formData.notes)
-      if (formData.scheduledFor) formDataToSend.append('scheduledFor', formData.scheduledFor)
 
-      // Append files
-      formData.files.forEach(file => {
-        formDataToSend.append('files', file)
-      })
+      if (formData.scheduledFor) {
+        formDataToSend.append('scheduledFor', formData.scheduledFor)
+      }
+
+      formData.files.forEach((file) => formDataToSend.append('files', file))
 
       const response = await fetch('/api/tasks', {
         method: 'POST',
-        body: formDataToSend
+        body: formDataToSend,
       })
 
       if (response.ok) {
         onTaskCreated()
-        onClose()
+
+        // Reset for next open
+        const firstCustomer = getFirstCustomer()
+        const defaultCustomerId = firstCustomer?.id || ''
+        const defaultCustomerName = firstCustomer?.fullName || ''
+        const filteredProps = defaultCustomerId
+          ? properties.filter((p) => p.customerId === defaultCustomerId)
+          : []
+
+        setCustomerProperties(filteredProps)
 
         setFormData({
-          customerId: '',
-          customerName: '',
-          propertyId: '',
-          propertySearch: '',
-          serviceId: services[0]?.id || '',
-          statusId: statuses[0]?.id || '',
+          customerId: defaultCustomerId,
+          customerSearch: defaultCustomerName,
+          propertyId: filteredProps[0]?.id || '',
+          serviceId: getFirstServiceId(),
+          statusId: getCompletedStatusId(),
           notes: '',
           scheduledFor: '',
-          files: []
+          files: [],
         })
-        setShowPropertyDropdown(false)
+
+        onClose()
       } else {
-        const data = await response.json()
+        const data = await response.json().catch(() => ({}))
         setError(data.error || 'Error creating task')
       }
-    } catch {
+    } catch (err) {
       setError('Network error')
     } finally {
       setLoading(false)
@@ -887,25 +911,27 @@ function CreateTaskModal({
   }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      setFormData(prev => ({
-        ...prev,
-        files: Array.from(e.target.files!)
-      }))
-    }
+    if (!e.target.files) return
+    setFormData((prev) => ({ ...prev, files: Array.from(e.target.files!) }))
   }
 
   const removeFile = (index: number) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      files: prev.files.filter((_, i) => i !== index)
+      files: prev.files.filter((_, i) => i !== index),
     }))
   }
 
   if (!isOpen) return null
 
-  const selectedProperty = formData.propertyId ? getPropertyById(formData.propertyId) : null
-  const selectedCustomer = formData.customerId ? getCustomerById(formData.customerId) : null
+  const filteredCustomers =
+    formData.customerSearch.trim().length === 0
+      ? customers
+      : customers.filter(
+          (c) =>
+            c.fullName.toLowerCase().includes(formData.customerSearch.toLowerCase()) ||
+            c.email.toLowerCase().includes(formData.customerSearch.toLowerCase())
+        )
 
   return (
     <div
@@ -919,9 +945,9 @@ function CreateTaskModal({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        zIndex: 1000
+        zIndex: 1000,
       }}
-      onClick={() => setShowPropertyDropdown(false)}
+      onClick={() => setShowCustomerDropdown(false)}
     >
       <div
         className="kline-card"
@@ -931,7 +957,7 @@ function CreateTaskModal({
           padding: '2rem',
           position: 'relative',
           maxHeight: '90vh',
-          overflowY: 'auto'
+          overflowY: 'auto',
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -945,13 +971,20 @@ function CreateTaskModal({
             border: 'none',
             fontSize: '1.5rem',
             cursor: 'pointer',
-            color: 'var(--kline-text-light)'
+            color: 'var(--kline-text-light)',
           }}
         >
           ×
         </button>
 
-        <h2 style={{ fontSize: '1.5rem', fontWeight: '700', marginBottom: '1.5rem', color: 'var(--kline-text)' }}>
+        <h2
+          style={{
+            fontSize: '1.5rem',
+            fontWeight: '700',
+            marginBottom: '1.5rem',
+            color: 'var(--kline-text)',
+          }}
+        >
           Create New Task
         </h2>
 
@@ -963,41 +996,58 @@ function CreateTaskModal({
               color: 'var(--kline-red)',
               padding: '1rem',
               borderRadius: '8px',
-              marginBottom: '1rem'
+              marginBottom: '1rem',
             }}
           >
             {error}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-          {/* ✅ Property FIRST */}
+        <form
+          onSubmit={handleSubmit}
+          style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}
+        >
+          {/* Customer Search + Dropdown */}
           <div>
-            <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '0.5rem', fontWeight: '600' }}>
-              Property (Address) *
+            <label
+              style={{
+                display: 'block',
+                color: 'var(--kline-text)',
+                marginBottom: '0.5rem',
+                fontWeight: '600',
+              }}
+            >
+              Customer *
             </label>
 
             <div style={{ position: 'relative' }}>
               <input
                 type="text"
-                placeholder="Search address, city, state, or customer..."
-                value={formData.propertySearch}
+                placeholder="Search customer..."
+                value={formData.customerSearch}
+                onFocus={() => setShowCustomerDropdown(true)}
                 onChange={(e) => {
-                  const val = e.target.value
-                  // if user edits after selecting, we clear selection to prevent mismatch
-                  setFormData(prev => ({
+                  const value = e.target.value
+                  setFormData((prev) => ({
                     ...prev,
-                    propertySearch: val
+                    customerSearch: value,
                   }))
-                  setShowPropertyDropdown(true)
+                  setShowCustomerDropdown(true)
 
-                  // Human-proof behavior: if they change the text, nuke the selected ids
-                  if (formData.propertyId) {
-                    clearProperty()
-                    setFormData(prev => ({ ...prev, propertySearch: val }))
-                  }
+                  // Optional: auto-match first customer while typing
+                  const search = value.toLowerCase()
+                  const match = customers.find(
+                    (c) =>
+                      c.fullName.toLowerCase().includes(search) ||
+                      c.email.toLowerCase().includes(search)
+                  )
+
+                  setFormData((prev) => ({
+                    ...prev,
+                    customerSearch: value,
+                    customerId: match ? match.id : prev.customerId,
+                  }))
                 }}
-                onFocus={() => setShowPropertyDropdown(true)}
                 className="kline-input"
                 style={{ width: '100%', paddingRight: '2rem' }}
               />
@@ -1009,34 +1059,13 @@ function CreateTaskModal({
                   top: '50%',
                   transform: 'translateY(-50%)',
                   color: 'var(--kline-text-light)',
-                  pointerEvents: 'none'
+                  pointerEvents: 'none',
                 }}
               >
                 ⌄
               </span>
 
-              {formData.propertyId && (
-                <button
-                  type="button"
-                  onClick={clearProperty}
-                  style={{
-                    position: 'absolute',
-                    right: '2rem',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    background: 'transparent',
-                    border: 'none',
-                    cursor: 'pointer',
-                    color: 'var(--kline-text-light)',
-                    fontSize: '0.9rem'
-                  }}
-                  title="Clear selection"
-                >
-                  Clear
-                </button>
-              )}
-
-              {showPropertyDropdown && (
+              {showCustomerDropdown && (
                 <div
                   style={{
                     position: 'absolute',
@@ -1045,121 +1074,147 @@ function CreateTaskModal({
                     borderRadius: '6px',
                     marginTop: '0.25rem',
                     width: '100%',
-                    maxHeight: '220px',
+                    maxHeight: '180px',
                     overflowY: 'auto',
                     zIndex: 10,
-                    boxShadow: '0 4px 10px rgba(0,0,0,0.1)'
+                    boxShadow: '0 4px 10px rgba(0,0,0,0.1)',
                   }}
                 >
-                  {filteredProperties.length === 0 ? (
-                    <div style={{ padding: '0.8rem 1rem', color: 'var(--kline-text-light)', fontSize: '0.85rem' }}>
-                      No matching properties.
+                  {filteredCustomers.length === 0 ? (
+                    <div style={{ padding: '0.8rem 1rem', color: 'var(--kline-text-light)' }}>
+                      No matches
                     </div>
                   ) : (
-                    filteredProperties.map(p => {
-                      const c = getCustomerById(p.customerId)
-                      const isSelected = formData.propertyId === p.id
+                    filteredCustomers.map((c) => (
+                      <div
+                        key={c.id}
+                        onClick={() => {
+                          const filtered = properties.filter((p) => p.customerId === c.id)
+                          setCustomerProperties(filtered)
 
-                      return (
-                        <div
-                          key={p.id}
-                          onClick={() => selectProperty(p)}
-                          style={{
-                            padding: '0.6rem 1rem',
-                            cursor: 'pointer',
-                            background: isSelected ? 'var(--kline-gray-light)' : 'white'
-                          }}
-                          onMouseOver={(e) => (e.currentTarget.style.background = 'var(--kline-gray-light)')}
-                          onMouseOut={(e) => {
-                            e.currentTarget.style.background = isSelected ? 'var(--kline-gray-light)' : 'white'
-                          }}
-                        >
-                          <div style={{ fontWeight: 700 }}>{formatPropertyLabel(p)}</div>
-                          <div style={{ color: 'var(--kline-text-light)', fontSize: '0.8rem' }}>
-                            {c ? c.fullName : 'Unknown customer'}
-                          </div>
-                        </div>
-                      )
-                    })
+                          setFormData((prev) => ({
+                            ...prev,
+                            customerId: c.id,
+                            customerSearch: c.fullName,
+                            propertyId: filtered[0]?.id || '',
+                          }))
+
+                          setShowCustomerDropdown(false)
+                        }}
+                        style={{
+                          padding: '0.6rem 1rem',
+                          cursor: 'pointer',
+                          background:
+                            formData.customerId === c.id
+                              ? 'var(--kline-gray-light)'
+                              : 'white',
+                        }}
+                        onMouseOver={(e) =>
+                          (e.currentTarget.style.background = 'var(--kline-gray-light)')
+                        }
+                        onMouseOut={(e) => {
+                          e.currentTarget.style.background =
+                            formData.customerId === c.id
+                              ? 'var(--kline-gray-light)'
+                              : 'white'
+                        }}
+                      >
+                        <strong>{c.fullName}</strong>{' '}
+                        <span style={{ color: 'var(--kline-text-light)', fontSize: '0.8rem' }}>
+                          ({c.email})
+                        </span>
+                      </div>
+                    ))
                   )}
                 </div>
               )}
             </div>
-
-            {!formData.propertyId && (
-              <div style={{ color: 'var(--kline-text-light)', fontSize: '0.8rem', marginTop: '0.5rem' }}>
-                Select an address to auto-link the customer.
-              </div>
-            )}
           </div>
 
-          {/* ✅ Customer READ-ONLY */}
+          {/* Property */}
           <div>
-            <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '0.5rem', fontWeight: '600' }}>
-              Customer (Auto)
+            <label
+              style={{
+                display: 'block',
+                color: 'var(--kline-text)',
+                marginBottom: '0.5rem',
+                fontWeight: '600',
+              }}
+            >
+              Property *
             </label>
 
-            <input
-              type="text"
-              value={
-                selectedCustomer
-                  ? `${selectedCustomer.fullName} (${selectedCustomer.email})`
-                  : formData.customerName || ''
-              }
+            <select
+              value={formData.propertyId}
+              onChange={(e) => setFormData({ ...formData, propertyId: e.target.value })}
               className="kline-input"
-              readOnly
-              disabled
-              style={{ opacity: 0.85, cursor: 'not-allowed' }}
-              placeholder="Select a property first"
-            />
+              required
+              disabled={customerProperties.length === 0}
+            >
+              <option value="">Select a property</option>
+              {customerProperties.map((property) => (
+                <option key={property.id} value={property.id}>
+                  {property.address}, {property.city}, {property.state}
+                </option>
+              ))}
+            </select>
 
-            {formData.propertyId && !selectedCustomer && (
+            {customerProperties.length === 0 && formData.customerId && (
               <div style={{ color: 'var(--kline-red)', fontSize: '0.8rem', marginTop: '0.5rem' }}>
-                Customer not found for this property. (Data issue)
+                This customer has no properties. Please add properties first.
               </div>
             )}
           </div>
 
-          {/* Service / Status */}
+          {/* Service + Status */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
             <div>
-              <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '0.5rem', fontWeight: '600' }}>
+              <label
+                style={{
+                  display: 'block',
+                  color: 'var(--kline-text)',
+                  marginBottom: '0.5rem',
+                  fontWeight: '600',
+                }}
+              >
                 Service *
               </label>
+
               <select
                 value={formData.serviceId}
                 onChange={(e) => setFormData({ ...formData, serviceId: e.target.value })}
                 className="kline-input"
                 required
-                disabled={!formData.propertyId}
               >
                 <option value="">Select a service</option>
-                {services.map(service => (
+                {services.map((service) => (
                   <option key={service.id} value={service.id}>
                     {service.name}
                   </option>
                 ))}
               </select>
-              {!formData.propertyId && (
-                <div style={{ color: 'var(--kline-text-light)', fontSize: '0.8rem', marginTop: '0.5rem' }}>
-                  Select a property first.
-                </div>
-              )}
             </div>
 
             <div>
-              <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '0.5rem', fontWeight: '600' }}>
+              <label
+                style={{
+                  display: 'block',
+                  color: 'var(--kline-text)',
+                  marginBottom: '0.5rem',
+                  fontWeight: '600',
+                }}
+              >
                 Status *
               </label>
+
               <select
                 value={formData.statusId}
                 onChange={(e) => setFormData({ ...formData, statusId: e.target.value })}
                 className="kline-input"
                 required
-                disabled={!formData.propertyId}
               >
                 <option value="">Select a status</option>
-                {statuses.map(status => (
+                {statuses.map((status) => (
                   <option key={status.id} value={status.id}>
                     {status.name} {status.notifyClient ? '(Notifies Customer)' : ''}
                   </option>
@@ -1168,9 +1223,16 @@ function CreateTaskModal({
             </div>
           </div>
 
-          {/* Scheduled For */}
+          {/* Scheduled */}
           <div>
-            <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '0.5rem', fontWeight: '600' }}>
+            <label
+              style={{
+                display: 'block',
+                color: 'var(--kline-text)',
+                marginBottom: '0.5rem',
+                fontWeight: '600',
+              }}
+            >
               Scheduled For
             </label>
             <input
@@ -1178,13 +1240,19 @@ function CreateTaskModal({
               value={formData.scheduledFor}
               onChange={(e) => setFormData({ ...formData, scheduledFor: e.target.value })}
               className="kline-input"
-              disabled={!formData.propertyId}
             />
           </div>
 
           {/* Notes */}
           <div>
-            <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '0.5rem', fontWeight: '600' }}>
+            <label
+              style={{
+                display: 'block',
+                color: 'var(--kline-text)',
+                marginBottom: '0.5rem',
+                fontWeight: '600',
+              }}
+            >
               Notes
             </label>
             <textarea
@@ -1194,15 +1262,22 @@ function CreateTaskModal({
               placeholder="Add any notes about this task..."
               rows={3}
               style={{ resize: 'vertical' }}
-              disabled={!formData.propertyId}
             />
           </div>
 
-          {/* Attach Images */}
+          {/* Files */}
           <div>
-            <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '0.5rem', fontWeight: '600' }}>
+            <label
+              style={{
+                display: 'block',
+                color: 'var(--kline-text)',
+                marginBottom: '0.5rem',
+                fontWeight: '600',
+              }}
+            >
               Attach Images
             </label>
+
             <input
               type="file"
               multiple
@@ -1210,7 +1285,6 @@ function CreateTaskModal({
               onChange={handleFileChange}
               className="kline-input"
               style={{ padding: '0.5rem' }}
-              disabled={!formData.propertyId}
             />
 
             {formData.files.length > 0 && (
@@ -1228,7 +1302,7 @@ function CreateTaskModal({
                       padding: '0.5rem',
                       background: 'var(--kline-gray-light)',
                       borderRadius: '6px',
-                      marginBottom: '0.25rem'
+                      marginBottom: '0.25rem',
                     }}
                   >
                     <span style={{ fontSize: '0.8rem' }}>{file.name}</span>
@@ -1242,9 +1316,8 @@ function CreateTaskModal({
                         borderRadius: '4px',
                         padding: '0.2rem 0.5rem',
                         fontSize: '0.7rem',
-                        cursor: 'pointer'
+                        cursor: 'pointer',
                       }}
-                      disabled={!formData.propertyId}
                     >
                       Remove
                     </button>
@@ -1254,7 +1327,7 @@ function CreateTaskModal({
             )}
           </div>
 
-          {/* Buttons */}
+          {/* Actions */}
           <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end', marginTop: '1rem' }}>
             <button
               type="button"
@@ -1267,14 +1340,15 @@ function CreateTaskModal({
                 borderRadius: '8px',
                 cursor: 'pointer',
                 fontWeight: '600',
-                fontSize: '0.9rem'
+                fontSize: '0.9rem',
               }}
             >
               Cancel
             </button>
+
             <button
               type="submit"
-              disabled={loading || !formData.propertyId}
+              disabled={loading}
               className="kline-btn-primary"
               style={{ padding: '0.8rem 1.5rem', fontSize: '0.9rem' }}
             >
@@ -1286,6 +1360,7 @@ function CreateTaskModal({
     </div>
   )
 }
+
 
 // Edit Task Modal Component
 function EditTaskModal({ task, onClose, onTaskUpdated, customers, properties, services, statuses }: { 
