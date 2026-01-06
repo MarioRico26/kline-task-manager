@@ -63,7 +63,6 @@ export async function sendTaskUpdateEmail(emailData: EmailData) {
             customerName,
             service,
             property,
-            status,
             scheduledFor,
             notes,
             images,
@@ -180,7 +179,6 @@ export async function sendTaskUpdateEmail(emailData: EmailData) {
                 <p><strong>Service:</strong> ${service.name}</p>
                 ${service.description ? `<p>${service.description}</p>` : ''}
                 <p><strong>Property:</strong> ${property}</p>
-                <p><strong>Status:</strong> <span class="status-badge">${status}</span></p>
                 ${
             scheduledFor
                 ? `<p><strong>Scheduled Date:</strong> ${new Date(
@@ -262,7 +260,6 @@ We wanted to update you on your service request:
 
 Service: ${service.name}
 Property: ${property}
-Status: ${status}
 ${scheduledFor ? `Scheduled For: ${new Date(scheduledFor).toLocaleDateString()}` : ''}
 ${notes ? `Notes: ${notes}` : ''}
 

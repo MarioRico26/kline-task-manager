@@ -25,6 +25,8 @@ ${body}
 
 Thank you for choosing Kline Bros.
 Call us at 609-494-5838 for any questions.
+
+This number is not monitored. Please do not reply to this message.
   `.trim()
 }
 
