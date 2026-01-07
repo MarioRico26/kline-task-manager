@@ -16,23 +16,18 @@ interface StatusCount {
 
 export async function GET() {
   try {
-    console.log('📊 Fetching dashboard stats...')
-    
-    // Obtener estadísticas básicas
     const [
       totalTasks,
-      totalCustomers, 
+      totalCustomers,
       totalServices,
       totalUsers,
       totalProperties,
       totalStatuses,
-      tasks,
-      services,
-      statuses
+      tasks
     ] = await Promise.all([
       prisma.task.count(),
       prisma.customer.count(),
-      prisma.service.count(), 
+      prisma.service.count(),
       prisma.user.count(),
       prisma.property.count(),
       prisma.taskStatus.count(),
@@ -41,84 +36,72 @@ export async function GET() {
           service: { select: { name: true } },
           customer: { select: { fullName: true } },
           status: { select: { name: true, color: true } },
-          property: { select: { address: true } }
+          property: { select: { address: true, city: true, state: true, zip: true } },
         },
-        orderBy: { createdAt: 'desc' }
+        orderBy: { createdAt: 'desc' },
+        take: 2000, // evita traer infinito si crece el sistema
       }),
-      prisma.service.findMany(),
-      prisma.taskStatus.findMany()
     ])
 
-    // Calcular tareas completadas y pendientes
-    const completedTasks = tasks.filter(task => task.completedAt !== null).length
-    const pendingTasks = tasks.filter(task => task.completedAt === null).length
+    const completedTasks = tasks.filter((t) => t.completedAt !== null).length
+    const pendingTasks = tasks.filter((t) => t.completedAt === null).length
+
+    const overdueTasks = tasks.filter((t) => {
+      return t.completedAt === null && t.scheduledFor && new Date(t.scheduledFor) < new Date()
+    }).length
 
     // Tasks by Service
     const serviceCount: ServiceCount = {}
-    tasks.forEach(task => {
-      const serviceName = task.service.name
-      serviceCount[serviceName] = (serviceCount[serviceName] || 0) + 1
-    })
-    
-    const tasksByService = Object.entries(serviceCount).map(([service, count]) => ({
-      service,
-      count
-    })).sort((a, b) => b.count - a.count)
+    for (const t of tasks) {
+      const name = t.service.name
+      serviceCount[name] = (serviceCount[name] || 0) + 1
+    }
+    const tasksByService = Object.entries(serviceCount)
+      .map(([service, count]) => ({ service, count }))
+      .sort((a, b) => b.count - a.count)
 
-    // Tasks by Status  
+    // Tasks by Status
     const statusCount: StatusCount = {}
-    tasks.forEach(task => {
-      const statusName = task.status.name
-      const statusColor = task.status.color || '#1e3a5f'
-      if (!statusCount[statusName]) {
-        statusCount[statusName] = { count: 0, color: statusColor }
-      }
-      statusCount[statusName].count++
-    })
-
+    for (const t of tasks) {
+      const name = t.status.name
+      const color = t.status.color || '#1e3a5f'
+      if (!statusCount[name]) statusCount[name] = { count: 0, color }
+      statusCount[name].count++
+    }
     const tasksByStatus = Object.entries(statusCount).map(([status, data]) => ({
       status,
       count: data.count,
-      color: data.color
+      color: data.color,
     }))
 
-    // Recent Tasks (últimas 6)
-    const recentTasks = tasks.slice(0, 6).map(task => ({
-      id: task.id,
-      service: task.service.name,
-      customer: task.customer.fullName, 
-      status: task.status.name,
-      scheduledFor: task.scheduledFor,
-      address: task.property.address
+    // Recent Tasks
+    const recentTasks = tasks.slice(0, 8).map((t) => ({
+      id: t.id,
+      service: t.service.name,
+      customer: t.customer.fullName,
+      status: t.status.name,
+      scheduledFor: t.scheduledFor ? t.scheduledFor.toISOString() : null,
+      address: `${t.property.address}, ${t.property.city}`,
     }))
 
-    const stats = {
+    return NextResponse.json({
       totalTasks,
       totalCustomers,
       totalServices,
-      totalUsers, 
+      totalUsers,
       totalProperties,
       totalStatuses,
       completedTasks,
       pendingTasks,
-      overdueTasks: tasks.filter(task => 
-        task.completedAt === null && 
-        task.scheduledFor && 
-        new Date(task.scheduledFor) < new Date()
-      ).length,
+      overdueTasks,
       tasksByStatus,
       tasksByService,
-      recentTasks
-    }
-
-    console.log('✅ Dashboard stats fetched successfully')
-    return NextResponse.json(stats)
-
-  } catch (error) {
+      recentTasks,
+    })
+  } catch (error: any) {
     console.error('❌ Error fetching dashboard stats:', error)
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
     return NextResponse.json(
-      { error: 'Internal server error', details: errorMessage },
+      { error: 'Internal server error', details: error?.message || 'Unknown error' },
       { status: 500 }
     )
   }

@@ -1,1875 +1,487 @@
-//kline-task-manager/src/app/tasks/page.tsx:
 'use client'
-import { useState, useEffect } from 'react'
+
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
-interface Task {
-  id: string
-  notes: string | null
-  scheduledFor: string | null
-  completedAt: string | null
-  createdAt: string
-  customer: {
+interface DashboardStats {
+  totalTasks: number
+  totalCustomers: number
+  totalServices: number
+  totalUsers: number
+  totalProperties: number
+  totalStatuses: number
+  completedTasks: number
+  pendingTasks: number
+  overdueTasks: number
+  tasksByStatus: Array<{ status: string; count: number; color: string }>
+  tasksByService: Array<{ service: string; count: number }>
+  recentTasks: Array<{
     id: string
-    fullName: string
-    email: string
-  }
-  property: {
-    id: string
+    service: string
+    customer: string
+    status: string
+    scheduledFor: string | null
     address: string
-    city: string
-    state: string
-  }
-  service: {
-    id: string
-    name: string
-  }
-  status: {
-    id: string
-    name: string
-    color: string | null
-    notifyClient: boolean
-  }
-  media: {
-    id: string
-    url: string
-  }[]
+  }>
 }
 
-interface Customer {
-  id: string
-  fullName: string
-  email: string
+function fmtDate(value: string | null) {
+  if (!value) return 'Not scheduled'
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return 'Not scheduled'
+  return d.toLocaleDateString()
 }
 
-interface Property {
-  id: string
-  address: string
-  city: string
-  state: string
-  customerId: string
-}
-
-interface Service {
-  id: string
-  name: string
-}
-
-interface TaskStatus {
-  id: string
-  name: string
-  color: string | null
-  notifyClient: boolean
-}
-
-export default function TasksPage() {
-  const [tasks, setTasks] = useState<Task[]>([])
-  const [customers, setCustomers] = useState<Customer[]>([])
-  const [properties, setProperties] = useState<Property[]>([])
-  const [services, setServices] = useState<Service[]>([])
-  const [statuses, setStatuses] = useState<TaskStatus[]>([])
-  const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState('')
-  const [statusFilter, setStatusFilter] = useState('ALL')
-  const [customerFilter, setCustomerFilter] = useState('ALL')
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
-  const [editingTask, setEditingTask] = useState<Task | null>(null)
-  const [deletingTask, setDeletingTask] = useState<Task | null>(null)
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null) // 🔐 NUEVO
+export default function DashboardPage() {
   const router = useRouter()
+  const [stats, setStats] = useState<DashboardStats | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
   useEffect(() => {
-    async function checkAuth() {
+    let cancelled = false
+
+    async function load() {
       try {
-        const res = await fetch('/api/auth/check', {
-          credentials: 'include',
-          cache: 'no-store'
-        })
-  
-        if (res.ok) {
-          setIsAuthenticated(true)
-        } else {
-          setIsAuthenticated(false)
-          router.push('/auth/login')
+        setLoading(true)
+        setErrorMsg(null)
+
+        const res = await fetch('/api/dashboard/stats', { cache: 'no-store' })
+        if (!res.ok) {
+          const txt = await res.text().catch(() => '')
+          throw new Error(`Stats request failed: ${res.status}. ${txt}`)
         }
-      } catch (error) {
-        setIsAuthenticated(false)
-        router.push('/auth/login')
+
+        const data = (await res.json()) as DashboardStats
+        if (!cancelled) setStats(data)
+      } catch (err: any) {
+        console.error('❌ Dashboard load error:', err)
+        if (!cancelled) setErrorMsg(err?.message || 'Failed to load dashboard stats')
+      } finally {
+        if (!cancelled) setLoading(false)
       }
     }
-  
-    checkAuth()
-  }, [router])
 
-// ✅ Cargar datos solo cuando ya estamos seguros que hay login
-useEffect(() => {
-  if (isAuthenticated === true) {
-    fetchData()
-  }
-}, [isAuthenticated])
-
-  const fetchData = async () => {
-    try {
-      setLoading(true)
-      const [tasksRes, customersRes, propertiesRes, servicesRes, statusesRes] = await Promise.all([
-        fetch('/api/tasks', { cache: 'no-store', credentials: 'include' }),
-        fetch('/api/customers', { cache: 'no-store', credentials: 'include' }),
-        fetch('/api/properties', { cache: 'no-store', credentials: 'include' }),
-        fetch('/api/services', { cache: 'no-store', credentials: 'include' }),
-        fetch('/api/statuses', { cache: 'no-store', credentials: 'include' })
-      ])
-
-      if (tasksRes.ok && customersRes.ok && propertiesRes.ok && servicesRes.ok && statusesRes.ok) {
-        const tasksData = await tasksRes.json()
-        const customersData = await customersRes.json()
-        const propertiesData = await propertiesRes.json()
-        const servicesData = await servicesRes.json()
-        const statusesData = await statusesRes.json()
-        
-        setTasks(tasksData)
-        setCustomers(customersData)
-        setProperties(propertiesData)
-        setServices(servicesData)
-        setStatuses(statusesData)
-      } else {
-        console.error('Error fetching data')
-      }
-    } catch (error) {
-      console.error('Error fetching data:', error)
-    } finally {
-      setLoading(false)
+    load()
+    return () => {
+      cancelled = true
     }
-  }
-  if (isAuthenticated === null) {
-    return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        height: '100vh',
-        background: 'var(--kline-gray-light)'
-      }}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{
-            width: '60px',
-            height: '60px',
-            background: 'var(--kline-red)',
-            borderRadius: '8px',
-            margin: '0 auto 1rem',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}>
-            <span style={{ color: 'white', fontWeight: 'bold', fontSize: '1.5rem' }}>K</span>
-          </div>
-          <p style={{ color: 'var(--kline-text-light)' }}>Checking session...</p>
-        </div>
-      </div>
-    )
-  }
-
-  // 🔐 REDIRECCIÓN SI NO ESTÁ AUTENTICADO (AÑADIDO)
-  if (isAuthenticated === false) {
-    return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        height: '100vh',
-        background: 'var(--kline-gray-light)'
-      }}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{
-            width: '60px',
-            height: '60px',
-            background: 'var(--kline-red)',
-            borderRadius: '8px',
-            margin: '0 auto 1rem',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}>
-            <span style={{ color: 'white', fontWeight: 'bold', fontSize: '1.5rem' }}>K</span>
-          </div>
-          <p style={{ color: 'var(--kline-text-light)' }}>Redirecting to login...</p>
-        </div>
-      </div>
-    )
-  }
-  if (isAuthenticated === true && loading) {
-    return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        height: '100vh',
-        background: 'var(--kline-gray-light)'
-      }}>
-        <p style={{ color: 'var(--kline-text-light)' }}>Loading tasks...</p>
-      </div>
-    )
-  }
+  }, [])
 
   const handleLogout = () => {
     document.cookie = 'user-id=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;'
     window.location.href = '/auth/login'
   }
 
-  const handleBack = () => {
-    router.back()
-  }
-
-  const handleDashboard = () => {
-    router.push('/dashboard')
-  }
-
-  const handleDeleteTask = async (task: Task) => {
-    try {
-      const response = await fetch(`/api/tasks/${task.id}`, {
-        method: 'DELETE'
-      })
-
-      if (response.ok) {
-        fetchData()
-        setDeletingTask(null)
-      } else {
-        alert('Error deleting task')
-      }
-    } catch (error) {
-      alert('Network error')
-    }
-  }
-
-  const filteredTasks = tasks.filter(task => {
-    const matchesSearch = 
-      task.customer.fullName.toLowerCase().includes(filter.toLowerCase()) ||
-      task.property.address.toLowerCase().includes(filter.toLowerCase()) ||
-      task.service.name.toLowerCase().includes(filter.toLowerCase()) ||
-      (task.notes && task.notes.toLowerCase().includes(filter.toLowerCase()))
-    
-    const matchesStatus = statusFilter === 'ALL' || task.status.id === statusFilter
-    const matchesCustomer = customerFilter === 'ALL' || task.customer.id === customerFilter
-    
-    return matchesSearch && matchesStatus && matchesCustomer
-  })
-
-  const formatDate = (dateString: string | null) => {
-    if (!dateString) return 'Not scheduled'
-    return new Date(dateString).toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    })
-  }
-
-  const getStatusColor = (color: string | null) => {
-    return color || '#6b7280'
-  }
+  const quickModules = useMemo(
+    () => [
+      { title: 'Customers', desc: 'Clients & profiles', route: '/customers', count: stats?.totalCustomers ?? 0, color: '#198754' },
+      { title: 'Properties', desc: 'Addresses & locations', route: '/properties', count: stats?.totalProperties ?? 0, color: '#fd7e14' },
+      { title: 'Tasks', desc: 'Create & track work', route: '/tasks', count: stats?.totalTasks ?? 0, color: '#0d6efd' },
+      { title: 'Services', desc: 'Service catalog', route: '/services', count: stats?.totalServices ?? 0, color: '#6f42c1' },
+      { title: 'Statuses', desc: 'Workflow / automation', route: '/statuses', count: stats?.totalStatuses ?? 0, color: '#20c997' },
+      { title: 'Users', desc: 'Access & roles', route: '/users', count: stats?.totalUsers ?? 0, color: '#dc3545' },
+    ],
+    [stats]
+  )
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--kline-gray-light)' }}>
+    <div
+      style={{
+        minHeight: '100vh',
+        background: 'var(--kline-gray-light)',
+        fontFamily: 'system-ui, -apple-system, sans-serif',
+      }}
+    >
       {/* Header */}
-      <header className="kline-header" style={{ padding: '1rem 0' }}>
-        <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '0 1rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
-              <button 
-                onClick={handleBack}
-                style={{ 
-                  background: 'transparent',
-                  border: '2px solid var(--kline-text-light)',
-                  color: 'var(--kline-text-light)',
-                  padding: '0.6rem 1.2rem',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  fontWeight: '600',
-                  fontSize: '0.9rem',
-                  transition: 'all 0.3s ease'
-                }}
-                onMouseOver={(e) => {
-                  e.currentTarget.style.borderColor = 'var(--kline-red)'
-                  e.currentTarget.style.color = 'var(--kline-red)'
-                }}
-                onMouseOut={(e) => {
-                  e.currentTarget.style.borderColor = 'var(--kline-text-light)'
-                  e.currentTarget.style.color = 'var(--kline-text-light)'
+      <header
+        style={{
+          background: '#fff',
+          borderBottom: '1px solid var(--kline-gray)',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+        }}
+      >
+        <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 20px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: '80px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              <div
+                style={{
+                  width: '44px',
+                  height: '44px',
+                  background: 'var(--kline-red)',
+                  borderRadius: '10px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 4px 12px rgba(227, 6, 19, 0.25)',
                 }}
               >
-                ← Back
-              </button>
-              <h1 style={{ fontSize: '1.8rem', fontWeight: '700', color: 'var(--kline-text)' }}>
-                Task <span className="kline-accent">Management</span>
-              </h1>
+                <span style={{ color: 'white', fontWeight: 'bold', fontSize: '1.2rem' }}>K</span>
+              </div>
+              <div>
+                <h1 style={{ fontSize: '1.6rem', fontWeight: 800, margin: 0, color: 'var(--kline-text)' }}>
+                  KLINE <span style={{ color: 'var(--kline-red)' }}>TASKS</span>
+                </h1>
+                <p style={{ margin: '2px 0 0', color: 'var(--kline-text-light)', fontSize: '0.9rem' }}>
+                  Dashboard
+                </p>
+              </div>
             </div>
-            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-              <button 
-                onClick={handleDashboard}
-                style={{ 
-                  background: 'var(--kline-yellow)',
-                  border: 'none',
-                  color: 'var(--kline-text)',
-                  padding: '0.6rem 1.2rem',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  fontWeight: '600',
-                  fontSize: '0.9rem',
-                  transition: 'all 0.3s ease'
-                }}
-                onMouseOver={(e) => {
-                  e.currentTarget.style.background = 'var(--kline-yellow-light)'
-                  e.currentTarget.style.transform = 'translateY(-2px)'
-                }}
-                onMouseOut={(e) => {
-                  e.currentTarget.style.background = 'var(--kline-yellow)'
-                  e.currentTarget.style.transform = 'translateY(0)'
-                }}
-              >
-                Dashboard
-              </button>
-              <button 
-                onClick={handleLogout}
-                className="kline-btn-primary"
-                style={{ padding: '0.6rem 1.2rem', fontSize: '0.9rem' }}
-              >
-                Logout
-              </button>
-            </div>
+
+            <button
+              onClick={handleLogout}
+              style={{
+                padding: '10px 18px',
+                background: 'transparent',
+                color: 'var(--kline-text-light)',
+                fontWeight: 600,
+                borderRadius: '10px',
+                border: '2px solid var(--kline-gray)',
+                cursor: 'pointer',
+                fontSize: '0.95rem',
+              }}
+              onMouseOver={(e) => {
+                e.currentTarget.style.background = 'var(--kline-red)'
+                e.currentTarget.style.color = '#fff'
+                e.currentTarget.style.borderColor = 'var(--kline-red)'
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.background = 'transparent'
+                e.currentTarget.style.color = 'var(--kline-text-light)'
+                e.currentTarget.style.borderColor = 'var(--kline-gray)'
+              }}
+            >
+              Logout
+            </button>
           </div>
         </div>
       </header>
 
-      {/* Main Content */}
-      <main style={{ maxWidth: '1400px', margin: '2rem auto', padding: '0 1rem' }}>
-        {/* Action Bar */}
-        <div className="kline-card" style={{ padding: '1.5rem', marginBottom: '2rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
-            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
-              {/* Search */}
-              <div style={{ position: 'relative' }}>
-                <input
-                  type="text"
-                  placeholder="Search tasks..."
-                  value={filter}
-                  onChange={(e) => setFilter(e.target.value)}
-                  className="kline-input"
-                  style={{ paddingLeft: '2.5rem', width: '300px', padding: '0.8rem 1rem 0.8rem 2.5rem' }}
-                />
-                <span style={{ 
-                  position: 'absolute', 
-                  left: '1rem', 
-                  top: '50%', 
-                  transform: 'translateY(-50%)',
-                  color: 'var(--kline-text-light)'
-                }}>
-                  🔍
-                </span>
-              </div>
+      <main style={{ maxWidth: '1200px', margin: '0 auto', padding: '28px 20px 60px' }}>
+        {/* Top title + actions */}
+        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: '2rem', fontWeight: 800, color: 'var(--kline-text)' }}>Overview</h2>
+            <p style={{ margin: '6px 0 0', color: 'var(--kline-text-light)', fontSize: '1rem' }}>
+              Quick snapshot of operations
+            </p>
+          </div>
 
-              {/* Status Filter */}
-              <select 
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="kline-input"
-                style={{ width: '180px', padding: '0.8rem 1rem' }}
-              >
-                <option value="ALL">All Statuses</option>
-                {statuses.map(status => (
-                  <option key={status.id} value={status.id}>
-                    {status.name}
-                  </option>
-                ))}
-              </select>
-
-              {/* Customer Filter */}
-              <select 
-                value={customerFilter}
-                onChange={(e) => setCustomerFilter(e.target.value)}
-                className="kline-input"
-                style={{ width: '200px', padding: '0.8rem 1rem' }}
-              >
-                <option value="ALL">All Customers</option>
-                {customers.map(customer => (
-                  <option key={customer.id} value={customer.id}>
-                    {customer.fullName}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Add Task Button */}
-            <button 
-              className="kline-btn-primary"
-              style={{ padding: '0.8rem 1.5rem', fontSize: '0.9rem' }}
-              onClick={() => setIsCreateModalOpen(true)}
-              disabled={customers.length === 0 || properties.length === 0 || services.length === 0 || statuses.length === 0}
+          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+            <button
+              onClick={() => router.push('/customers')}
+              style={{
+                padding: '10px 14px',
+                background: 'var(--kline-red)',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '10px',
+                fontWeight: 700,
+                cursor: 'pointer',
+              }}
             >
-              {customers.length === 0 ? 'Need Customers' : 
-               properties.length === 0 ? 'Need Properties' :
-               services.length === 0 ? 'Need Services' :
-               statuses.length === 0 ? 'Need Statuses' : '+ New Task'}
+              + Customer
+            </button>
+            <button
+              onClick={() => router.push('/properties')}
+              style={{
+                padding: '10px 14px',
+                background: '#fd7e14',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '10px',
+                fontWeight: 700,
+                cursor: 'pointer',
+              }}
+            >
+              + Property
+            </button>
+            <button
+              onClick={() => router.push('/tasks')}
+              style={{
+                padding: '10px 14px',
+                background: '#198754',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '10px',
+                fontWeight: 700,
+                cursor: 'pointer',
+              }}
+            >
+              + Task
             </button>
           </div>
         </div>
 
-        {/* Tasks Table - Compact View */}
-        {loading ? (
-          <div className="kline-card" style={{ padding: '3rem', textAlign: 'center', color: 'var(--kline-text-light)' }}>
-            Loading tasks...
+        {/* Loading / error */}
+        {loading && (
+          <div style={{ padding: '60px 0', textAlign: 'center' }}>
+            <div
+              style={{
+                width: 40,
+                height: 40,
+                border: '3px solid var(--kline-gray)',
+                borderTop: '3px solid var(--kline-red)',
+                borderRadius: '50%',
+                animation: 'spin 1s linear infinite',
+                margin: '0 auto 14px',
+              }}
+            />
+            <div style={{ color: 'var(--kline-text-light)', fontWeight: 600 }}>Loading dashboard…</div>
           </div>
-        ) : customers.length === 0 || properties.length === 0 || services.length === 0 || statuses.length === 0 ? (
-          <div className="kline-card" style={{ padding: '3rem', textAlign: 'center', color: 'var(--kline-text-light)' }}>
-            <h3 style={{ marginBottom: '1rem', color: 'var(--kline-text)' }}>Setup Required</h3>
-            <p>You need to create customers, properties, services, and statuses before adding tasks.</p>
-            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', marginTop: '1.5rem', flexWrap: 'wrap' }}>
-              {customers.length === 0 && (
-                <button 
-                  className="kline-btn-primary"
-                  style={{ padding: '0.6rem 1.2rem', fontSize: '0.8rem' }}
-                  onClick={() => router.push('/customers')}
-                >
-                  Create Customers
-                </button>
-              )}
-              {properties.length === 0 && (
-                <button 
-                  className="kline-btn-primary"
-                  style={{ padding: '0.6rem 1.2rem', fontSize: '0.8rem' }}
-                  onClick={() => router.push('/properties')}
-                >
-                  Create Properties
-                </button>
-              )}
-              {services.length === 0 && (
-                <button 
-                  className="kline-btn-primary"
-                  style={{ padding: '0.6rem 1.2rem', fontSize: '0.8rem' }}
-                  onClick={() => router.push('/services')}
-                >
-                  Create Services
-                </button>
-              )}
-              {statuses.length === 0 && (
-                <button 
-                  className="kline-btn-primary"
-                  style={{ padding: '0.6rem 1.2rem', fontSize: '0.8rem' }}
-                  onClick={() => router.push('/statuses')}
-                >
-                  Create Statuses
-                </button>
-              )}
-            </div>
+        )}
+
+        {!loading && errorMsg && (
+          <div className="kline-card" style={{ padding: 18, marginTop: 20, borderLeft: '4px solid #dc3545' }}>
+            <div style={{ fontWeight: 800, color: 'var(--kline-text)' }}>Could not load dashboard</div>
+            <div style={{ marginTop: 6, color: 'var(--kline-text-light)' }}>{errorMsg}</div>
+            <button
+              onClick={() => window.location.reload()}
+              style={{
+                marginTop: 12,
+                padding: '10px 14px',
+                background: 'var(--kline-red)',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 10,
+                fontWeight: 700,
+                cursor: 'pointer',
+              }}
+            >
+              Retry
+            </button>
           </div>
-        ) : (
-          <div className="kline-card" style={{ overflow: 'hidden' }}>
-            {/* Table Header */}
-            <div style={{ 
-              display: 'grid', 
-              gridTemplateColumns: '1.5fr 1.2fr 1fr 1fr 1fr auto',
-              padding: '1rem 1.5rem',
-              background: 'var(--kline-gray-light)',
-              borderBottom: '2px solid var(--kline-gray)',
-              fontWeight: '600',
-              color: 'var(--kline-text)',
-              fontSize: '0.85rem'
-            }}>
-              <div>Customer & Property</div>
-              <div>Service & Notes</div>
-              <div>Status</div>
-              <div>Scheduled</div>
-              <div>Created</div>
-              <div>Actions</div>
+        )}
+
+        {/* Content */}
+        {!loading && !errorMsg && stats && (
+          <>
+            {/* KPIs */}
+            <div
+              style={{
+                marginTop: 22,
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                gap: 16,
+              }}
+            >
+              <KpiCard label="Total Tasks" value={stats.totalTasks} accent="var(--kline-red)" sub={`${stats.completedTasks} completed`} />
+              <KpiCard label="Pending" value={stats.pendingTasks} accent="#fd7e14" sub={stats.overdueTasks > 0 ? `${stats.overdueTasks} overdue` : 'On track'} />
+              <KpiCard label="Customers" value={stats.totalCustomers} accent="#198754" sub={`${stats.totalProperties} properties`} />
+              <KpiCard label="Services" value={stats.totalServices} accent="#6f42c1" sub="Active service types" />
             </div>
 
-            {/* Table Rows */}
-            {filteredTasks.map((task) => (
-              <div 
-                key={task.id}
-                style={{ 
-                  display: 'grid', 
-                  gridTemplateColumns: '1.5fr 1.2fr 1fr 1fr 1fr auto',
-                  padding: '1rem 1.5rem',
-                  borderBottom: '1px solid var(--kline-gray)',
-                  alignItems: 'center',
-                  fontSize: '0.85rem',
-                  transition: 'background 0.2s ease'
-                }}
-                onMouseOver={(e) => {
-                  e.currentTarget.style.background = 'var(--kline-gray-light)'
-                }}
-                onMouseOut={(e) => {
-                  e.currentTarget.style.background = 'transparent'
-                }}
-              >
-                {/* Customer & Property Column */}
-                <div>
-                  <div style={{ fontWeight: '500', marginBottom: '0.25rem' }}>
-                    {task.customer.fullName}
-                  </div>
-                  <div style={{ 
-                    color: 'var(--kline-text-light)', 
-                    fontSize: '0.75rem'
-                  }}>
-                    {task.property.address}, {task.property.city}, {task.property.state}
+            {/* Modules + Recent tasks */}
+            <div style={{ marginTop: 22, display: 'grid', gridTemplateColumns: '1fr', gap: 18 }}>
+              {/* Modules */}
+              <div className="kline-card" style={{ padding: 18 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
+                  <div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 900, color: 'var(--kline-text)' }}>Modules</div>
+                    <div style={{ marginTop: 4, color: 'var(--kline-text-light)', fontSize: '0.95rem' }}>
+                      Quick access to management sections
+                    </div>
                   </div>
                 </div>
 
-                {/* Service & Notes Column */}
-                <div>
-                  <div style={{ fontWeight: '600', color: 'var(--kline-blue)', marginBottom: '0.25rem' }}>
-                    {task.service.name}
+                <div
+                  style={{
+                    marginTop: 14,
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                    gap: 12,
+                  }}
+                >
+                  {quickModules.map((m) => (
+                    <button
+                      key={m.route}
+                      onClick={() => router.push(m.route)}
+                      style={{
+                        textAlign: 'left',
+                        padding: 14,
+                        borderRadius: 12,
+                        background: '#fff',
+                        border: '1px solid var(--kline-gray)',
+                        cursor: 'pointer',
+                        transition: 'transform .15s ease, box-shadow .15s ease',
+                      }}
+                      onMouseOver={(e) => {
+                        e.currentTarget.style.transform = 'translateY(-2px)'
+                        e.currentTarget.style.boxShadow = '0 10px 24px rgba(0,0,0,0.10)'
+                      }}
+                      onMouseOut={(e) => {
+                        e.currentTarget.style.transform = 'translateY(0)'
+                        e.currentTarget.style.boxShadow = 'none'
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start' }}>
+                        <div>
+                          <div style={{ fontWeight: 900, color: 'var(--kline-text)' }}>{m.title}</div>
+                          <div style={{ marginTop: 2, color: 'var(--kline-text-light)', fontSize: '0.9rem' }}>{m.desc}</div>
+                        </div>
+                        <div
+                          style={{
+                            minWidth: 38,
+                            height: 38,
+                            borderRadius: 10,
+                            background: m.color,
+                            color: '#fff',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontWeight: 900,
+                          }}
+                        >
+                          {m.count}
+                        </div>
+                      </div>
+
+                      <div style={{ marginTop: 10, color: m.color, fontWeight: 800, fontSize: '0.9rem' }}>
+                        Open →
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Recent Tasks */}
+              <div className="kline-card" style={{ padding: 18 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                  <div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 900, color: 'var(--kline-text)' }}>Recent Tasks</div>
+                    <div style={{ marginTop: 4, color: 'var(--kline-text-light)', fontSize: '0.95rem' }}>
+                      Latest created tasks
+                    </div>
                   </div>
-                  <div style={{ 
-                    color: 'var(--kline-text-light)', 
-                    fontSize: '0.75rem',
-                    fontStyle: task.notes ? 'normal' : 'italic'
-                  }}>
-                    {task.notes || 'No notes'}
-                  </div>
-                </div>
 
-                {/* Status Column */}
-                <div>
-                  <span style={{ 
-                    background: getStatusColor(task.status.color),
-                    color: 'white',
-                    padding: '0.3rem 0.6rem',
-                    borderRadius: '12px',
-                    fontSize: '0.75rem',
-                    fontWeight: '600',
-                    display: 'inline-block'
-                  }}>
-                    {task.status.name}
-                  </span>
-                </div>
-
-                {/* Scheduled Column */}
-                <div style={{ color: 'var(--kline-text)', fontSize: '0.8rem' }}>
-                  {formatDate(task.scheduledFor)}
-                </div>
-
-                {/* Created Column */}
-                <div style={{ 
-                  color: 'var(--kline-text-light)', 
-                  fontSize: '0.75rem'
-                }}>
-                  {new Date(task.createdAt).toLocaleDateString()}
-                </div>
-
-                {/* Actions Column */}
-                <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
-                  <button 
-                    style={{ 
-                      background: 'var(--kline-yellow)',
-                      border: 'none',
-                      color: 'var(--kline-text)',
-                      padding: '0.4rem 0.8rem',
-                      borderRadius: '6px',
-                      cursor: 'pointer',
-                      fontWeight: '600',
-                      fontSize: '0.75rem',
-                      transition: 'all 0.2s ease',
-                      minWidth: '60px'
-                    }}
-                    onMouseOver={(e) => {
-                      e.currentTarget.style.background = 'var(--kline-yellow-light)'
-                      e.currentTarget.style.transform = 'translateY(-1px)'
-                    }}
-                    onMouseOut={(e) => {
-                      e.currentTarget.style.background = 'var(--kline-yellow)'
-                      e.currentTarget.style.transform = 'translateY(0)'
-                    }}
-                    onClick={() => setEditingTask(task)}
-                  >
-                    Edit
-                  </button>
-                  <button 
-                    style={{ 
-                      padding: '0.4rem 0.8rem', 
-                      fontSize: '0.75rem',
+                  <button
+                    onClick={() => router.push('/tasks')}
+                    style={{
+                      padding: '10px 14px',
                       background: 'transparent',
-                      border: '1px solid var(--kline-red)',
                       color: 'var(--kline-red)',
-                      borderRadius: '6px',
+                      fontWeight: 800,
+                      borderRadius: 10,
+                      border: '2px solid var(--kline-red)',
                       cursor: 'pointer',
-                      fontWeight: '600',
-                      transition: 'all 0.2s ease',
-                      minWidth: '60px'
                     }}
                     onMouseOver={(e) => {
                       e.currentTarget.style.background = 'var(--kline-red)'
-                      e.currentTarget.style.color = 'white'
+                      e.currentTarget.style.color = '#fff'
                     }}
                     onMouseOut={(e) => {
                       e.currentTarget.style.background = 'transparent'
                       e.currentTarget.style.color = 'var(--kline-red)'
                     }}
-                    onClick={() => setDeletingTask(task)}
                   >
-                    Delete
+                    View all
                   </button>
                 </div>
-              </div>
-            ))}
 
-            {filteredTasks.length === 0 && (
-              <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--kline-text-light)' }}>
-                {tasks.length === 0 ? 'No tasks found' : 'No tasks match your search'}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Compact Stats */}
-        <div style={{ 
-          display: 'grid', 
-          gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', 
-          gap: '0.75rem', 
-          marginTop: '1.5rem' 
-        }}>
-          <div className="kline-card" style={{ 
-            padding: '1rem', 
-            textAlign: 'center',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: '0.5rem'
-          }}>
-            <div style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--kline-red)' }}>
-              {tasks.length}
-            </div>
-            <div style={{ 
-              color: 'var(--kline-text-light)', 
-              fontSize: '0.8rem',
-              fontWeight: '600'
-            }}>
-              Total Tasks
-            </div>
-          </div>
-          <div className="kline-card" style={{ 
-            padding: '1rem', 
-            textAlign: 'center',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: '0.5rem'
-          }}>
-            <div style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--kline-red)' }}>
-              {tasks.filter(t => t.scheduledFor && new Date(t.scheduledFor) > new Date()).length}
-            </div>
-            <div style={{ 
-              color: 'var(--kline-text-light)', 
-              fontSize: '0.8rem',
-              fontWeight: '600'
-            }}>
-              Upcoming
-            </div>
-          </div>
-          <div className="kline-card" style={{ 
-            padding: '1rem', 
-            textAlign: 'center',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: '0.5rem'
-          }}>
-            <div style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--kline-red)' }}>
-              {tasks.filter(t => t.completedAt).length}
-            </div>
-            <div style={{ 
-              color: 'var(--kline-text-light)', 
-              fontSize: '0.8rem',
-              fontWeight: '600'
-            }}>
-              Completed
-            </div>
-          </div>
-          <div className="kline-card" style={{ 
-            padding: '1rem', 
-            textAlign: 'center',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: '0.5rem'
-          }}>
-            <div style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--kline-red)' }}>
-              {tasks.filter(t => t.status.notifyClient).length}
-            </div>
-            <div style={{ 
-              color: 'var(--kline-text-light)', 
-              fontSize: '0.8rem',
-              fontWeight: '600'
-            }}>
-              Notify Client
-            </div>
-          </div>
-        </div>
-      </main>
-
-      {/* Create Task Modal */}
-      {isCreateModalOpen && (
-        <CreateTaskModal
-          isOpen={isCreateModalOpen}
-          onClose={() => setIsCreateModalOpen(false)}
-          onTaskCreated={fetchData}
-          customers={customers}
-          properties={properties}
-          services={services}
-          statuses={statuses}
-        />
-      )}
-
-      {/* Edit Task Modal */}
-      {editingTask && (
-        <EditTaskModal
-          task={editingTask}
-          onClose={() => setEditingTask(null)}
-          onTaskUpdated={fetchData}
-          customers={customers}
-          properties={properties}
-          services={services}
-          statuses={statuses}
-        />
-      )}
-
-      {/* Delete Confirmation Modal */}
-      {deletingTask && (
-        <DeleteTaskModal
-          task={deletingTask}
-          onClose={() => setDeletingTask(null)}
-          onTaskDeleted={handleDeleteTask}
-        />
-      )}
-    </div>
-  )
-}
-
-// Create Task Modal Component
-function CreateTaskModal({
-  isOpen,
-  onClose,
-  onTaskCreated,
-  customers,
-  properties,
-  services,
-  statuses,
-}: {
-  isOpen: boolean
-  onClose: () => void
-  onTaskCreated: () => void
-  customers: Customer[]
-  properties: Property[]
-  services: Service[]
-  statuses: TaskStatus[]
-}) {
-  // Helpers
-  const getCompletedStatusId = () => {
-    const completed = statuses.find(
-      (s) => s.name?.toLowerCase().trim() === 'completed'
-    )
-    return completed?.id || statuses[0]?.id || ''
-  }
-
-  const getFirstCustomer = () => customers[0] || null
-  const getFirstServiceId = () => services[0]?.id || ''
-
-  const [formData, setFormData] = useState({
-    customerId: '',
-    customerSearch: '',
-    propertyId: '',
-    serviceId: '',
-    statusId: '',
-    notes: '',
-    scheduledFor: '',
-    files: [] as File[],
-  })
-
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [customerProperties, setCustomerProperties] = useState<Property[]>([])
-  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false)
-
-  // ✅ Initialize defaults WHEN modal opens (and whenever lists are ready)
-  useEffect(() => {
-    if (!isOpen) return
-
-    const firstCustomer = getFirstCustomer()
-    const defaultCustomerId = firstCustomer?.id || ''
-    const defaultCustomerName = firstCustomer?.fullName || ''
-
-    const defaultStatusId = getCompletedStatusId()
-    const defaultServiceId = getFirstServiceId()
-
-    const filteredProps = defaultCustomerId
-      ? properties.filter((p) => p.customerId === defaultCustomerId)
-      : []
-
-    setCustomerProperties(filteredProps)
-
-    setFormData((prev) => ({
-      ...prev,
-      customerId: prev.customerId || defaultCustomerId,
-      customerSearch: prev.customerSearch || defaultCustomerName,
-      serviceId: prev.serviceId || defaultServiceId,
-      statusId: prev.statusId || defaultStatusId,
-      propertyId: prev.propertyId || filteredProps[0]?.id || '',
-      notes: prev.notes || '',
-      scheduledFor: prev.scheduledFor || '',
-      files: prev.files || [],
-    }))
-
-    // Reset UI bits
-    setError('')
-    setShowCustomerDropdown(false)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, customers.length, properties.length, services.length, statuses.length])
-
-  // ✅ Keep customerProperties in sync if customerId changes
-  useEffect(() => {
-    if (!isOpen) return
-
-    if (!formData.customerId) {
-      setCustomerProperties([])
-      setFormData((prev) => ({ ...prev, propertyId: '' }))
-      return
-    }
-
-    const filtered = properties.filter((p) => p.customerId === formData.customerId)
-    setCustomerProperties(filtered)
-
-    // Auto-select first property if current property isn't in filtered list
-    const stillValid = filtered.some((p) => p.id === formData.propertyId)
-    if (!stillValid) {
-      setFormData((prev) => ({ ...prev, propertyId: filtered[0]?.id || '' }))
-    }
-  }, [formData.customerId, properties, formData.propertyId, isOpen])
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-    setError('')
-
-    try {
-      // Basic validation
-      if (!formData.customerId) return setError('Please select a customer.')
-      if (!formData.propertyId) return setError('Please select a property.')
-      if (!formData.serviceId) return setError('Please select a service.')
-      if (!formData.statusId) return setError('Please select a status.')
-
-      const formDataToSend = new FormData()
-      formDataToSend.append('customerId', formData.customerId)
-      formDataToSend.append('propertyId', formData.propertyId)
-      formDataToSend.append('serviceId', formData.serviceId)
-      formDataToSend.append('statusId', formData.statusId)
-      formDataToSend.append('notes', formData.notes)
-
-      if (formData.scheduledFor) {
-        formDataToSend.append('scheduledFor', formData.scheduledFor)
-      }
-
-      formData.files.forEach((file) => formDataToSend.append('files', file))
-
-      const response = await fetch('/api/tasks', {
-        method: 'POST',
-        body: formDataToSend,
-      })
-
-      if (response.ok) {
-        onTaskCreated()
-
-        // Reset for next open
-        const firstCustomer = getFirstCustomer()
-        const defaultCustomerId = firstCustomer?.id || ''
-        const defaultCustomerName = firstCustomer?.fullName || ''
-        const filteredProps = defaultCustomerId
-          ? properties.filter((p) => p.customerId === defaultCustomerId)
-          : []
-
-        setCustomerProperties(filteredProps)
-
-        setFormData({
-          customerId: defaultCustomerId,
-          customerSearch: defaultCustomerName,
-          propertyId: filteredProps[0]?.id || '',
-          serviceId: getFirstServiceId(),
-          statusId: getCompletedStatusId(),
-          notes: '',
-          scheduledFor: '',
-          files: [],
-        })
-
-        onClose()
-      } else {
-        const data = await response.json().catch(() => ({}))
-        setError(data.error || 'Error creating task')
-      }
-    } catch (err) {
-      setError('Network error')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files) return
-    setFormData((prev) => ({ ...prev, files: Array.from(e.target.files!) }))
-  }
-
-  const removeFile = (index: number) => {
-    setFormData((prev) => ({
-      ...prev,
-      files: prev.files.filter((_, i) => i !== index),
-    }))
-  }
-
-  if (!isOpen) return null
-
-  const filteredCustomers =
-    formData.customerSearch.trim().length === 0
-      ? customers
-      : customers.filter(
-          (c) =>
-            c.fullName.toLowerCase().includes(formData.customerSearch.toLowerCase()) ||
-            c.email.toLowerCase().includes(formData.customerSearch.toLowerCase())
-        )
-
-  return (
-    <div
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        background: 'rgba(0, 0, 0, 0.5)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 1000,
-      }}
-      onClick={() => setShowCustomerDropdown(false)}
-    >
-      <div
-        className="kline-card"
-        style={{
-          width: '90%',
-          maxWidth: '600px',
-          padding: '2rem',
-          position: 'relative',
-          maxHeight: '90vh',
-          overflowY: 'auto',
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <button
-          onClick={onClose}
-          style={{
-            position: 'absolute',
-            top: '1rem',
-            right: '1rem',
-            background: 'none',
-            border: 'none',
-            fontSize: '1.5rem',
-            cursor: 'pointer',
-            color: 'var(--kline-text-light)',
-          }}
-        >
-          ×
-        </button>
-
-        <h2
-          style={{
-            fontSize: '1.5rem',
-            fontWeight: '700',
-            marginBottom: '1.5rem',
-            color: 'var(--kline-text)',
-          }}
-        >
-          Create New Task
-        </h2>
-
-        {error && (
-          <div
-            style={{
-              background: 'rgba(227, 6, 19, 0.1)',
-              border: '1px solid var(--kline-red)',
-              color: 'var(--kline-red)',
-              padding: '1rem',
-              borderRadius: '8px',
-              marginBottom: '1rem',
-            }}
-          >
-            {error}
-          </div>
-        )}
-
-        <form
-          onSubmit={handleSubmit}
-          style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}
-        >
-          {/* Customer Search + Dropdown */}
-          <div>
-            <label
-              style={{
-                display: 'block',
-                color: 'var(--kline-text)',
-                marginBottom: '0.5rem',
-                fontWeight: '600',
-              }}
-            >
-              Customer *
-            </label>
-
-            <div style={{ position: 'relative' }}>
-              <input
-                type="text"
-                placeholder="Search customer..."
-                value={formData.customerSearch}
-                onFocus={() => setShowCustomerDropdown(true)}
-                onChange={(e) => {
-                  const value = e.target.value
-                  setFormData((prev) => ({
-                    ...prev,
-                    customerSearch: value,
-                  }))
-                  setShowCustomerDropdown(true)
-
-                  // Optional: auto-match first customer while typing
-                  const search = value.toLowerCase()
-                  const match = customers.find(
-                    (c) =>
-                      c.fullName.toLowerCase().includes(search) ||
-                      c.email.toLowerCase().includes(search)
-                  )
-
-                  setFormData((prev) => ({
-                    ...prev,
-                    customerSearch: value,
-                    customerId: match ? match.id : prev.customerId,
-                  }))
-                }}
-                className="kline-input"
-                style={{ width: '100%', paddingRight: '2rem' }}
-              />
-
-              <span
-                style={{
-                  position: 'absolute',
-                  right: '0.8rem',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  color: 'var(--kline-text-light)',
-                  pointerEvents: 'none',
-                }}
-              >
-                ⌄
-              </span>
-
-              {showCustomerDropdown && (
-                <div
-                  style={{
-                    position: 'absolute',
-                    background: 'white',
-                    border: '1px solid var(--kline-gray)',
-                    borderRadius: '6px',
-                    marginTop: '0.25rem',
-                    width: '100%',
-                    maxHeight: '180px',
-                    overflowY: 'auto',
-                    zIndex: 10,
-                    boxShadow: '0 4px 10px rgba(0,0,0,0.1)',
-                  }}
-                >
-                  {filteredCustomers.length === 0 ? (
-                    <div style={{ padding: '0.8rem 1rem', color: 'var(--kline-text-light)' }}>
-                      No matches
+                <div style={{ marginTop: 14 }}>
+                  {stats.recentTasks?.length ? (
+                    <div style={{ border: '1px solid var(--kline-gray)', borderRadius: 12, overflow: 'hidden', background: '#fff' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <thead>
+                          <tr style={{ background: 'var(--kline-gray-light)' }}>
+                            <Th>Service / Customer</Th>
+                            <Th>Status</Th>
+                            <Th>Scheduled</Th>
+                            <Th>Address</Th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {stats.recentTasks.map((t) => (
+                            <tr
+                              key={t.id}
+                              style={{ cursor: 'pointer' }}
+                              onClick={() => router.push(`/tasks`)}
+                              onMouseOver={(e) => (e.currentTarget.style.backgroundColor = 'var(--kline-gray-light)')}
+                              onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                            >
+                              <Td>
+                                <div style={{ fontWeight: 900, color: 'var(--kline-text)' }}>{t.service}</div>
+                                <div style={{ marginTop: 2, color: 'var(--kline-text-light)', fontSize: '0.9rem' }}>{t.customer}</div>
+                              </Td>
+                              <Td>
+                                <span
+                                  style={{
+                                    display: 'inline-block',
+                                    padding: '6px 10px',
+                                    borderRadius: 10,
+                                    fontWeight: 900,
+                                    fontSize: '0.8rem',
+                                    background: '#e7f1ff',
+                                    color: '#0d6efd',
+                                    border: '1px solid #b3d4ff',
+                                  }}
+                                >
+                                  {t.status}
+                                </span>
+                              </Td>
+                              <Td>{fmtDate(t.scheduledFor)}</Td>
+                              <Td>{t.address}</Td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
                   ) : (
-                    filteredCustomers.map((c) => (
-                      <div
-                        key={c.id}
-                        onClick={() => {
-                          const filtered = properties.filter((p) => p.customerId === c.id)
-                          setCustomerProperties(filtered)
-
-                          setFormData((prev) => ({
-                            ...prev,
-                            customerId: c.id,
-                            customerSearch: c.fullName,
-                            propertyId: filtered[0]?.id || '',
-                          }))
-
-                          setShowCustomerDropdown(false)
-                        }}
-                        style={{
-                          padding: '0.6rem 1rem',
-                          cursor: 'pointer',
-                          background:
-                            formData.customerId === c.id
-                              ? 'var(--kline-gray-light)'
-                              : 'white',
-                        }}
-                        onMouseOver={(e) =>
-                          (e.currentTarget.style.background = 'var(--kline-gray-light)')
-                        }
-                        onMouseOut={(e) => {
-                          e.currentTarget.style.background =
-                            formData.customerId === c.id
-                              ? 'var(--kline-gray-light)'
-                              : 'white'
-                        }}
-                      >
-                        <strong>{c.fullName}</strong>{' '}
-                        <span style={{ color: 'var(--kline-text-light)', fontSize: '0.8rem' }}>
-                          ({c.email})
-                        </span>
-                      </div>
-                    ))
+                    <div style={{ padding: 28, textAlign: 'center', color: 'var(--kline-text-light)', fontWeight: 700 }}>
+                      No tasks yet. Create one with “+ Task”.
+                    </div>
                   )}
                 </div>
-              )}
-            </div>
-          </div>
-
-          {/* Property */}
-          <div>
-            <label
-              style={{
-                display: 'block',
-                color: 'var(--kline-text)',
-                marginBottom: '0.5rem',
-                fontWeight: '600',
-              }}
-            >
-              Property *
-            </label>
-
-            <select
-              value={formData.propertyId}
-              onChange={(e) => setFormData({ ...formData, propertyId: e.target.value })}
-              className="kline-input"
-              required
-              disabled={customerProperties.length === 0}
-            >
-              <option value="">Select a property</option>
-              {customerProperties.map((property) => (
-                <option key={property.id} value={property.id}>
-                  {property.address}, {property.city}, {property.state}
-                </option>
-              ))}
-            </select>
-
-            {customerProperties.length === 0 && formData.customerId && (
-              <div style={{ color: 'var(--kline-red)', fontSize: '0.8rem', marginTop: '0.5rem' }}>
-                This customer has no properties. Please add properties first.
               </div>
-            )}
-          </div>
-
-          {/* Service + Status */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-            <div>
-              <label
-                style={{
-                  display: 'block',
-                  color: 'var(--kline-text)',
-                  marginBottom: '0.5rem',
-                  fontWeight: '600',
-                }}
-              >
-                Service *
-              </label>
-
-              <select
-                value={formData.serviceId}
-                onChange={(e) => setFormData({ ...formData, serviceId: e.target.value })}
-                className="kline-input"
-                required
-              >
-                <option value="">Select a service</option>
-                {services.map((service) => (
-                  <option key={service.id} value={service.id}>
-                    {service.name}
-                  </option>
-                ))}
-              </select>
             </div>
-
-            <div>
-              <label
-                style={{
-                  display: 'block',
-                  color: 'var(--kline-text)',
-                  marginBottom: '0.5rem',
-                  fontWeight: '600',
-                }}
-              >
-                Status *
-              </label>
-
-              <select
-                value={formData.statusId}
-                onChange={(e) => setFormData({ ...formData, statusId: e.target.value })}
-                className="kline-input"
-                required
-              >
-                <option value="">Select a status</option>
-                {statuses.map((status) => (
-                  <option key={status.id} value={status.id}>
-                    {status.name} {status.notifyClient ? '(Notifies Customer)' : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Scheduled */}
-          <div>
-            <label
-              style={{
-                display: 'block',
-                color: 'var(--kline-text)',
-                marginBottom: '0.5rem',
-                fontWeight: '600',
-              }}
-            >
-              Scheduled For
-            </label>
-            <input
-              type="datetime-local"
-              value={formData.scheduledFor}
-              onChange={(e) => setFormData({ ...formData, scheduledFor: e.target.value })}
-              className="kline-input"
-            />
-          </div>
-
-          {/* Notes */}
-          <div>
-            <label
-              style={{
-                display: 'block',
-                color: 'var(--kline-text)',
-                marginBottom: '0.5rem',
-                fontWeight: '600',
-              }}
-            >
-              Notes
-            </label>
-            <textarea
-              value={formData.notes}
-              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-              className="kline-input"
-              placeholder="Add any notes about this task..."
-              rows={3}
-              style={{ resize: 'vertical' }}
-            />
-          </div>
-
-          {/* Files */}
-          <div>
-            <label
-              style={{
-                display: 'block',
-                color: 'var(--kline-text)',
-                marginBottom: '0.5rem',
-                fontWeight: '600',
-              }}
-            >
-              Attach Images
-            </label>
-
-            <input
-              type="file"
-              multiple
-              accept="image/*"
-              onChange={handleFileChange}
-              className="kline-input"
-              style={{ padding: '0.5rem' }}
-            />
-
-            {formData.files.length > 0 && (
-              <div style={{ marginTop: '0.5rem' }}>
-                <div style={{ fontSize: '0.8rem', color: 'var(--kline-text-light)', marginBottom: '0.5rem' }}>
-                  Selected files:
-                </div>
-                {formData.files.map((file, index) => (
-                  <div
-                    key={index}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.5rem',
-                      padding: '0.5rem',
-                      background: 'var(--kline-gray-light)',
-                      borderRadius: '6px',
-                      marginBottom: '0.25rem',
-                    }}
-                  >
-                    <span style={{ fontSize: '0.8rem' }}>{file.name}</span>
-                    <button
-                      type="button"
-                      onClick={() => removeFile(index)}
-                      style={{
-                        background: 'var(--kline-red)',
-                        border: 'none',
-                        color: 'white',
-                        borderRadius: '4px',
-                        padding: '0.2rem 0.5rem',
-                        fontSize: '0.7rem',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      Remove
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Actions */}
-          <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end', marginTop: '1rem' }}>
-            <button
-              type="button"
-              onClick={onClose}
-              style={{
-                background: 'transparent',
-                border: '2px solid var(--kline-text-light)',
-                color: 'var(--kline-text-light)',
-                padding: '0.8rem 1.5rem',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                fontWeight: '600',
-                fontSize: '0.9rem',
-              }}
-            >
-              Cancel
-            </button>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="kline-btn-primary"
-              style={{ padding: '0.8rem 1.5rem', fontSize: '0.9rem' }}
-            >
-              {loading ? 'Creating...' : 'Create Task'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  )
-}
-
-
-// Edit Task Modal Component
-function EditTaskModal({ task, onClose, onTaskUpdated, customers, properties, services, statuses }: { 
-  task: Task | null, 
-  onClose: () => void, 
-  onTaskUpdated: () => void,
-  customers: Customer[],
-  properties: Property[],
-  services: Service[],
-  statuses: TaskStatus[]
-}) {
-  const [formData, setFormData] = useState({
-    customerId: '',
-    propertyId: '',
-    serviceId: '',
-    statusId: '',
-    notes: '',
-    scheduledFor: '',
-    files: [] as File[]
-  })
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [customerProperties, setCustomerProperties] = useState<Property[]>([])
-
-  useEffect(() => {
-    if (task) {
-      setFormData({
-        customerId: task.customer.id,
-        propertyId: task.property.id,
-        serviceId: task.service.id,
-        statusId: task.status.id,
-        notes: task.notes || '',
-        scheduledFor: task.scheduledFor ? new Date(task.scheduledFor).toISOString().slice(0, 16) : '',
-        files: []
-      })
-      
-      // Load properties for the selected customer
-      const filtered = properties.filter(p => p.customerId === task.customer.id)
-      setCustomerProperties(filtered)
-    }
-  }, [task, properties])
-
-  // Filter properties when customer changes
-  useEffect(() => {
-    if (formData.customerId) {
-      const filtered = properties.filter(p => p.customerId === formData.customerId)
-      setCustomerProperties(filtered)
-    } else {
-      setCustomerProperties([])
-    }
-  }, [formData.customerId, properties])
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!task) return
-
-    setLoading(true)
-    setError('')
-
-    try {
-      const formDataToSend = new FormData()
-      formDataToSend.append('customerId', formData.customerId)
-      formDataToSend.append('propertyId', formData.propertyId)
-      formDataToSend.append('serviceId', formData.serviceId)
-      formDataToSend.append('statusId', formData.statusId)
-      formDataToSend.append('notes', formData.notes)
-      if (formData.scheduledFor) {
-        formDataToSend.append('scheduledFor', formData.scheduledFor)
-      }
-      
-      // Append files
-      formData.files.forEach(file => {
-        formDataToSend.append('files', file)
-      })
-
-      const response = await fetch(`/api/tasks/${task.id}`, {
-        method: 'PUT',
-        body: formDataToSend
-      })
-
-      if (response.ok) {
-        onTaskUpdated()
-        onClose()
-      } else {
-        const data = await response.json()
-        setError(data.error || 'Error updating task')
-      }
-    } catch (error) {
-      setError('Network error')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      setFormData(prev => ({
-        ...prev,
-        files: Array.from(e.target.files!)
-      }))
-    }
-  }
-
-  const removeFile = (index: number) => {
-    setFormData(prev => ({
-      ...prev,
-      files: prev.files.filter((_, i) => i !== index)
-    }))
-  }
-
-  if (!task) return null
-
-  return (
-    <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      background: 'rgba(0, 0, 0, 0.5)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 1000
-    }}>
-      <div className="kline-card" style={{ 
-        width: '90%', 
-        maxWidth: '600px', 
-        padding: '2rem',
-        position: 'relative',
-        maxHeight: '90vh',
-        overflowY: 'auto'
-      }}>
-        <button
-          onClick={onClose}
-          style={{
-            position: 'absolute',
-            top: '1rem',
-            right: '1rem',
-            background: 'none',
-            border: 'none',
-            fontSize: '1.5rem',
-            cursor: 'pointer',
-            color: 'var(--kline-text-light)'
-          }}
-        >
-          ×
-        </button>
-
-        <h2 style={{ fontSize: '1.5rem', fontWeight: '700', marginBottom: '1.5rem', color: 'var(--kline-text)' }}>
-          Edit Task
-        </h2>
-
-        {error && (
-          <div style={{
-            background: 'rgba(227, 6, 19, 0.1)',
-            border: '1px solid var(--kline-red)',
-            color: 'var(--kline-red)',
-            padding: '1rem',
-            borderRadius: '8px',
-            marginBottom: '1rem'
-          }}>
-            {error}
-          </div>
+          </>
         )}
+      </main>
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-          <div>
-            <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '0.5rem', fontWeight: '600' }}>
-              Customer *
-            </label>
-            <select 
-              value={formData.customerId}
-              onChange={(e) => setFormData({ ...formData, customerId: e.target.value })}
-              className="kline-input"
-              required
-            >
-              {customers.map(customer => (
-                <option key={customer.id} value={customer.id}>
-                  {customer.fullName} ({customer.email})
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '0.5rem', fontWeight: '600' }}>
-              Property *
-            </label>
-            <select 
-              value={formData.propertyId}
-              onChange={(e) => setFormData({ ...formData, propertyId: e.target.value })}
-              className="kline-input"
-              required
-              disabled={customerProperties.length === 0}
-            >
-              {customerProperties.map(property => (
-                <option key={property.id} value={property.id}>
-                  {property.address}, {property.city}, {property.state}
-                </option>
-              ))}
-            </select>
-            {customerProperties.length === 0 && formData.customerId && (
-              <div style={{ color: 'var(--kline-red)', fontSize: '0.8rem', marginTop: '0.5rem' }}>
-                This customer has no properties.
-              </div>
-            )}
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-            <div>
-              <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '0.5rem', fontWeight: '600' }}>
-                Service *
-              </label>
-              <select 
-                value={formData.serviceId}
-                onChange={(e) => setFormData({ ...formData, serviceId: e.target.value })}
-                className="kline-input"
-                required
-              >
-                {services.map(service => (
-                  <option key={service.id} value={service.id}>
-                    {service.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '0.5rem', fontWeight: '600' }}>
-                Status *
-              </label>
-              <select 
-                value={formData.statusId}
-                onChange={(e) => setFormData({ ...formData, statusId: e.target.value })}
-                className="kline-input"
-                required
-              >
-                {statuses.map(status => (
-                  <option key={status.id} value={status.id}>
-                    {status.name} {status.notifyClient ? '(Notifies Customer)' : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div>
-            <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '0.5rem', fontWeight: '600' }}>
-              Scheduled For
-            </label>
-            <input
-              type="datetime-local"
-              value={formData.scheduledFor}
-              onChange={(e) => setFormData({ ...formData, scheduledFor: e.target.value })}
-              className="kline-input"
-            />
-          </div>
-
-          <div>
-            <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '0.5rem', fontWeight: '600' }}>
-              Notes
-            </label>
-            <textarea
-              value={formData.notes}
-              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-              className="kline-input"
-              placeholder="Add any notes about this task..."
-              rows={3}
-              style={{ resize: 'vertical' }}
-            />
-          </div>
-
-          <div>
-            <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '0.5rem', fontWeight: '600' }}>
-              Attach Additional Images
-            </label>
-            <input
-              type="file"
-              multiple
-              accept="image/*"
-              onChange={handleFileChange}
-              className="kline-input"
-              style={{ padding: '0.5rem' }}
-            />
-            {formData.files.length > 0 && (
-              <div style={{ marginTop: '0.5rem' }}>
-                <div style={{ fontSize: '0.8rem', color: 'var(--kline-text-light)', marginBottom: '0.5rem' }}>
-                  New files to attach:
-                </div>
-                {formData.files.map((file, index) => (
-                  <div key={index} style={{ 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    gap: '0.5rem',
-                    padding: '0.5rem',
-                    background: 'var(--kline-gray-light)',
-                    borderRadius: '6px',
-                    marginBottom: '0.25rem'
-                  }}>
-                    <span style={{ fontSize: '0.8rem' }}>{file.name}</span>
-                    <button
-                      type="button"
-                      onClick={() => removeFile(index)}
-                      style={{
-                        background: 'var(--kline-red)',
-                        border: 'none',
-                        color: 'white',
-                        borderRadius: '4px',
-                        padding: '0.2rem 0.5rem',
-                        fontSize: '0.7rem',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      Remove
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-            {task.media.length > 0 && (
-              <div style={{ marginTop: '1rem' }}>
-                <div style={{ fontSize: '0.8rem', color: 'var(--kline-text-light)', marginBottom: '0.5rem' }}>
-                  Current attachments:
-                </div>
-                {task.media.map(media => (
-                  <div key={media.id} style={{ 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    gap: '0.5rem',
-                    padding: '0.5rem',
-                    background: 'var(--kline-gray-light)',
-                    borderRadius: '6px',
-                    marginBottom: '0.25rem'
-                  }}>
-                    <span style={{ fontSize: '0.8rem' }}>📷 Image</span>
-                    <a 
-                      href={media.url} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      style={{ 
-                        color: 'var(--kline-blue)', 
-                        fontSize: '0.7rem',
-                        textDecoration: 'none'
-                      }}
-                    >
-                      View
-                    </a>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end', marginTop: '1rem' }}>
-            <button
-              type="button"
-              onClick={onClose}
-              style={{
-                background: 'transparent',
-                border: '2px solid var(--kline-text-light)',
-                color: 'var(--kline-text-light)',
-                padding: '0.8rem 1.5rem',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                fontWeight: '600',
-                fontSize: '0.9rem'
-              }}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="kline-btn-primary"
-              style={{ padding: '0.8rem 1.5rem', fontSize: '0.9rem' }}
-            >
-              {loading ? 'Updating...' : 'Update Task'}
-            </button>
-          </div>
-        </form>
-      </div>
+      <style jsx>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   )
 }
 
-// Delete Confirmation Modal
-function DeleteTaskModal({ task, onClose, onTaskDeleted }: { 
-  task: Task | null, 
-  onClose: () => void, 
-  onTaskDeleted: (task: Task) => void 
-}) {
-  if (!task) return null
-
-  const formatAddress = (task: Task) => {
-    return `${task.property.address}, ${task.property.city}, ${task.property.state}`
-  }
-
+function KpiCard({ label, value, sub, accent }: { label: string; value: number; sub: string; accent: string }) {
   return (
-    <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      background: 'rgba(0, 0, 0, 0.5)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 1000
-    }}>
-      <div className="kline-card" style={{ 
-        width: '90%', 
-        maxWidth: '500px', 
-        padding: '2rem',
-        position: 'relative'
-      }}>
-        <button
-          onClick={onClose}
-          style={{
-            position: 'absolute',
-            top: '1rem',
-            right: '1rem',
-            background: 'none',
-            border: 'none',
-            fontSize: '1.5rem',
-            cursor: 'pointer',
-            color: 'var(--kline-text-light)'
-          }}
-        >
-          ×
-        </button>
-
-        <h2 style={{ fontSize: '1.5rem', fontWeight: '700', marginBottom: '1rem', color: 'var(--kline-text)' }}>
-          Confirm Delete
-        </h2>
-
-        <p style={{ marginBottom: '1rem', color: 'var(--kline-text)', lineHeight: '1.5' }}>
-          Are you sure you want to delete this task?
-        </p>
-        
-        <div style={{ 
-          background: 'var(--kline-gray-light)', 
-          padding: '1rem', 
-          borderRadius: '8px',
-          marginBottom: '2rem'
-        }}>
-          <div style={{ fontWeight: '600', marginBottom: '0.5rem' }}>
-            {task.service.name} for {task.customer.fullName}
-          </div>
-          <div style={{ color: 'var(--kline-text-light)', fontSize: '0.9rem', marginBottom: '0.5rem' }}>
-            {formatAddress(task)}
-          </div>
-          <div style={{ color: 'var(--kline-text-light)', fontSize: '0.9rem' }}>
-            Status: <span style={{ 
-              background: task.status.color || '#6b7280',
-              color: 'white',
-              padding: '0.2rem 0.5rem',
-              borderRadius: '8px',
-              fontSize: '0.8rem'
-            }}>
-              {task.status.name}
-            </span>
-          </div>
-        </div>
-
-        <p style={{ color: 'var(--kline-red)', fontWeight: '600', marginBottom: '2rem' }}>
-          ⚠️ This action cannot be undone.
-        </p>
-
-        <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
-          <button
-            onClick={onClose}
-            style={{
-              background: 'transparent',
-              border: '2px solid var(--kline-text-light)',
-              color: 'var(--kline-text-light)',
-              padding: '0.8rem 1.5rem',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              fontWeight: '600',
-              fontSize: '0.9rem'
-            }}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={() => onTaskDeleted(task)}
-            style={{
-              background: 'var(--kline-red)',
-              border: 'none',
-              color: 'white',
-              padding: '0.8rem 1.5rem',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              fontWeight: '600',
-              fontSize: '0.9rem',
-              transition: 'all 0.3s ease'
-            }}
-            onMouseOver={(e) => {
-              e.currentTarget.style.background = '#c40510'
-            }}
-            onMouseOut={(e) => {
-              e.currentTarget.style.background = 'var(--kline-red)'
-            }}
-          >
-            Delete Task
-          </button>
-        </div>
+    <div className="kline-card" style={{ padding: 18, borderLeft: `5px solid ${accent}` }}>
+      <div style={{ color: 'var(--kline-text-light)', fontWeight: 900, letterSpacing: '.5px', textTransform: 'uppercase', fontSize: '0.8rem' }}>
+        {label}
       </div>
+      <div style={{ marginTop: 6, fontSize: '2.2rem', fontWeight: 1000, color: 'var(--kline-text)' }}>{value}</div>
+      <div style={{ marginTop: 4, color: 'var(--kline-text-light)', fontWeight: 700 }}>{sub}</div>
     </div>
+  )
+}
+
+function Th({ children }: { children: any }) {
+  return (
+    <th
+      style={{
+        padding: '14px 12px',
+        textAlign: 'left',
+        fontSize: '0.75rem',
+        fontWeight: 900,
+        color: 'var(--kline-text-light)',
+        textTransform: 'uppercase',
+        borderBottom: '1px solid var(--kline-gray)',
+      }}
+    >
+      {children}
+    </th>
+  )
+}
+
+function Td({ children }: { children: any }) {
+  return (
+    <td style={{ padding: '14px 12px', borderBottom: '1px solid var(--kline-gray)', color: 'var(--kline-text)', fontWeight: 700, fontSize: '0.9rem' }}>
+      {children}
+    </td>
   )
 }
