@@ -177,6 +177,20 @@ export default function TasksPage() {
 
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <button
+              onClick={() => router.push('/tasks/new')}
+              style={{
+                padding: '10px 14px',
+                background: 'var(--kline-red)',
+                color: '#fff',
+                fontWeight: 800,
+                borderRadius: '10px',
+                border: 'none',
+                cursor: 'pointer',
+              }}
+            >
+              + New Task
+            </button>
+            <button
               onClick={loadTasks}
               style={{
                 padding: '10px 14px',

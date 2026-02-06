@@ -440,7 +440,7 @@ export default function Dashboard() {
 
   {/* Task */}
   <button
-    onClick={() => router.push('/tasks')}
+    onClick={() => router.push('/tasks/new')}
     style={{
       padding: '12px 22px',
       background: '#198754',
