@@ -9,7 +9,7 @@ const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient }
 const prisma = globalForPrisma.prisma ?? new PrismaClient()
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma
 
-function validateSequentialServiceTransition(
+async function validateSequentialServiceTransition(
   currentService: {
     id: string
     name: string
@@ -37,14 +37,39 @@ function validateSequentialServiceTransition(
     currentService.workflowGroup === targetService.workflowGroup &&
     currentService.stepOrder !== null
   ) {
-    if (targetService.stepOrder !== currentService.stepOrder + 1) {
-      return `Invalid service sequence transition. You can only move from step ${currentService.stepOrder} to step ${currentService.stepOrder + 1}.`
+    const expectedStep = currentService.stepOrder + 1
+    if (targetService.stepOrder !== expectedStep) {
+      const expectedService = await prisma.service.findFirst({
+        where: {
+          workflowGroup: targetService.workflowGroup,
+          stepOrder: expectedStep,
+        },
+        select: { name: true },
+      })
+
+      if (expectedService) {
+        return `Before "${targetService.name}", you need to complete "${expectedService.name}" (step ${expectedStep}) first.`
+      }
+
+      return `Before "${targetService.name}", you need to complete step ${expectedStep} first.`
     }
     return null
   }
 
   if (targetService.stepOrder !== 1) {
-    return `Service workflow "${targetService.workflowGroup}" must start at step 1.`
+    const firstStepService = await prisma.service.findFirst({
+      where: {
+        workflowGroup: targetService.workflowGroup,
+        stepOrder: 1,
+      },
+      select: { name: true },
+    })
+
+    if (firstStepService) {
+      return `This workflow must start with "${firstStepService.name}" (step 1) before "${targetService.name}".`
+    }
+
+    return `This workflow must start at step 1 before "${targetService.name}".`
   }
 
   return null
@@ -113,7 +138,7 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "Status not found" }, { status: 400 })
     }
 
-    const sequenceError = validateSequentialServiceTransition(
+    const sequenceError = await validateSequentialServiceTransition(
       {
         id: existingTask.service.id,
         name: existingTask.service.name,

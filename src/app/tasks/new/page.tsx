@@ -138,8 +138,17 @@ export default function NewTaskPage() {
       })
 
       if (!res.ok) {
-        const txt = await res.text().catch(() => '')
-        throw new Error(`Create failed: ${res.status}. ${txt}`)
+        let errorMessage = `Create failed (${res.status})`
+        try {
+          const data = (await res.json()) as { error?: string }
+          if (data?.error) {
+            errorMessage = data.error
+          }
+        } catch {
+          const txt = await res.text().catch(() => '')
+          if (txt) errorMessage = `Create failed (${res.status}): ${txt}`
+        }
+        throw new Error(errorMessage)
       }
 
       router.push('/tasks')

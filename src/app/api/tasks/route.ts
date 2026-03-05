@@ -111,8 +111,20 @@ export async function POST(request: Request) {
       }
 
       if (service.stepOrder !== 1) {
+        const firstStepService = await prisma.service.findFirst({
+          where: {
+            workflowGroup: service.workflowGroup,
+            stepOrder: 1,
+          },
+          select: { name: true },
+        })
+
         return NextResponse.json(
-          { error: `Sequential workflow "${service.workflowGroup}" must start at step 1.` },
+          {
+            error: firstStepService
+              ? `This workflow must start with "${firstStepService.name}" (step 1) before "${service.name}".`
+              : `Sequential workflow "${service.workflowGroup}" must start at step 1.`,
+          },
           { status: 400 }
         )
       }
