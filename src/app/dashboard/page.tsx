@@ -456,7 +456,7 @@ export default function DashboardPage() {
           max-width: 1320px;
           margin: 0 auto;
           padding: 0 28px;
-          min-height: 84px;
+          min-height: 92px;
           display: flex;
           align-items: center;
           justify-content: space-between;
@@ -502,20 +502,20 @@ export default function DashboardPage() {
         .main-content {
           max-width: 1320px;
           margin: 0 auto;
-          padding: 36px 28px 72px;
+          padding: 44px 30px 84px;
           display: grid;
-          gap: 26px;
+          gap: 34px;
         }
 
         .hero {
           background: #fff;
           border: 1px solid var(--kline-gray);
-          border-radius: 18px;
-          padding: 28px;
+          border-radius: 20px;
+          padding: 34px;
           display: flex;
           justify-content: space-between;
           align-items: flex-end;
-          gap: 24px;
+          gap: 30px;
           box-shadow: 0 8px 28px rgba(0, 0, 0, 0.06);
         }
 
@@ -536,10 +536,10 @@ export default function DashboardPage() {
         }
 
         .hero-subtitle {
-          margin: 10px 0 0;
+          margin: 12px 0 0;
           color: var(--kline-text-light);
-          font-size: 1rem;
-          max-width: 680px;
+          font-size: 1.04rem;
+          max-width: 720px;
         }
 
         .hero-actions {
@@ -579,15 +579,15 @@ export default function DashboardPage() {
 
         .kpi-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-          gap: 18px;
+          grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+          gap: 22px;
         }
 
         .kpi-card {
           background: #fff;
           border: 1px solid var(--kline-gray);
-          border-radius: 14px;
-          padding: 20px;
+          border-radius: 16px;
+          padding: 24px;
           box-shadow: 0 8px 24px rgba(0, 0, 0, 0.05);
         }
 
@@ -600,14 +600,14 @@ export default function DashboardPage() {
         }
 
         .kpi-value {
-          margin-top: 8px;
+          margin-top: 10px;
           font-size: clamp(1.8rem, 3vw, 2.2rem);
           line-height: 1.1;
           font-weight: 800;
         }
 
         .kpi-detail {
-          margin-top: 8px;
+          margin-top: 10px;
           color: var(--kline-text-light);
           font-size: 0.92rem;
           font-weight: 600;
@@ -616,15 +616,15 @@ export default function DashboardPage() {
         .content-grid {
           display: grid;
           grid-template-columns: 1.55fr 1fr;
-          gap: 18px;
+          gap: 24px;
           align-items: start;
         }
 
         .card-panel {
           background: #fff;
           border: 1px solid var(--kline-gray);
-          border-radius: 16px;
-          padding: 22px;
+          border-radius: 18px;
+          padding: 26px;
           box-shadow: 0 8px 24px rgba(0, 0, 0, 0.05);
         }
 
@@ -640,17 +640,17 @@ export default function DashboardPage() {
         }
 
         .module-grid {
-          margin-top: 16px;
+          margin-top: 20px;
           display: grid;
           grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-          gap: 12px;
+          gap: 14px;
         }
 
         .module-card {
           border: 1px solid var(--kline-gray);
           background: #fff;
-          border-radius: 12px;
-          padding: 14px;
+          border-radius: 14px;
+          padding: 18px;
           text-align: left;
           cursor: pointer;
           transition: transform 0.15s ease, box-shadow 0.15s ease;
@@ -693,20 +693,20 @@ export default function DashboardPage() {
         }
 
         .module-link {
-          margin-top: 10px;
+          margin-top: 14px;
           font-size: 0.82rem;
           font-weight: 700;
         }
 
         .insight-stack {
           display: grid;
-          gap: 18px;
+          gap: 24px;
         }
 
         .bars {
-          margin-top: 14px;
+          margin-top: 18px;
           display: grid;
-          gap: 10px;
+          gap: 12px;
         }
 
         .monitor-list {
@@ -717,8 +717,8 @@ export default function DashboardPage() {
 
         .monitor-row {
           border: 1px solid var(--kline-gray);
-          border-radius: 12px;
-          padding: 11px 12px;
+          border-radius: 14px;
+          padding: 14px;
           background: #fafafa;
         }
 
@@ -766,7 +766,7 @@ export default function DashboardPage() {
         }
 
         .monitor-steps {
-          margin-top: 7px;
+          margin-top: 9px;
           display: grid;
           gap: 4px;
           font-size: 0.8rem;
@@ -775,15 +775,15 @@ export default function DashboardPage() {
         }
 
         .monitor-updated {
-          margin-top: 7px;
+          margin-top: 9px;
           color: var(--kline-text-light);
           font-size: 0.76rem;
         }
 
         .bar-row {
           display: grid;
-          grid-template-columns: 120px 1fr 32px;
-          gap: 10px;
+          grid-template-columns: 140px 1fr 38px;
+          gap: 12px;
           align-items: center;
         }
 
@@ -830,7 +830,7 @@ export default function DashboardPage() {
         }
 
         .recent-panel {
-          padding-top: 20px;
+          padding-top: 24px;
         }
 
         .panel-head.row {
@@ -848,9 +848,9 @@ export default function DashboardPage() {
         }
 
         .table-wrap {
-          margin-top: 14px;
+          margin-top: 18px;
           border: 1px solid var(--kline-gray);
-          border-radius: 12px;
+          border-radius: 14px;
           overflow-x: auto;
           background: #fff;
         }
@@ -863,7 +863,7 @@ export default function DashboardPage() {
 
         th {
           text-align: left;
-          padding: 12px 14px;
+          padding: 14px 16px;
           font-size: 0.74rem;
           text-transform: uppercase;
           letter-spacing: 0.06em;
@@ -873,7 +873,7 @@ export default function DashboardPage() {
         }
 
         td {
-          padding: 14px;
+          padding: 16px;
           font-size: 0.9rem;
           color: var(--kline-text);
           border-bottom: 1px solid var(--kline-gray);
@@ -915,7 +915,7 @@ export default function DashboardPage() {
           border-radius: 14px;
           background: #fff;
           box-shadow: 0 8px 24px rgba(0, 0, 0, 0.05);
-          padding: 30px;
+          padding: 34px;
           text-align: center;
         }
 
@@ -939,8 +939,8 @@ export default function DashboardPage() {
         }
 
         .empty-state {
-          margin-top: 12px;
-          padding: 16px;
+          margin-top: 14px;
+          padding: 18px;
           border-radius: 10px;
           background: #f8f9fa;
           color: var(--kline-text-light);
