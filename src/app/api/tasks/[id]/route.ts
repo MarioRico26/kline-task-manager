@@ -24,7 +24,7 @@ async function validateSequentialServiceTransition(
     workflowGroup: string | null
     stepOrder: number | null
   }
-): string | null {
+): Promise<string | null> {
   if (!targetService.isSequential) return null
   if (!targetService.workflowGroup || targetService.stepOrder === null) {
     return `Service "${targetService.name}" is misconfigured. Missing workflowGroup or stepOrder.`
