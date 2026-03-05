@@ -15,6 +15,7 @@ export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('')
+  const [contactFilter, setContactFilter] = useState<'ALL' | 'EMAIL' | 'PHONE' | 'BOTH'>('ALL')
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null)
   const [deletingCustomer, setDeletingCustomer] = useState<Customer | null>(null)
@@ -102,11 +103,24 @@ useEffect(() => {
     )
   }
 
-  const filteredCustomers = customers.filter(customer => 
-    customer.fullName.toLowerCase().includes(filter.toLowerCase()) ||
-    customer.email.toLowerCase().includes(filter.toLowerCase()) ||
-    customer.phone.includes(filter)
-  )
+  const query = filter.toLowerCase().trim()
+  const filteredCustomers = customers.filter((customer) => {
+    const matchesQuery =
+      !query ||
+      customer.fullName.toLowerCase().includes(query) ||
+      customer.email.toLowerCase().includes(query) ||
+      customer.phone.includes(query)
+
+    if (!matchesQuery) return false
+
+    const hasEmail = Boolean(customer.email?.trim())
+    const hasPhone = Boolean(customer.phone?.trim())
+
+    if (contactFilter === 'EMAIL') return hasEmail
+    if (contactFilter === 'PHONE') return hasPhone
+    if (contactFilter === 'BOTH') return hasEmail && hasPhone
+    return true
+  })
 
   const formatPhone = (phone: string) => {
     const cleaned = phone.replace(/\D/g, '');
@@ -121,7 +135,7 @@ useEffect(() => {
     <div style={{ minHeight: '100vh', background: 'var(--kline-gray-light)' }}>
       {/* Header */}
       <header className="kline-header" style={{ padding: '1rem 0' }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 1rem' }}>
+        <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 1rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
               <button 
@@ -190,7 +204,7 @@ useEffect(() => {
       </header>
 
       {/* Main Content */}
-      <main style={{ maxWidth: '1200px', margin: '2rem auto', padding: '0 1rem' }}>
+      <main style={{ maxWidth: '1280px', margin: '1.6rem auto', padding: '0 1rem' }}>
         {/* Action Bar */}
         <div className="kline-card" style={{ padding: '1.5rem', marginBottom: '2rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
@@ -215,6 +229,17 @@ useEffect(() => {
                   🔍
                 </span>
               </div>
+              <select
+                className="kline-input"
+                value={contactFilter}
+                onChange={(e) => setContactFilter(e.target.value as 'ALL' | 'EMAIL' | 'PHONE' | 'BOTH')}
+                style={{ width: '220px' }}
+              >
+                <option value="ALL">All contacts</option>
+                <option value="EMAIL">Has email</option>
+                <option value="PHONE">Has phone</option>
+                <option value="BOTH">Has email + phone</option>
+              </select>
 
               {/* View Mode Toggle */}
               <div style={{ display: 'flex', background: 'var(--kline-gray)', borderRadius: '8px', padding: '4px' }}>
@@ -261,6 +286,9 @@ useEffect(() => {
             >
               + New Customer
             </button>
+          </div>
+          <div style={{ marginTop: '0.75rem', color: 'var(--kline-text-light)', fontSize: '0.84rem', fontWeight: 600 }}>
+            Showing {filteredCustomers.length} of {customers.length} customers
           </div>
         </div>
 
@@ -360,7 +388,7 @@ useEffect(() => {
 
             {filteredCustomers.length === 0 && (
               <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--kline-text-light)' }}>
-                {customers.length === 0 ? 'No customers found' : 'No customers match your search'}
+                {customers.length === 0 ? 'No customers found' : 'No customers match the active filters'}
               </div>
             )}
           </div>
@@ -444,7 +472,7 @@ useEffect(() => {
 
             {filteredCustomers.length === 0 && (
               <div className="kline-card" style={{ padding: '3rem', textAlign: 'center', color: 'var(--kline-text-light)', gridColumn: '1 / -1' }}>
-                {customers.length === 0 ? 'No customers found' : 'No customers match your search'}
+                {customers.length === 0 ? 'No customers found' : 'No customers match the active filters'}
               </div>
             )}
           </div>
@@ -560,7 +588,17 @@ function CreateCustomerModal({
 
     setLoading(true)
     try {
-      const payload: any = {
+      const payload: {
+        fullName: string
+        email: string
+        phone: string
+        property?: {
+          address: string
+          city: string
+          state: string
+          zip: string
+        }
+      } = {
         fullName: formData.fullName.trim(),
         email: formData.email.trim(),
         phone: formData.phone.replace(/\D/g, '')
@@ -1052,7 +1090,7 @@ function DeleteCustomerModal({ customer, onClose, onCustomerDeleted }: {
         </h2>
 
         <p style={{ marginBottom: '2rem', color: 'var(--kline-text)', lineHeight: '1.5' }}>
-          Are you sure you want to delete customer <strong>"{customer.fullName}"</strong>? This action cannot be undone.
+          Are you sure you want to delete customer <strong>&quot;{customer.fullName}&quot;</strong>? This action cannot be undone.
         </p>
 
         <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>

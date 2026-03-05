@@ -39,12 +39,24 @@ interface StatusItem {
   notifyClient?: boolean
 }
 
+interface TaskHistoryItem {
+  id: string
+  customer: { id: string }
+  service: {
+    id: string
+    isSequential?: boolean
+    workflowGroup?: string | null
+    stepOrder?: number | null
+  }
+}
+
 export default function NewTaskPage() {
   const router = useRouter()
   const [customers, setCustomers] = useState<CustomerItem[]>([])
   const [properties, setProperties] = useState<PropertyItem[]>([])
   const [services, setServices] = useState<ServiceItem[]>([])
   const [statuses, setStatuses] = useState<StatusItem[]>([])
+  const [tasksHistory, setTasksHistory] = useState<TaskHistoryItem[]>([])
 
   const [loading, setLoading] = useState(true)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
@@ -58,6 +70,10 @@ export default function NewTaskPage() {
   const [scheduledFor, setScheduledFor] = useState('')
   const [notes, setNotes] = useState('')
   const [files, setFiles] = useState<FileList | null>(null)
+  const [propertySearch, setPropertySearch] = useState('')
+  const [serviceSearch, setServiceSearch] = useState('')
+  const [serviceTypeFilter, setServiceTypeFilter] = useState<'ALL' | 'SEQUENTIAL' | 'INDEPENDENT'>('ALL')
+  const [workflowFilter, setWorkflowFilter] = useState('ALL')
 
   useEffect(() => {
     async function loadFormData() {
@@ -65,29 +81,32 @@ export default function NewTaskPage() {
         setLoading(true)
         setErrorMsg(null)
 
-        const [cRes, pRes, sRes, stRes] = await Promise.all([
+        const [cRes, pRes, sRes, stRes, tRes] = await Promise.all([
           fetch('/api/customers', { cache: 'no-store' }),
           fetch('/api/properties', { cache: 'no-store' }),
           fetch('/api/services', { cache: 'no-store' }),
           fetch('/api/statuses', { cache: 'no-store' }),
+          fetch('/api/tasks', { cache: 'no-store' }),
         ])
 
-        if (!cRes.ok || !pRes.ok || !sRes.ok || !stRes.ok) {
-          const msg = `Load failed (customers:${cRes.status}, properties:${pRes.status}, services:${sRes.status}, statuses:${stRes.status})`
+        if (!cRes.ok || !pRes.ok || !sRes.ok || !stRes.ok || !tRes.ok) {
+          const msg = `Load failed (customers:${cRes.status}, properties:${pRes.status}, services:${sRes.status}, statuses:${stRes.status}, tasks:${tRes.status})`
           throw new Error(msg)
         }
 
-        const [cData, pData, sData, stData] = await Promise.all([
+        const [cData, pData, sData, stData, tData] = await Promise.all([
           cRes.json(),
           pRes.json(),
           sRes.json(),
           stRes.json(),
+          tRes.json(),
         ])
 
         setCustomers(cData)
         setProperties(pData)
         setServices(sData)
         setStatuses(stData)
+        setTasksHistory(tData)
       } catch (err: unknown) {
         console.error('❌ New Task load error:', err)
         setErrorMsg(err instanceof Error ? err.message : 'Failed to load form data')
@@ -101,14 +120,109 @@ export default function NewTaskPage() {
 
   const filteredProperties = useMemo(() => {
     if (!customerId) return []
-    return properties.filter((p) => p.customerId === customerId)
-  }, [properties, customerId])
+    return properties
+      .filter((p) => p.customerId === customerId)
+      .filter((p) => {
+        if (!propertySearch.trim()) return true
+        const query = propertySearch.toLowerCase()
+        return (
+          p.address.toLowerCase().includes(query) ||
+          p.city.toLowerCase().includes(query) ||
+          p.state.toLowerCase().includes(query) ||
+          p.zip.toLowerCase().includes(query)
+        )
+      })
+  }, [properties, customerId, propertySearch])
+
+  const workflows = useMemo(() => {
+    const set = new Set<string>()
+    services.forEach((service) => {
+      if (service.isSequential && service.workflowGroup) set.add(service.workflowGroup)
+    })
+    return ['ALL', ...Array.from(set).sort()]
+  }, [services])
+
+  const customerWorkflowProgress = useMemo(() => {
+    const progress = new Map<string, number>()
+    if (!customerId) return progress
+
+    tasksHistory.forEach((task) => {
+      if (task.customer?.id !== customerId) return
+      if (!task.service?.isSequential) return
+      if (!task.service.workflowGroup || !task.service.stepOrder) return
+
+      const currentMax = progress.get(task.service.workflowGroup) || 0
+      if (task.service.stepOrder > currentMax) {
+        progress.set(task.service.workflowGroup, task.service.stepOrder)
+      }
+    })
+
+    return progress
+  }, [tasksHistory, customerId])
+
+  const filteredServices = useMemo(() => {
+    return services.filter((service) => {
+      const query = serviceSearch.trim().toLowerCase()
+      if (query) {
+        const matchesQuery =
+          service.name.toLowerCase().includes(query) ||
+          (service.description || '').toLowerCase().includes(query)
+        if (!matchesQuery) return false
+      }
+
+      if (serviceTypeFilter === 'SEQUENTIAL' && !service.isSequential) return false
+      if (serviceTypeFilter === 'INDEPENDENT' && service.isSequential) return false
+
+      if (workflowFilter !== 'ALL') {
+        if (!service.isSequential || service.workflowGroup !== workflowFilter) return false
+      }
+
+      if (!service.isSequential) return true
+      if (!service.workflowGroup || !service.stepOrder) return false
+
+      const expectedStep = (customerWorkflowProgress.get(service.workflowGroup) || 0) + 1
+      return service.stepOrder === expectedStep
+    })
+  }, [services, serviceSearch, serviceTypeFilter, workflowFilter, customerWorkflowProgress])
+
+  const workflowNextSteps = useMemo(() => {
+    if (!customerId) return []
+
+    const grouped = new Map<string, ServiceItem[]>()
+    services.forEach((service) => {
+      if (!service.isSequential || !service.workflowGroup || !service.stepOrder) return
+      const list = grouped.get(service.workflowGroup) || []
+      list.push(service)
+      grouped.set(service.workflowGroup, list)
+    })
+
+    return Array.from(grouped.entries())
+      .map(([group, list]) => {
+        const sorted = [...list].sort((a, b) => (a.stepOrder || 0) - (b.stepOrder || 0))
+        const expectedStep = (customerWorkflowProgress.get(group) || 0) + 1
+        const nextService = sorted.find((service) => service.stepOrder === expectedStep)
+
+        return {
+          group,
+          expectedStep,
+          nextServiceName: nextService?.name || null,
+          isComplete: !nextService,
+        }
+      })
+      .sort((a, b) => a.group.localeCompare(b.group))
+  }, [customerId, services, customerWorkflowProgress])
 
   useEffect(() => {
     if (propertyId && !filteredProperties.find((p) => p.id === propertyId)) {
       setPropertyId('')
     }
   }, [filteredProperties, propertyId])
+
+  useEffect(() => {
+    if (serviceId && !filteredServices.find((service) => service.id === serviceId)) {
+      setServiceId('')
+    }
+  }, [filteredServices, serviceId])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -165,7 +279,7 @@ export default function NewTaskPage() {
       style={{
         minHeight: '100vh',
         background: 'var(--kline-gray-light)',
-        fontFamily: 'system-ui, -apple-system, sans-serif',
+        fontFamily: 'var(--kline-font-sans)',
       }}
     >
       {/* Header */}
@@ -176,7 +290,7 @@ export default function NewTaskPage() {
           boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
         }}
       >
-        <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 20px' }}>
+        <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 20px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: '80px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
               <div
@@ -239,7 +353,7 @@ export default function NewTaskPage() {
         </div>
       </header>
 
-      <main style={{ maxWidth: '1200px', margin: '0 auto', padding: '28px 20px 60px' }}>
+      <main style={{ maxWidth: '1280px', margin: '0 auto', padding: '28px 20px 60px' }}>
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
           <div>
             <h2 style={{ margin: 0, fontSize: '2rem', fontWeight: 800, color: 'var(--kline-text)' }}>Create Task</h2>
@@ -309,6 +423,15 @@ export default function NewTaskPage() {
 
               <div>
                 <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '8px', fontWeight: 700 }}>Property</label>
+                <input
+                  type="text"
+                  className="kline-input"
+                  value={propertySearch}
+                  onChange={(e) => setPropertySearch(e.target.value)}
+                  placeholder="Filter properties by address/city"
+                  style={{ marginBottom: 8 }}
+                  disabled={!customerId}
+                />
                 <select
                   className="kline-input"
                   value={propertyId}
@@ -321,7 +444,7 @@ export default function NewTaskPage() {
                   </option>
                   {filteredProperties.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {p.address}, {p.city}
+                      {p.address}, {p.city}, {p.state}
                     </option>
                   ))}
                 </select>
@@ -329,6 +452,36 @@ export default function NewTaskPage() {
 
               <div>
                 <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '8px', fontWeight: 700 }}>Service</label>
+                <div className="service-filter-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 140px 140px', gap: 8, marginBottom: 8 }}>
+                  <input
+                    type="text"
+                    className="kline-input"
+                    value={serviceSearch}
+                    onChange={(e) => setServiceSearch(e.target.value)}
+                    placeholder="Search service..."
+                  />
+                  <select
+                    className="kline-input"
+                    value={serviceTypeFilter}
+                    onChange={(e) => setServiceTypeFilter(e.target.value as 'ALL' | 'SEQUENTIAL' | 'INDEPENDENT')}
+                  >
+                    <option value="ALL">All types</option>
+                    <option value="SEQUENTIAL">Sequential</option>
+                    <option value="INDEPENDENT">Independent</option>
+                  </select>
+                  <select
+                    className="kline-input"
+                    value={workflowFilter}
+                    onChange={(e) => setWorkflowFilter(e.target.value)}
+                    disabled={workflows.length <= 1}
+                  >
+                    {workflows.map((workflow) => (
+                      <option key={workflow} value={workflow}>
+                        {workflow === 'ALL' ? 'All workflows' : workflow}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <select
                   className="kline-input"
                   value={serviceId}
@@ -336,13 +489,38 @@ export default function NewTaskPage() {
                   required
                 >
                   <option value="">Select service</option>
-                  {services.map((s) => (
+                  {filteredServices.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.name}
                       {s.isSequential && s.workflowGroup && s.stepOrder ? ` (${s.workflowGroup} #${s.stepOrder})` : ''}
                     </option>
                   ))}
                 </select>
+                <div style={{ marginTop: 6, color: 'var(--kline-text-light)', fontSize: '0.8rem' }}>
+                  Sequential services are auto-filtered to the next valid step for this customer.
+                </div>
+                {customerId && workflowNextSteps.length > 0 && (
+                  <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    {workflowNextSteps.map((item) => (
+                      <span
+                        key={item.group}
+                        style={{
+                          fontSize: '0.78rem',
+                          fontWeight: 700,
+                          color: item.isComplete ? '#1f7a43' : 'var(--kline-text-light)',
+                          background: item.isComplete ? 'rgba(25, 135, 84, 0.12)' : 'var(--kline-gray-light)',
+                          border: `1px solid ${item.isComplete ? 'rgba(25, 135, 84, 0.25)' : 'var(--kline-gray)'}`,
+                          borderRadius: 999,
+                          padding: '6px 10px',
+                        }}
+                      >
+                        {item.isComplete
+                          ? `${item.group}: completed`
+                          : `${item.group}: next ${item.nextServiceName || `step ${item.expectedStep}`}`}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div>
@@ -441,6 +619,11 @@ export default function NewTaskPage() {
         @keyframes spin {
           0% { transform: rotate(0deg); }
           100% { transform: rotate(360deg); }
+        }
+        @media (max-width: 980px) {
+          .service-filter-grid {
+            grid-template-columns: 1fr !important;
+          }
         }
       `}</style>
     </div>

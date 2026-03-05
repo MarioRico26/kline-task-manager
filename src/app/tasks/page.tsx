@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 
 interface TaskItem {
@@ -47,6 +47,10 @@ export default function TasksPage() {
   const [tasks, setTasks] = useState<TaskItem[]>([])
   const [loading, setLoading] = useState(true)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState('ALL')
+  const [serviceFilter, setServiceFilter] = useState('ALL')
+  const [scheduleFilter, setScheduleFilter] = useState<'ALL' | 'SCHEDULED' | 'UNSCHEDULED'>('ALL')
 
   const loadTasks = async () => {
     try {
@@ -59,9 +63,10 @@ export default function TasksPage() {
       }
       const data = (await res.json()) as TaskItem[]
       setTasks(data)
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('❌ Tasks load error:', err)
-      setErrorMsg(err?.message || 'Failed to load tasks')
+      const message = err instanceof Error ? err.message : 'Failed to load tasks'
+      setErrorMsg(message)
     } finally {
       setLoading(false)
     }
@@ -70,6 +75,46 @@ export default function TasksPage() {
   useEffect(() => {
     loadTasks()
   }, [])
+
+  const statusOptions = useMemo(() => {
+    const statuses = new Set(tasks.map((task) => task.status?.name).filter(Boolean))
+    return ['ALL', ...Array.from(statuses).sort()]
+  }, [tasks])
+
+  const serviceOptions = useMemo(() => {
+    const services = new Set(tasks.map((task) => task.service?.name).filter(Boolean))
+    return ['ALL', ...Array.from(services).sort()]
+  }, [tasks])
+
+  const filteredTasks = useMemo(() => {
+    const query = search.trim().toLowerCase()
+
+    return tasks.filter((task) => {
+      if (statusFilter !== 'ALL' && task.status?.name !== statusFilter) return false
+      if (serviceFilter !== 'ALL' && task.service?.name !== serviceFilter) return false
+      if (scheduleFilter === 'SCHEDULED' && !task.scheduledFor) return false
+      if (scheduleFilter === 'UNSCHEDULED' && task.scheduledFor) return false
+
+      if (!query) return true
+
+      const haystack = [
+        task.service?.name,
+        task.service?.description,
+        task.customer?.fullName,
+        task.customer?.email,
+        task.customer?.phone,
+        task.property?.address,
+        task.property?.city,
+        task.property?.state,
+        task.status?.name,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+
+      return haystack.includes(query)
+    })
+  }, [tasks, search, statusFilter, serviceFilter, scheduleFilter])
 
   const handleLogout = () => {
     document.cookie = 'user-id=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;'
@@ -81,7 +126,7 @@ export default function TasksPage() {
       style={{
         minHeight: '100vh',
         background: 'var(--kline-gray-light)',
-        fontFamily: 'system-ui, -apple-system, sans-serif',
+        fontFamily: 'var(--kline-font-sans)',
       }}
     >
       {/* Header */}
@@ -92,7 +137,7 @@ export default function TasksPage() {
           boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
         }}
       >
-        <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 20px' }}>
+        <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 20px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: '80px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
               <div
@@ -165,7 +210,7 @@ export default function TasksPage() {
         </div>
       </header>
 
-      <main style={{ maxWidth: '1200px', margin: '0 auto', padding: '28px 20px 60px' }}>
+      <main style={{ maxWidth: '1280px', margin: '0 auto', padding: '28px 20px 60px' }}>
         {/* Title + actions */}
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
           <div>
@@ -204,6 +249,44 @@ export default function TasksPage() {
             >
               Refresh
             </button>
+          </div>
+        </div>
+
+        <div className="kline-card" style={{ marginTop: 20, padding: 16 }}>
+          <div className="task-filters-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 1.8fr) repeat(3, minmax(160px, 1fr))', gap: 10 }}>
+            <input
+              type="text"
+              className="kline-input"
+              placeholder="Search customer, service, address, status..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+            <select className="kline-input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+              {statusOptions.map((status) => (
+                <option key={status} value={status}>
+                  {status === 'ALL' ? 'All statuses' : status}
+                </option>
+              ))}
+            </select>
+            <select className="kline-input" value={serviceFilter} onChange={(e) => setServiceFilter(e.target.value)}>
+              {serviceOptions.map((service) => (
+                <option key={service} value={service}>
+                  {service === 'ALL' ? 'All services' : service}
+                </option>
+              ))}
+            </select>
+            <select
+              className="kline-input"
+              value={scheduleFilter}
+              onChange={(e) => setScheduleFilter(e.target.value as 'ALL' | 'SCHEDULED' | 'UNSCHEDULED')}
+            >
+              <option value="ALL">All schedule types</option>
+              <option value="SCHEDULED">Scheduled only</option>
+              <option value="UNSCHEDULED">Unscheduled only</option>
+            </select>
+          </div>
+          <div style={{ marginTop: 10, color: 'var(--kline-text-light)', fontSize: '0.85rem', fontWeight: 600 }}>
+            Showing {filteredTasks.length} of {tasks.length} tasks
           </div>
         </div>
 
@@ -249,9 +332,9 @@ export default function TasksPage() {
 
         {!loading && !errorMsg && (
           <div className="kline-card" style={{ padding: 18, marginTop: 22 }}>
-            {tasks.length === 0 ? (
+            {filteredTasks.length === 0 ? (
               <div style={{ padding: 28, textAlign: 'center', color: 'var(--kline-text-light)', fontWeight: 700 }}>
-                No tasks yet. Create one to get started.
+                {tasks.length === 0 ? 'No tasks yet. Create one to get started.' : 'No tasks match the current filters.'}
               </div>
             ) : (
               <div style={{ overflowX: 'auto' }}>
@@ -267,7 +350,7 @@ export default function TasksPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {tasks.map((t) => (
+                    {filteredTasks.map((t) => (
                       <tr key={t.id}>
                         <Td>
                           <div style={{ fontWeight: 900, color: 'var(--kline-text)' }}>{t.service?.name || '—'}</div>
@@ -309,6 +392,11 @@ export default function TasksPage() {
           0% { transform: rotate(0deg); }
           100% { transform: rotate(360deg); }
         }
+        @media (max-width: 980px) {
+          .task-filters-grid {
+            grid-template-columns: 1fr !important;
+          }
+        }
       `}</style>
     </div>
   )
@@ -333,7 +421,7 @@ function StatusBadge({ name, color }: { name: string; color: string }) {
   )
 }
 
-function Th({ children }: { children: any }) {
+function Th({ children }: { children: ReactNode }) {
   return (
     <th
       style={{
@@ -351,7 +439,7 @@ function Th({ children }: { children: any }) {
   )
 }
 
-function Td({ children }: { children: any }) {
+function Td({ children }: { children: ReactNode }) {
   return (
     <td style={{ padding: '14px 12px', borderBottom: '1px solid var(--kline-gray)', color: 'var(--kline-text)', fontWeight: 700, fontSize: '0.9rem' }}>
       {children}

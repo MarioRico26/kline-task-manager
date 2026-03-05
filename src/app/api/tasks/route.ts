@@ -54,6 +54,32 @@ async function getDefaultCompletedStatusId() {
   return completed?.id || null
 }
 
+async function getExpectedSequentialStep(customerId: string, workflowGroup: string) {
+  const previousTasks = await prisma.task.findMany({
+    where: {
+      customerId,
+      service: {
+        isSequential: true,
+        workflowGroup,
+      },
+    },
+    select: {
+      service: {
+        select: {
+          stepOrder: true,
+        },
+      },
+    },
+  })
+
+  const maxStep = previousTasks.reduce((max, task) => {
+    const step = task.service.stepOrder || 0
+    return step > max ? step : max
+  }, 0)
+
+  return maxStep + 1
+}
+
 export async function POST(request: Request) {
   try {
     const formData = await request.formData()
@@ -110,20 +136,22 @@ export async function POST(request: Request) {
         )
       }
 
-      if (service.stepOrder !== 1) {
-        const firstStepService = await prisma.service.findFirst({
+      const expectedStep = await getExpectedSequentialStep(customerId, service.workflowGroup)
+
+      if (service.stepOrder !== expectedStep) {
+        const expectedService = await prisma.service.findFirst({
           where: {
             workflowGroup: service.workflowGroup,
-            stepOrder: 1,
+            stepOrder: expectedStep,
           },
           select: { name: true },
         })
 
         return NextResponse.json(
           {
-            error: firstStepService
-              ? `This workflow must start with "${firstStepService.name}" (step 1) before "${service.name}".`
-              : `Sequential workflow "${service.workflowGroup}" must start at step 1.`,
+            error: expectedService
+              ? `Before "${service.name}", you need to complete "${expectedService.name}" (step ${expectedStep}) first.`
+              : `This customer already finished available steps for "${service.workflowGroup}".`,
           },
           { status: 400 }
         )

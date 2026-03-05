@@ -107,7 +107,7 @@ export default function PropertiesPage() {
     <div style={{ minHeight: '100vh', background: 'var(--kline-gray-light)' }}>
       {/* Header */}
       <header className="kline-header" style={{ padding: '1rem 0' }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 1rem' }}>
+        <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 1rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
               <button 
@@ -176,12 +176,11 @@ export default function PropertiesPage() {
       </header>
 
       {/* Main Content */}
-      <main style={{ maxWidth: '1200px', margin: '2rem auto', padding: '0 1rem' }}>
+      <main style={{ maxWidth: '1280px', margin: '1.6rem auto', padding: '0 1rem' }}>
         {/* Action Bar */}
         <div className="kline-card" style={{ padding: '1.5rem', marginBottom: '2rem' }}>
-        </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
-              <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
                   {/* Search */}
                   <div style={{ position: 'relative' }}>
                       <input
@@ -217,18 +216,19 @@ export default function PropertiesPage() {
                           </option>
                       ))}
                   </select>
-              </div>
+            </div>
 
-              {/* Add Property Button */}
-              <button
-                  className="kline-btn-primary"
-                  style={{ padding: '0.8rem 1.5rem', fontSize: '0.9rem' }}
-                  onClick={() => setIsCreateModalOpen(true)}
-                  disabled={customers.length === 0}
-              >
-                  {customers.length === 0 ? 'No Customers' : '+ New Property'}
-              </button>
+            {/* Add Property Button */}
+            <button
+              className="kline-btn-primary"
+              style={{ padding: '0.8rem 1.5rem', fontSize: '0.9rem' }}
+              onClick={() => setIsCreateModalOpen(true)}
+              disabled={customers.length === 0}
+            >
+              {customers.length === 0 ? 'No Customers' : '+ New Property'}
+            </button>
           </div>
+        </div>
 
         {/* Properties Table - Compact View */}
         {loading ? (

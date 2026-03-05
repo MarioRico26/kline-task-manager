@@ -392,7 +392,7 @@ export default function DashboardPage() {
           min-height: 100vh;
           background: radial-gradient(circle at top right, #fff2dc 0%, #f5f5f5 30%, #f5f5f5 100%);
           color: var(--kline-text);
-          font-family: system-ui, -apple-system, Segoe UI, sans-serif;
+          font-family: var(--kline-font-sans);
         }
 
         .topbar {

@@ -144,7 +144,7 @@ export default function StatusesPage() {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--kline-gray-light)' }}>
       <header className="kline-header" style={{ padding: '1rem 0' }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 1rem' }}>
+        <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 1rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
               <button
@@ -190,7 +190,7 @@ export default function StatusesPage() {
         </div>
       </header>
 
-      <main style={{ maxWidth: '1200px', margin: '2rem auto', padding: '0 1rem' }}>
+      <main style={{ maxWidth: '1280px', margin: '1.6rem auto', padding: '0 1rem' }}>
         <div className="kline-card" style={{ padding: '1.5rem', marginBottom: '1.5rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
             <div style={{ position: 'relative' }}>

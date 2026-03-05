@@ -63,6 +63,9 @@ export default function ServicesPage() {
   const [services, setServices] = useState<Service[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('')
+  const [typeFilter, setTypeFilter] = useState<'ALL' | 'SEQUENTIAL' | 'INDEPENDENT'>('ALL')
+  const [workflowFilter, setWorkflowFilter] = useState('ALL')
+  const [messageFilter, setMessageFilter] = useState<'ALL' | 'WITH_MESSAGE' | 'WITHOUT_MESSAGE'>('ALL')
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [editingService, setEditingService] = useState<Service | null>(null)
   const [deletingService, setDeletingService] = useState<Service | null>(null)
@@ -112,22 +115,42 @@ export default function ServicesPage() {
 
   const filteredServices = useMemo(() => {
     const query = filter.toLowerCase().trim()
-    if (!query) return services
 
     return services.filter((service) => {
-      return (
-        service.name.toLowerCase().includes(query) ||
-        (service.description || '').toLowerCase().includes(query) ||
-        (service.clientMessage || '').toLowerCase().includes(query) ||
-        (service.workflowGroup || '').toLowerCase().includes(query)
-      )
+      if (query) {
+        const matchesQuery =
+          service.name.toLowerCase().includes(query) ||
+          (service.description || '').toLowerCase().includes(query) ||
+          (service.clientMessage || '').toLowerCase().includes(query) ||
+          (service.workflowGroup || '').toLowerCase().includes(query)
+
+        if (!matchesQuery) return false
+      }
+
+      if (typeFilter === 'SEQUENTIAL' && !service.isSequential) return false
+      if (typeFilter === 'INDEPENDENT' && service.isSequential) return false
+      if (workflowFilter !== 'ALL' && service.workflowGroup !== workflowFilter) return false
+
+      const hasMessage = Boolean((service.clientMessage || '').trim())
+      if (messageFilter === 'WITH_MESSAGE' && !hasMessage) return false
+      if (messageFilter === 'WITHOUT_MESSAGE' && hasMessage) return false
+
+      return true
     })
-  }, [services, filter])
+  }, [services, filter, typeFilter, workflowFilter, messageFilter])
+
+  const workflowOptions = useMemo(() => {
+    const groups = new Set<string>()
+    services.forEach((service) => {
+      if (service.workflowGroup) groups.add(service.workflowGroup)
+    })
+    return ['ALL', ...Array.from(groups).sort()]
+  }, [services])
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--kline-gray-light)' }}>
       <header className="kline-header" style={{ padding: '1rem 0' }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 1rem' }}>
+        <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 1rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
               <button
@@ -174,17 +197,17 @@ export default function ServicesPage() {
         </div>
       </header>
 
-      <main style={{ maxWidth: '1200px', margin: '2rem auto', padding: '0 1rem' }}>
+      <main style={{ maxWidth: '1280px', margin: '1.6rem auto', padding: '0 1rem' }}>
         <div className="kline-card" style={{ padding: '1.5rem', marginBottom: '1.5rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-            <div style={{ position: 'relative' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
+            <div style={{ position: 'relative', minWidth: '280px', flex: '1 1 320px' }}>
               <input
                 type="text"
                 placeholder="Search services, flow or message..."
                 value={filter}
                 onChange={(e) => setFilter(e.target.value)}
                 className="kline-input"
-                style={{ paddingLeft: '2.5rem', width: '340px', maxWidth: '100%' }}
+                style={{ paddingLeft: '2.5rem' }}
               />
               <span style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--kline-text-light)' }}>
                 🔍
@@ -194,6 +217,36 @@ export default function ServicesPage() {
             <button className="kline-btn-primary" style={{ padding: '0.8rem 1.5rem', fontSize: '0.9rem' }} onClick={() => setIsCreateModalOpen(true)}>
               + New Service
             </button>
+          </div>
+          <div className="service-filters-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(180px, 1fr))', gap: '0.65rem' }}>
+            <select
+              className="kline-input"
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value as 'ALL' | 'SEQUENTIAL' | 'INDEPENDENT')}
+            >
+              <option value="ALL">All types</option>
+              <option value="SEQUENTIAL">Sequential</option>
+              <option value="INDEPENDENT">Independent</option>
+            </select>
+            <select className="kline-input" value={workflowFilter} onChange={(e) => setWorkflowFilter(e.target.value)}>
+              {workflowOptions.map((workflow) => (
+                <option key={workflow} value={workflow}>
+                  {workflow === 'ALL' ? 'All workflows' : workflow}
+                </option>
+              ))}
+            </select>
+            <select
+              className="kline-input"
+              value={messageFilter}
+              onChange={(e) => setMessageFilter(e.target.value as 'ALL' | 'WITH_MESSAGE' | 'WITHOUT_MESSAGE')}
+            >
+              <option value="ALL">All client-message states</option>
+              <option value="WITH_MESSAGE">With client message</option>
+              <option value="WITHOUT_MESSAGE">Without client message</option>
+            </select>
+          </div>
+          <div style={{ marginTop: '0.75rem', color: 'var(--kline-text-light)', fontSize: '0.84rem', fontWeight: 600 }}>
+            Showing {filteredServices.length} of {services.length} services
           </div>
         </div>
 
@@ -267,7 +320,7 @@ export default function ServicesPage() {
 
             {filteredServices.length === 0 && (
               <div className="kline-card" style={{ padding: '3rem', textAlign: 'center', color: 'var(--kline-text-light)', gridColumn: '1 / -1' }}>
-                {services.length === 0 ? 'No services found' : 'No services match your search'}
+                {services.length === 0 ? 'No services found' : 'No services match the active filters'}
               </div>
             )}
           </div>
@@ -307,6 +360,13 @@ export default function ServicesPage() {
       {deletingService && (
         <DeleteServiceModal service={deletingService} onClose={() => setDeletingService(null)} onServiceDeleted={handleDeleteService} />
       )}
+      <style jsx>{`
+        @media (max-width: 980px) {
+          .service-filters-grid {
+            grid-template-columns: 1fr;
+          }
+        }
+      `}</style>
     </div>
   )
 }
