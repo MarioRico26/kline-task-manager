@@ -23,6 +23,15 @@ interface DashboardStats {
     scheduledFor: string | null
     address: string
   }>
+  sequentialWorkflowMonitor: Array<{
+    workflow: string
+    customer: string
+    property: string
+    currentStep: string
+    nextStep: string
+    status: 'IN_PROGRESS' | 'NOT_STARTED' | 'COMPLETED'
+    lastActivity: string | null
+  }>
 }
 
 interface ModuleCard {
@@ -58,6 +67,13 @@ function KpiCard({
       <div className="kpi-detail">{detail}</div>
     </div>
   )
+}
+
+function formatMonitorDate(value: string | null) {
+  if (!value) return 'No activity yet'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return 'No activity yet'
+  return date.toLocaleDateString()
 }
 
 export default function DashboardPage() {
@@ -275,6 +291,38 @@ export default function DashboardPage() {
               </div>
 
               <div className="insight-stack">
+                <div className="panel card-panel">
+                  <div className="panel-head">
+                    <h3>Sequential Workflow Monitor</h3>
+                    <p>Current stage by customer and property</p>
+                  </div>
+
+                  {stats.sequentialWorkflowMonitor.length === 0 ? (
+                    <div className="empty-state">No sequential workflows in progress</div>
+                  ) : (
+                    <div className="monitor-list">
+                      {stats.sequentialWorkflowMonitor.map((item) => (
+                        <div key={`${item.workflow}-${item.customer}-${item.property}`} className="monitor-row">
+                          <div className="monitor-title-row">
+                            <strong>{item.workflow}</strong>
+                            <span className={`monitor-badge ${item.status.toLowerCase()}`}>
+                              {item.status === 'IN_PROGRESS' ? 'In Progress' : item.status === 'NOT_STARTED' ? 'Not Started' : 'Completed'}
+                            </span>
+                          </div>
+                          <div className="monitor-meta">
+                            {item.customer} · {item.property}
+                          </div>
+                          <div className="monitor-steps">
+                            <span>Current: {item.currentStep}</span>
+                            <span>Next: {item.nextStep}</span>
+                          </div>
+                          <div className="monitor-updated">Last activity: {formatMonitorDate(item.lastActivity)}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
                 <div className="panel card-panel">
                   <div className="panel-head">
                     <h3>Tasks by Service</h3>
@@ -659,6 +707,77 @@ export default function DashboardPage() {
           margin-top: 14px;
           display: grid;
           gap: 10px;
+        }
+
+        .monitor-list {
+          margin-top: 14px;
+          display: grid;
+          gap: 10px;
+        }
+
+        .monitor-row {
+          border: 1px solid var(--kline-gray);
+          border-radius: 12px;
+          padding: 11px 12px;
+          background: #fafafa;
+        }
+
+        .monitor-title-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+        }
+
+        .monitor-title-row strong {
+          font-size: 0.9rem;
+        }
+
+        .monitor-badge {
+          font-size: 0.7rem;
+          font-weight: 800;
+          border-radius: 999px;
+          padding: 4px 8px;
+          border: 1px solid transparent;
+        }
+
+        .monitor-badge.in_progress {
+          color: #a85b00;
+          background: rgba(253, 126, 20, 0.15);
+          border-color: rgba(253, 126, 20, 0.3);
+        }
+
+        .monitor-badge.not_started {
+          color: #495057;
+          background: rgba(108, 117, 125, 0.12);
+          border-color: rgba(108, 117, 125, 0.22);
+        }
+
+        .monitor-badge.completed {
+          color: #1f7a43;
+          background: rgba(25, 135, 84, 0.12);
+          border-color: rgba(25, 135, 84, 0.25);
+        }
+
+        .monitor-meta {
+          margin-top: 4px;
+          color: var(--kline-text-light);
+          font-size: 0.8rem;
+        }
+
+        .monitor-steps {
+          margin-top: 7px;
+          display: grid;
+          gap: 4px;
+          font-size: 0.8rem;
+          color: var(--kline-text);
+          font-weight: 600;
+        }
+
+        .monitor-updated {
+          margin-top: 7px;
+          color: var(--kline-text-light);
+          font-size: 0.76rem;
         }
 
         .bar-row {
