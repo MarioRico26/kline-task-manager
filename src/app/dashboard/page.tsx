@@ -260,34 +260,85 @@ export default function DashboardPage() {
             </section>
 
             <section className="content-grid">
-              <div className="panel card-panel">
-                <div className="panel-head">
-                  <h3>Core Modules</h3>
-                  <p>Navigate directly to each management area</p>
-                </div>
-                <div className="module-grid">
-                  {moduleCards.map((card) => (
-                    <button
-                      key={card.route}
-                      className="module-card"
-                      onClick={() => router.push(card.route)}
-                      style={{ borderLeft: `4px solid ${card.color}` }}
-                    >
-                      <div className="module-top">
-                        <div>
-                          <strong>{card.title}</strong>
-                          <span>{card.description}</span>
+              <div className="left-stack">
+                <div className="panel card-panel">
+                  <div className="panel-head">
+                    <h3>Core Modules</h3>
+                    <p>Navigate directly to each management area</p>
+                  </div>
+                  <div className="module-grid">
+                    {moduleCards.map((card) => (
+                      <button
+                        key={card.route}
+                        className="module-card"
+                        onClick={() => router.push(card.route)}
+                        style={{ borderLeft: `4px solid ${card.color}` }}
+                      >
+                        <div className="module-top">
+                          <div>
+                            <strong>{card.title}</strong>
+                            <span>{card.description}</span>
+                          </div>
+                          <div className="module-count" style={{ background: `${card.color}1A`, color: card.color }}>
+                            {card.count}
+                          </div>
                         </div>
-                        <div className="module-count" style={{ background: `${card.color}1A`, color: card.color }}>
-                          {card.count}
+                        <div className="module-link" style={{ color: card.color }}>
+                          Open Module
                         </div>
-                      </div>
-                      <div className="module-link" style={{ color: card.color }}>
-                        Open Module
-                      </div>
-                    </button>
-                  ))}
+                      </button>
+                    ))}
+                  </div>
                 </div>
+
+                <section className="panel card-panel recent-panel">
+                  <div className="panel-head row">
+                    <div>
+                      <h3>Recent Tasks</h3>
+                      <p>Last tasks created in the system</p>
+                    </div>
+                    <div className="recent-actions">
+                      <button className="ghost-btn" onClick={() => router.push('/tasks/new')}>
+                        + New Task
+                      </button>
+                      <button className="outline-red" onClick={() => router.push('/tasks')}>
+                        View All Tasks
+                      </button>
+                    </div>
+                  </div>
+
+                  {stats.recentTasks.length === 0 ? (
+                    <div className="empty-state">No recent tasks yet</div>
+                  ) : (
+                    <div className="table-wrap">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Service / Customer</th>
+                            <th>Status</th>
+                            <th>Scheduled</th>
+                            <th>Address</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {stats.recentTasks.map((task) => (
+                            <tr key={task.id} onClick={() => router.push('/tasks')}>
+                              <td>
+                                <strong>{task.service}</strong>
+                                <span>{task.customer}</span>
+                              </td>
+                              <td>
+                                <span className="status-pill">{task.status}</span>
+                              </td>
+                              <td>{formatDate(task.scheduledFor)}</td>
+                              <td>{task.address}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </section>
               </div>
 
               <div className="insight-stack">
@@ -381,55 +432,6 @@ export default function DashboardPage() {
                   )}
                 </div>
               </div>
-            </section>
-
-            <section className="panel card-panel recent-panel">
-              <div className="panel-head row">
-                <div>
-                  <h3>Recent Tasks</h3>
-                  <p>Last tasks created in the system</p>
-                </div>
-                <div className="recent-actions">
-                  <button className="ghost-btn" onClick={() => router.push('/tasks/new')}>
-                    + New Task
-                  </button>
-                  <button className="outline-red" onClick={() => router.push('/tasks')}>
-                    View All Tasks
-                  </button>
-                </div>
-              </div>
-
-              {stats.recentTasks.length === 0 ? (
-                <div className="empty-state">No recent tasks yet</div>
-              ) : (
-                <div className="table-wrap">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Service / Customer</th>
-                        <th>Status</th>
-                        <th>Scheduled</th>
-                        <th>Address</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {stats.recentTasks.map((task) => (
-                        <tr key={task.id} onClick={() => router.push('/tasks')}>
-                          <td>
-                            <strong>{task.service}</strong>
-                            <span>{task.customer}</span>
-                          </td>
-                          <td>
-                            <span className="status-pill">{task.status}</span>
-                          </td>
-                          <td>{formatDate(task.scheduledFor)}</td>
-                          <td>{task.address}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
             </section>
           </>
         )}
@@ -620,6 +622,12 @@ export default function DashboardPage() {
           align-items: start;
         }
 
+        .left-stack {
+          display: grid;
+          gap: 24px;
+          align-content: start;
+        }
+
         .card-panel {
           background: #fff;
           border: 1px solid var(--kline-gray);
@@ -701,6 +709,7 @@ export default function DashboardPage() {
         .insight-stack {
           display: grid;
           gap: 24px;
+          align-content: start;
         }
 
         .bars {
