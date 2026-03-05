@@ -9,6 +9,47 @@ const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient }
 const prisma = globalForPrisma.prisma ?? new PrismaClient()
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma
 
+function validateSequentialTransition(
+  currentStatus: {
+    id: string
+    name: string
+    isSequential: boolean
+    workflowGroup: string | null
+    stepOrder: number | null
+  },
+  targetStatus: {
+    id: string
+    name: string
+    isSequential: boolean
+    workflowGroup: string | null
+    stepOrder: number | null
+  }
+): string | null {
+  if (!targetStatus.isSequential) return null
+  if (!targetStatus.workflowGroup || targetStatus.stepOrder === null) {
+    return `Status "${targetStatus.name}" is misconfigured. Missing workflowGroup or stepOrder.`
+  }
+
+  if (currentStatus.id === targetStatus.id) return null
+
+  if (
+    currentStatus.isSequential &&
+    currentStatus.workflowGroup === targetStatus.workflowGroup &&
+    currentStatus.stepOrder !== null
+  ) {
+    if (targetStatus.stepOrder !== currentStatus.stepOrder + 1) {
+      return `Invalid sequence transition. You can only move from step ${currentStatus.stepOrder} to step ${currentStatus.stepOrder + 1}.`
+    }
+    return null
+  }
+
+  if (targetStatus.stepOrder !== 1) {
+    return `Workflow "${targetStatus.workflowGroup}" must start at step 1.`
+  }
+
+  return null
+}
+
 export async function PUT(request: NextRequest) {
   try {
     const url = new URL(request.url)
@@ -40,7 +81,35 @@ export async function PUT(request: NextRequest) {
 
     const newStatus = await prisma.taskStatus.findUnique({
       where: { id: statusId },
+      select: {
+        id: true,
+        name: true,
+        notifyClient: true,
+        clientMessage: true,
+        isSequential: true,
+        workflowGroup: true,
+        stepOrder: true,
+      },
     })
+
+    if (!newStatus) {
+      return NextResponse.json({ error: "Status not found" }, { status: 400 })
+    }
+
+    const sequenceError = validateSequentialTransition(
+      {
+        id: existingTask.status.id,
+        name: existingTask.status.name,
+        isSequential: existingTask.status.isSequential,
+        workflowGroup: existingTask.status.workflowGroup,
+        stepOrder: existingTask.status.stepOrder,
+      },
+      newStatus
+    )
+
+    if (sequenceError) {
+      return NextResponse.json({ error: sequenceError }, { status: 400 })
+    }
 
     const task = await prisma.task.update({
       where: { id: taskId },
@@ -81,7 +150,7 @@ export async function PUT(request: NextRequest) {
 
     // Notifications
     if (newStatus?.notifyClient) {
-      const notificationPromises: Promise<any>[] = []
+      const notificationPromises: Promise<unknown>[] = []
 
       // EMAIL
       if (existingTask.customer.email) {
@@ -108,7 +177,8 @@ export async function PUT(request: NextRequest) {
         const smsText = buildTaskSMS(
           existingTask.customer.fullName,
           task.service.name,
-          task.service.description || null
+          task.service.description || null,
+          newStatus.clientMessage || null
         )
 
         notificationPromises.push(sendSMS(existingTask.customer.phone, smsText))

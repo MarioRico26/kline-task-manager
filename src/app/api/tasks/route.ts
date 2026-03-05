@@ -102,6 +102,22 @@ export async function POST(request: Request) {
       )
     }
 
+    if (status.isSequential) {
+      if (!status.workflowGroup || status.stepOrder === null) {
+        return NextResponse.json(
+          { error: `Status "${status.name}" is misconfigured for sequential workflow.` },
+          { status: 400 }
+        )
+      }
+
+      if (status.stepOrder !== 1) {
+        return NextResponse.json(
+          { error: `Sequential workflow "${status.workflowGroup}" must start at step 1.` },
+          { status: 400 }
+        )
+      }
+    }
+
     const task = await prisma.task.create({
       data: {
         customerId,
@@ -149,9 +165,10 @@ export async function POST(request: Request) {
         customer.fullName,
         service.name,
         service.description || null,
+        status.clientMessage || null,
       )
 
-      const notificationPromises: Promise<any>[] = []
+      const notificationPromises: Promise<unknown>[] = []
 
       // ✅ Email
       if (customer.email) {

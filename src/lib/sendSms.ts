@@ -12,9 +12,11 @@ const client = twilio(accountSid, authToken)
 export function buildTaskSMS(
   customerName: string,
   serviceName: string,
-  serviceDescription: string | null
+  serviceDescription: string | null,
+  clientMessage: string | null = null
 ) {
   const body =
+    (clientMessage && clientMessage.trim()) ||
     (serviceDescription && serviceDescription.trim()) ||
     `Your ${serviceName} service update is available.`
 
@@ -53,8 +55,9 @@ export async function sendSMS(to: string, message: string) {
 
     console.log("✅ SMS sent:", result.sid)
     return { success: true, sid: result.sid }
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Unknown SMS error"
     console.error("❌ SMS failed:", error)
-    return { success: false, error: error.message }
+    return { success: false, error: message }
   }
 }
