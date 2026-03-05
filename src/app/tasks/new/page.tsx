@@ -450,20 +450,22 @@ export default function NewTaskPage() {
                 </select>
               </div>
 
-              <div>
+              <div style={{ minWidth: 0 }}>
                 <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '8px', fontWeight: 700 }}>Service</label>
-                <div className="service-filter-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 140px 140px', gap: 8, marginBottom: 8 }}>
+                <div className="service-filter-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8, marginBottom: 8 }}>
                   <input
                     type="text"
                     className="kline-input"
                     value={serviceSearch}
                     onChange={(e) => setServiceSearch(e.target.value)}
                     placeholder="Search service..."
+                    style={{ gridColumn: '1 / -1', minWidth: 0 }}
                   />
                   <select
                     className="kline-input"
                     value={serviceTypeFilter}
                     onChange={(e) => setServiceTypeFilter(e.target.value as 'ALL' | 'SEQUENTIAL' | 'INDEPENDENT')}
+                    style={{ minWidth: 0 }}
                   >
                     <option value="ALL">All types</option>
                     <option value="SEQUENTIAL">Sequential</option>
@@ -474,6 +476,7 @@ export default function NewTaskPage() {
                     value={workflowFilter}
                     onChange={(e) => setWorkflowFilter(e.target.value)}
                     disabled={workflows.length <= 1}
+                    style={{ minWidth: 0 }}
                   >
                     {workflows.map((workflow) => (
                       <option key={workflow} value={workflow}>
