@@ -41,6 +41,7 @@ interface StatusItem {
 
 interface TaskHistoryItem {
   id: string
+  createdAt: string
   customer: { id: string }
   property: { id: string }
   service: {
@@ -53,6 +54,38 @@ interface TaskHistoryItem {
 
 function normalizeWorkflowKey(value?: string | null) {
   return (value || '').trim().toLowerCase()
+}
+
+function getNextWorkflowStep(
+  definedSteps: number[],
+  historySteps: Array<{ step: number; createdAt: string }>
+): number | null {
+  if (definedSteps.length === 0) return null
+
+  const sortedHistory = [...historySteps].sort(
+    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+  )
+
+  const startStep = definedSteps[0]
+  let currentStep = 0
+
+  for (const item of sortedHistory) {
+    if (item.step === startStep) {
+      currentStep = startStep
+      continue
+    }
+
+    const currentIndex = definedSteps.indexOf(currentStep)
+    if (currentIndex >= 0 && definedSteps[currentIndex + 1] === item.step) {
+      currentStep = item.step
+    }
+  }
+
+  if (currentStep === 0) return startStep
+
+  const currentIndex = definedSteps.indexOf(currentStep)
+  const nextStep = definedSteps[currentIndex + 1]
+  return nextStep ?? startStep
 }
 
 type WorkflowDefinition = {
@@ -129,26 +162,24 @@ export default function NewTaskPage() {
     return properties.filter((p) => p.customerId === customerId)
   }, [properties, customerId])
 
-  const customerWorkflowProgress = useMemo(() => {
-    const progress = new Map<string, number>()
-    if (!customerId || !propertyId) return progress
+  const workflowHistoryByKey = useMemo(() => {
+    const history = new Map<string, Array<{ step: number; createdAt: string }>>()
+    if (!customerId || !propertyId) return history
 
     tasksHistory.forEach((task) => {
       if (task.customer?.id !== customerId) return
       if (task.property?.id !== propertyId) return
-      if (!task.service?.isSequential) return
-      if (!task.service.stepOrder) return
+      if (!task.service?.isSequential || !task.service?.stepOrder) return
 
       const groupKey = normalizeWorkflowKey(task.service.workflowGroup)
       if (!groupKey) return
 
-      const currentMax = progress.get(groupKey) || 0
-      if (task.service.stepOrder > currentMax) {
-        progress.set(groupKey, task.service.stepOrder)
-      }
+      const list = history.get(groupKey) || []
+      list.push({ step: task.service.stepOrder, createdAt: task.createdAt })
+      history.set(groupKey, list)
     })
 
-    return progress
+    return history
   }, [tasksHistory, customerId, propertyId])
 
   const workflowDefinitions = useMemo(() => {
@@ -181,15 +212,16 @@ export default function NewTaskPage() {
     const nextSteps = new Map<string, number | null>()
 
     workflowDefinitions.forEach((definition, workflowKey) => {
-      const currentMaxStep = customerWorkflowProgress.get(workflowKey) || 0
-      const nextService = definition.services.find(
-        (service) => (service.stepOrder || 0) > currentMaxStep
-      )
-      nextSteps.set(workflowKey, nextService?.stepOrder || null)
+      const definedSteps = definition.services
+        .map((service) => service.stepOrder || 0)
+        .filter((step) => step > 0)
+
+      const historySteps = workflowHistoryByKey.get(workflowKey) || []
+      nextSteps.set(workflowKey, getNextWorkflowStep(definedSteps, historySteps))
     })
 
     return nextSteps
-  }, [workflowDefinitions, customerWorkflowProgress])
+  }, [workflowDefinitions, workflowHistoryByKey])
 
   const filteredServices = useMemo(() => {
     return services.filter((service) => {

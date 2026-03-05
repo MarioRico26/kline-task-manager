@@ -65,6 +65,23 @@ async function getNextSequentialStep(
 ) {
   const normalizedWorkflowGroup = normalizeWorkflowGroup(workflowGroup)
 
+  const workflowServices = await prisma.service.findMany({
+    where: {
+      isSequential: true,
+      workflowGroup: { equals: normalizedWorkflowGroup, mode: 'insensitive' },
+      stepOrder: { not: null },
+    },
+    orderBy: { stepOrder: 'asc' },
+    select: { stepOrder: true, name: true },
+  })
+
+  if (workflowServices.length === 0) return null
+
+  const definedSteps = workflowServices
+    .map((service) => service.stepOrder || 0)
+    .filter((step) => step > 0)
+  const startStep = definedSteps[0]
+
   const previousTasks = await prisma.task.findMany({
     where: {
       customerId,
@@ -74,7 +91,9 @@ async function getNextSequentialStep(
         workflowGroup: { equals: normalizedWorkflowGroup, mode: 'insensitive' },
       },
     },
+    orderBy: { createdAt: 'asc' },
     select: {
+      createdAt: true,
       service: {
         select: {
           stepOrder: true,
@@ -83,21 +102,25 @@ async function getNextSequentialStep(
     },
   })
 
-  const completedMaxStep = previousTasks.reduce((max, task) => {
+  let currentStep = 0
+  for (const task of previousTasks) {
     const step = task.service.stepOrder || 0
-    return step > max ? step : max
-  }, 0)
+    if (!step) continue
 
-  const nextService = await prisma.service.findFirst({
-    where: {
-      isSequential: true,
-      workflowGroup: { equals: normalizedWorkflowGroup, mode: 'insensitive' },
-      stepOrder: { gt: completedMaxStep },
-    },
-    orderBy: { stepOrder: 'asc' },
-    select: { stepOrder: true, name: true },
-  })
+    if (step === startStep) {
+      currentStep = startStep
+      continue
+    }
 
+    const currentIndex = definedSteps.indexOf(currentStep)
+    if (currentIndex >= 0 && definedSteps[currentIndex + 1] === step) {
+      currentStep = step
+    }
+  }
+
+  const currentIndex = definedSteps.indexOf(currentStep)
+  const nextStep = currentStep === 0 ? startStep : definedSteps[currentIndex + 1] ?? startStep
+  const nextService = workflowServices.find((service) => service.stepOrder === nextStep)
   if (!nextService?.stepOrder) return null
 
   return {
@@ -174,7 +197,7 @@ export async function POST(request: Request) {
 
       if (!nextStep) {
         return NextResponse.json(
-          { error: `This customer/property already finished available steps for "${service.workflowGroup}".` },
+          { error: `Workflow "${service.workflowGroup}" is misconfigured.` },
           { status: 400 }
         )
       }
