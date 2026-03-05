@@ -54,10 +54,11 @@ async function getDefaultCompletedStatusId() {
   return completed?.id || null
 }
 
-async function getExpectedSequentialStep(customerId: string, workflowGroup: string) {
+async function getExpectedSequentialStep(customerId: string, propertyId: string, workflowGroup: string) {
   const previousTasks = await prisma.task.findMany({
     where: {
       customerId,
+      propertyId,
       service: {
         isSequential: true,
         workflowGroup,
@@ -116,7 +117,7 @@ export async function POST(request: Request) {
     // ✅ Cargar entidades (y validar que existan)
     const [customer, property, service, status] = await Promise.all([
       prisma.customer.findUnique({ where: { id: customerId } }),
-      prisma.property.findUnique({ where: { id: propertyId } }),
+      prisma.property.findUnique({ where: { id: propertyId }, select: { id: true, customerId: true, address: true, city: true, state: true, zip: true } }),
       prisma.service.findUnique({ where: { id: serviceId } }),
       prisma.taskStatus.findUnique({ where: { id: finalStatusId } }),
     ])
@@ -124,6 +125,13 @@ export async function POST(request: Request) {
     if (!customer || !property || !service || !status) {
       return NextResponse.json(
         { error: 'Invalid customer, property, service, or status' },
+        { status: 400 }
+      )
+    }
+
+    if (property.customerId !== customerId) {
+      return NextResponse.json(
+        { error: 'Selected property does not belong to selected customer' },
         { status: 400 }
       )
     }
@@ -136,7 +144,7 @@ export async function POST(request: Request) {
         )
       }
 
-      const expectedStep = await getExpectedSequentialStep(customerId, service.workflowGroup)
+      const expectedStep = await getExpectedSequentialStep(customerId, propertyId, service.workflowGroup)
 
       if (service.stepOrder !== expectedStep) {
         const expectedService = await prisma.service.findFirst({
@@ -151,7 +159,7 @@ export async function POST(request: Request) {
           {
             error: expectedService
               ? `Before "${service.name}", you need to complete "${expectedService.name}" (step ${expectedStep}) first.`
-              : `This customer already finished available steps for "${service.workflowGroup}".`,
+              : `This customer/property already finished available steps for "${service.workflowGroup}".`,
           },
           { status: 400 }
         )

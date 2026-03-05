@@ -42,6 +42,7 @@ interface StatusItem {
 interface TaskHistoryItem {
   id: string
   customer: { id: string }
+  property: { id: string }
   service: {
     id: string
     isSequential?: boolean
@@ -121,10 +122,11 @@ export default function NewTaskPage() {
 
   const customerWorkflowProgress = useMemo(() => {
     const progress = new Map<string, number>()
-    if (!customerId) return progress
+    if (!customerId || !propertyId) return progress
 
     tasksHistory.forEach((task) => {
       if (task.customer?.id !== customerId) return
+      if (task.property?.id !== propertyId) return
       if (!task.service?.isSequential) return
       if (!task.service.workflowGroup || !task.service.stepOrder) return
 
@@ -135,20 +137,21 @@ export default function NewTaskPage() {
     })
 
     return progress
-  }, [tasksHistory, customerId])
+  }, [tasksHistory, customerId, propertyId])
 
   const filteredServices = useMemo(() => {
     return services.filter((service) => {
       if (!service.isSequential) return true
       if (!service.workflowGroup || !service.stepOrder) return false
+      if (!propertyId) return false
 
       const expectedStep = (customerWorkflowProgress.get(service.workflowGroup) || 0) + 1
       return service.stepOrder === expectedStep
     })
-  }, [services, customerWorkflowProgress])
+  }, [services, propertyId, customerWorkflowProgress])
 
   const workflowNextSteps = useMemo(() => {
-    if (!customerId) return []
+    if (!customerId || !propertyId) return []
 
     const grouped = new Map<string, ServiceItem[]>()
     services.forEach((service) => {
@@ -172,7 +175,7 @@ export default function NewTaskPage() {
         }
       })
       .sort((a, b) => a.group.localeCompare(b.group))
-  }, [customerId, services, customerWorkflowProgress])
+  }, [customerId, propertyId, services, customerWorkflowProgress])
 
   useEffect(() => {
     if (propertyId && !filteredProperties.find((p) => p.id === propertyId)) {
@@ -432,9 +435,9 @@ export default function NewTaskPage() {
                   ))}
                 </select>
                 <div style={{ marginTop: 6, color: 'var(--kline-text-light)', fontSize: '0.8rem' }}>
-                  Sequential services are auto-filtered to the next valid step for this customer.
+                  Sequential services are auto-filtered by customer + property.
                 </div>
-                {customerId && workflowNextSteps.length > 0 && (
+                {customerId && propertyId && workflowNextSteps.length > 0 && (
                   <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                     {workflowNextSteps.map((item) => (
                       <span
