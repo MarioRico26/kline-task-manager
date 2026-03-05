@@ -19,7 +19,8 @@
   --kline-shadow-sm: 0 7px 18px rgba(18, 20, 24, 0.06);
   --kline-radius: 14px;
   --kline-radius-sm: 10px;
-  --kline-font-sans: var(--font-kline-sans), "Segoe UI", sans-serif;
+  --kline-font-sans: var(--font-kline-sans), "Open Sans", "Segoe UI", sans-serif;
+  --kline-font-heading: var(--font-kline-heading), "Poppins", "Open Sans", "Segoe UI", sans-serif;
 }
 
 body {
@@ -39,6 +40,7 @@ h3,
 h4,
 h5,
 h6 {
+  font-family: var(--kline-font-heading);
   letter-spacing: -0.02em;
   color: var(--kline-text);
 }

@@ -1,10 +1,16 @@
 import './globals.css'
-import { Poppins } from 'next/font/google'
+import { Open_Sans, Poppins } from 'next/font/google'
+
+const openSans = Open_Sans({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-kline-sans',
+})
 
 const poppins = Poppins({
   subsets: ['latin'],
-  weight: ['400', '500', '600', '700', '800'],
-  variable: '--font-kline-sans',
+  weight: ['500', '600', '700', '800'],
+  variable: '--font-kline-heading',
 })
 
 export default function RootLayout({
@@ -14,7 +20,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={`${poppins.variable} antialiased`}>
+      <body className={`${openSans.variable} ${poppins.variable} antialiased`}>
         {children}
       </body>
     </html>
