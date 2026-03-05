@@ -70,10 +70,6 @@ export default function NewTaskPage() {
   const [scheduledFor, setScheduledFor] = useState('')
   const [notes, setNotes] = useState('')
   const [files, setFiles] = useState<FileList | null>(null)
-  const [propertySearch, setPropertySearch] = useState('')
-  const [serviceSearch, setServiceSearch] = useState('')
-  const [serviceTypeFilter, setServiceTypeFilter] = useState<'ALL' | 'SEQUENTIAL' | 'INDEPENDENT'>('ALL')
-  const [workflowFilter, setWorkflowFilter] = useState('ALL')
 
   useEffect(() => {
     async function loadFormData() {
@@ -120,27 +116,8 @@ export default function NewTaskPage() {
 
   const filteredProperties = useMemo(() => {
     if (!customerId) return []
-    return properties
-      .filter((p) => p.customerId === customerId)
-      .filter((p) => {
-        if (!propertySearch.trim()) return true
-        const query = propertySearch.toLowerCase()
-        return (
-          p.address.toLowerCase().includes(query) ||
-          p.city.toLowerCase().includes(query) ||
-          p.state.toLowerCase().includes(query) ||
-          p.zip.toLowerCase().includes(query)
-        )
-      })
-  }, [properties, customerId, propertySearch])
-
-  const workflows = useMemo(() => {
-    const set = new Set<string>()
-    services.forEach((service) => {
-      if (service.isSequential && service.workflowGroup) set.add(service.workflowGroup)
-    })
-    return ['ALL', ...Array.from(set).sort()]
-  }, [services])
+    return properties.filter((p) => p.customerId === customerId)
+  }, [properties, customerId])
 
   const customerWorkflowProgress = useMemo(() => {
     const progress = new Map<string, number>()
@@ -162,28 +139,13 @@ export default function NewTaskPage() {
 
   const filteredServices = useMemo(() => {
     return services.filter((service) => {
-      const query = serviceSearch.trim().toLowerCase()
-      if (query) {
-        const matchesQuery =
-          service.name.toLowerCase().includes(query) ||
-          (service.description || '').toLowerCase().includes(query)
-        if (!matchesQuery) return false
-      }
-
-      if (serviceTypeFilter === 'SEQUENTIAL' && !service.isSequential) return false
-      if (serviceTypeFilter === 'INDEPENDENT' && service.isSequential) return false
-
-      if (workflowFilter !== 'ALL') {
-        if (!service.isSequential || service.workflowGroup !== workflowFilter) return false
-      }
-
       if (!service.isSequential) return true
       if (!service.workflowGroup || !service.stepOrder) return false
 
       const expectedStep = (customerWorkflowProgress.get(service.workflowGroup) || 0) + 1
       return service.stepOrder === expectedStep
     })
-  }, [services, serviceSearch, serviceTypeFilter, workflowFilter, customerWorkflowProgress])
+  }, [services, customerWorkflowProgress])
 
   const workflowNextSteps = useMemo(() => {
     if (!customerId) return []
@@ -217,6 +179,13 @@ export default function NewTaskPage() {
       setPropertyId('')
     }
   }, [filteredProperties, propertyId])
+
+  useEffect(() => {
+    if (!customerId) return
+    if (filteredProperties.length === 1) {
+      setPropertyId(filteredProperties[0].id)
+    }
+  }, [customerId, filteredProperties])
 
   useEffect(() => {
     if (serviceId && !filteredServices.find((service) => service.id === serviceId)) {
@@ -423,15 +392,6 @@ export default function NewTaskPage() {
 
               <div>
                 <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '8px', fontWeight: 700 }}>Property</label>
-                <input
-                  type="text"
-                  className="kline-input"
-                  value={propertySearch}
-                  onChange={(e) => setPropertySearch(e.target.value)}
-                  placeholder="Filter properties by address/city"
-                  style={{ marginBottom: 8 }}
-                  disabled={!customerId}
-                />
                 <select
                   className="kline-input"
                   value={propertyId}
@@ -448,43 +408,15 @@ export default function NewTaskPage() {
                     </option>
                   ))}
                 </select>
+                {customerId && filteredProperties.length === 1 && (
+                  <div style={{ marginTop: 6, color: 'var(--kline-text-light)', fontSize: '0.8rem' }}>
+                    Property auto-selected for this customer.
+                  </div>
+                )}
               </div>
 
               <div style={{ minWidth: 0 }}>
                 <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '8px', fontWeight: 700 }}>Service</label>
-                <div className="service-filter-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8, marginBottom: 8 }}>
-                  <input
-                    type="text"
-                    className="kline-input"
-                    value={serviceSearch}
-                    onChange={(e) => setServiceSearch(e.target.value)}
-                    placeholder="Search service..."
-                    style={{ gridColumn: '1 / -1', minWidth: 0 }}
-                  />
-                  <select
-                    className="kline-input"
-                    value={serviceTypeFilter}
-                    onChange={(e) => setServiceTypeFilter(e.target.value as 'ALL' | 'SEQUENTIAL' | 'INDEPENDENT')}
-                    style={{ minWidth: 0 }}
-                  >
-                    <option value="ALL">All types</option>
-                    <option value="SEQUENTIAL">Sequential</option>
-                    <option value="INDEPENDENT">Independent</option>
-                  </select>
-                  <select
-                    className="kline-input"
-                    value={workflowFilter}
-                    onChange={(e) => setWorkflowFilter(e.target.value)}
-                    disabled={workflows.length <= 1}
-                    style={{ minWidth: 0 }}
-                  >
-                    {workflows.map((workflow) => (
-                      <option key={workflow} value={workflow}>
-                        {workflow === 'ALL' ? 'All workflows' : workflow}
-                      </option>
-                    ))}
-                  </select>
-                </div>
                 <select
                   className="kline-input"
                   value={serviceId}
@@ -622,11 +554,6 @@ export default function NewTaskPage() {
         @keyframes spin {
           0% { transform: rotate(0deg); }
           100% { transform: rotate(360deg); }
-        }
-        @media (max-width: 980px) {
-          .service-filter-grid {
-            grid-template-columns: 1fr !important;
-          }
         }
       `}</style>
     </div>
