@@ -9,15 +9,15 @@ const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient }
 const prisma = globalForPrisma.prisma ?? new PrismaClient()
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma
 
-function validateSequentialTransition(
-  currentStatus: {
+function validateSequentialServiceTransition(
+  currentService: {
     id: string
     name: string
     isSequential: boolean
     workflowGroup: string | null
     stepOrder: number | null
   },
-  targetStatus: {
+  targetService: {
     id: string
     name: string
     isSequential: boolean
@@ -25,26 +25,26 @@ function validateSequentialTransition(
     stepOrder: number | null
   }
 ): string | null {
-  if (!targetStatus.isSequential) return null
-  if (!targetStatus.workflowGroup || targetStatus.stepOrder === null) {
-    return `Status "${targetStatus.name}" is misconfigured. Missing workflowGroup or stepOrder.`
+  if (!targetService.isSequential) return null
+  if (!targetService.workflowGroup || targetService.stepOrder === null) {
+    return `Service "${targetService.name}" is misconfigured. Missing workflowGroup or stepOrder.`
   }
 
-  if (currentStatus.id === targetStatus.id) return null
+  if (currentService.id === targetService.id) return null
 
   if (
-    currentStatus.isSequential &&
-    currentStatus.workflowGroup === targetStatus.workflowGroup &&
-    currentStatus.stepOrder !== null
+    currentService.isSequential &&
+    currentService.workflowGroup === targetService.workflowGroup &&
+    currentService.stepOrder !== null
   ) {
-    if (targetStatus.stepOrder !== currentStatus.stepOrder + 1) {
-      return `Invalid sequence transition. You can only move from step ${currentStatus.stepOrder} to step ${currentStatus.stepOrder + 1}.`
+    if (targetService.stepOrder !== currentService.stepOrder + 1) {
+      return `Invalid service sequence transition. You can only move from step ${currentService.stepOrder} to step ${currentService.stepOrder + 1}.`
     }
     return null
   }
 
-  if (targetStatus.stepOrder !== 1) {
-    return `Workflow "${targetStatus.workflowGroup}" must start at step 1.`
+  if (targetService.stepOrder !== 1) {
+    return `Service workflow "${targetService.workflowGroup}" must start at step 1.`
   }
 
   return null
@@ -79,6 +79,23 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "Task not found" }, { status: 404 })
     }
 
+    const newService = await prisma.service.findUnique({
+      where: { id: serviceId },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        clientMessage: true,
+        isSequential: true,
+        workflowGroup: true,
+        stepOrder: true,
+      },
+    })
+
+    if (!newService) {
+      return NextResponse.json({ error: "Service not found" }, { status: 400 })
+    }
+
     const newStatus = await prisma.taskStatus.findUnique({
       where: { id: statusId },
       select: {
@@ -96,15 +113,15 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "Status not found" }, { status: 400 })
     }
 
-    const sequenceError = validateSequentialTransition(
+    const sequenceError = validateSequentialServiceTransition(
       {
-        id: existingTask.status.id,
-        name: existingTask.status.name,
-        isSequential: existingTask.status.isSequential,
-        workflowGroup: existingTask.status.workflowGroup,
-        stepOrder: existingTask.status.stepOrder,
+        id: existingTask.service.id,
+        name: existingTask.service.name,
+        isSequential: existingTask.service.isSequential,
+        workflowGroup: existingTask.service.workflowGroup,
+        stepOrder: existingTask.service.stepOrder,
       },
-      newStatus
+      newService
     )
 
     if (sequenceError) {
@@ -178,7 +195,7 @@ export async function PUT(request: NextRequest) {
           existingTask.customer.fullName,
           task.service.name,
           task.service.description || null,
-          newStatus.clientMessage || null
+          task.service.clientMessage || null
         )
 
         notificationPromises.push(sendSMS(existingTask.customer.phone, smsText))

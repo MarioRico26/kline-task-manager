@@ -48,12 +48,18 @@ model Service {
   id          String   @id @default(uuid())
   name        String
   description String?
+  clientMessage String?
+  isSequential Boolean  @default(false)
+  workflowGroup String?
+  stepOrder     Int?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   createdBy   String?
   updatedBy   String?
 
   tasks Task[]
+
+  @@unique([workflowGroup, stepOrder])
 }
 
 model TaskStatus {

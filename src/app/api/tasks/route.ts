@@ -102,17 +102,17 @@ export async function POST(request: Request) {
       )
     }
 
-    if (status.isSequential) {
-      if (!status.workflowGroup || status.stepOrder === null) {
+    if (service.isSequential) {
+      if (!service.workflowGroup || service.stepOrder === null) {
         return NextResponse.json(
-          { error: `Status "${status.name}" is misconfigured for sequential workflow.` },
+          { error: `Service "${service.name}" is misconfigured for sequential workflow.` },
           { status: 400 }
         )
       }
 
-      if (status.stepOrder !== 1) {
+      if (service.stepOrder !== 1) {
         return NextResponse.json(
-          { error: `Sequential workflow "${status.workflowGroup}" must start at step 1.` },
+          { error: `Sequential workflow "${service.workflowGroup}" must start at step 1.` },
           { status: 400 }
         )
       }
@@ -165,7 +165,7 @@ export async function POST(request: Request) {
         customer.fullName,
         service.name,
         service.description || null,
-        status.clientMessage || null,
+        service.clientMessage || null,
       )
 
       const notificationPromises: Promise<unknown>[] = []

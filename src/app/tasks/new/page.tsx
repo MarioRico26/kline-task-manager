@@ -26,6 +26,10 @@ interface ServiceItem {
   id: string
   name: string
   description?: string | null
+  clientMessage?: string | null
+  isSequential?: boolean
+  workflowGroup?: string | null
+  stepOrder?: number | null
 }
 
 interface StatusItem {
@@ -84,9 +88,9 @@ export default function NewTaskPage() {
         setProperties(pData)
         setServices(sData)
         setStatuses(stData)
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('❌ New Task load error:', err)
-        setErrorMsg(err?.message || 'Failed to load form data')
+        setErrorMsg(err instanceof Error ? err.message : 'Failed to load form data')
       } finally {
         setLoading(false)
       }
@@ -139,9 +143,9 @@ export default function NewTaskPage() {
       }
 
       router.push('/tasks')
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('❌ Task create error:', err)
-      setSubmitError(err?.message || 'Failed to create task')
+      setSubmitError(err instanceof Error ? err.message : 'Failed to create task')
     } finally {
       setSubmitting(false)
     }
@@ -326,6 +330,7 @@ export default function NewTaskPage() {
                   {services.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.name}
+                      {s.isSequential && s.workflowGroup && s.stepOrder ? ` (${s.workflowGroup} #${s.stepOrder})` : ''}
                     </option>
                   ))}
                 </select>
