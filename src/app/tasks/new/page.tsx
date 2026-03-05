@@ -55,6 +55,11 @@ function normalizeWorkflowKey(value?: string | null) {
   return (value || '').trim().toLowerCase()
 }
 
+type WorkflowDefinition = {
+  label: string
+  services: ServiceItem[]
+}
+
 export default function NewTaskPage() {
   const router = useRouter()
   const [customers, setCustomers] = useState<CustomerItem[]>([])
@@ -146,6 +151,46 @@ export default function NewTaskPage() {
     return progress
   }, [tasksHistory, customerId, propertyId])
 
+  const workflowDefinitions = useMemo(() => {
+    const grouped = new Map<string, WorkflowDefinition>()
+
+    services.forEach((service) => {
+      if (!service.isSequential || !service.stepOrder) return
+      const groupKey = normalizeWorkflowKey(service.workflowGroup)
+      if (!groupKey) return
+
+      const existing = grouped.get(groupKey)
+      if (existing) {
+        existing.services.push(service)
+      } else {
+        grouped.set(groupKey, {
+          label: (service.workflowGroup || '').trim() || groupKey,
+          services: [service],
+        })
+      }
+    })
+
+    grouped.forEach((definition) => {
+      definition.services.sort((a, b) => (a.stepOrder || 0) - (b.stepOrder || 0))
+    })
+
+    return grouped
+  }, [services])
+
+  const nextStepByWorkflow = useMemo(() => {
+    const nextSteps = new Map<string, number | null>()
+
+    workflowDefinitions.forEach((definition, workflowKey) => {
+      const currentMaxStep = customerWorkflowProgress.get(workflowKey) || 0
+      const nextService = definition.services.find(
+        (service) => (service.stepOrder || 0) > currentMaxStep
+      )
+      nextSteps.set(workflowKey, nextService?.stepOrder || null)
+    })
+
+    return nextSteps
+  }, [workflowDefinitions, customerWorkflowProgress])
+
   const filteredServices = useMemo(() => {
     return services.filter((service) => {
       if (!service.isSequential) return true
@@ -155,46 +200,32 @@ export default function NewTaskPage() {
       const groupKey = normalizeWorkflowKey(service.workflowGroup)
       if (!groupKey) return false
 
-      const expectedStep = (customerWorkflowProgress.get(groupKey) || 0) + 1
-      return service.stepOrder === expectedStep
+      const nextStep = nextStepByWorkflow.get(groupKey)
+      if (nextStep === null || nextStep === undefined) return false
+      return service.stepOrder === nextStep
     })
-  }, [services, propertyId, customerWorkflowProgress])
+  }, [services, propertyId, nextStepByWorkflow])
 
   const workflowNextSteps = useMemo(() => {
     if (!customerId || !propertyId) return []
 
-    const grouped = new Map<string, { label: string; services: ServiceItem[] }>()
-    services.forEach((service) => {
-      if (!service.isSequential || !service.stepOrder) return
-      const groupKey = normalizeWorkflowKey(service.workflowGroup)
-      if (!groupKey) return
-
-      const current = grouped.get(groupKey)
-      if (current) {
-        current.services.push(service)
-      } else {
-        grouped.set(groupKey, {
-          label: (service.workflowGroup || '').trim(),
-          services: [service],
-        })
-      }
-    })
-
-    return Array.from(grouped.entries())
-      .map(([groupKey, groupData]) => {
-        const sorted = [...groupData.services].sort((a, b) => (a.stepOrder || 0) - (b.stepOrder || 0))
-        const expectedStep = (customerWorkflowProgress.get(groupKey) || 0) + 1
-        const nextService = sorted.find((service) => service.stepOrder === expectedStep)
+    return Array.from(workflowDefinitions.entries())
+      .map(([groupKey, definition]) => {
+        const nextStep = nextStepByWorkflow.get(groupKey) || null
+        const nextService =
+          nextStep === null
+            ? null
+            : definition.services.find((service) => service.stepOrder === nextStep)
 
         return {
-          group: groupData.label || groupKey,
-          expectedStep,
+          group: definition.label || groupKey,
+          expectedStep: nextStep,
           nextServiceName: nextService?.name || null,
-          isComplete: !nextService,
+          isComplete: nextStep === null,
         }
       })
       .sort((a, b) => a.group.localeCompare(b.group))
-  }, [customerId, propertyId, services, customerWorkflowProgress])
+  }, [customerId, propertyId, workflowDefinitions, nextStepByWorkflow])
 
   useEffect(() => {
     if (propertyId && !filteredProperties.find((p) => p.id === propertyId)) {
@@ -473,7 +504,7 @@ export default function NewTaskPage() {
                       >
                         {item.isComplete
                           ? `${item.group}: completed`
-                          : `${item.group}: next ${item.nextServiceName || `step ${item.expectedStep}`}`}
+                          : `${item.group}: next ${item.nextServiceName || `step ${item.expectedStep ?? ''}`}`}
                       </span>
                     ))}
                   </div>

@@ -58,7 +58,11 @@ async function getDefaultCompletedStatusId() {
   return completed?.id || null
 }
 
-async function getExpectedSequentialStep(customerId: string, propertyId: string, workflowGroup: string) {
+async function getNextSequentialStep(
+  customerId: string,
+  propertyId: string,
+  workflowGroup: string
+) {
   const normalizedWorkflowGroup = normalizeWorkflowGroup(workflowGroup)
 
   const previousTasks = await prisma.task.findMany({
@@ -79,12 +83,27 @@ async function getExpectedSequentialStep(customerId: string, propertyId: string,
     },
   })
 
-  const maxStep = previousTasks.reduce((max, task) => {
+  const completedMaxStep = previousTasks.reduce((max, task) => {
     const step = task.service.stepOrder || 0
     return step > max ? step : max
   }, 0)
 
-  return maxStep + 1
+  const nextService = await prisma.service.findFirst({
+    where: {
+      isSequential: true,
+      workflowGroup: { equals: normalizedWorkflowGroup, mode: 'insensitive' },
+      stepOrder: { gt: completedMaxStep },
+    },
+    orderBy: { stepOrder: 'asc' },
+    select: { stepOrder: true, name: true },
+  })
+
+  if (!nextService?.stepOrder) return null
+
+  return {
+    stepOrder: nextService.stepOrder,
+    name: nextService.name,
+  }
 }
 
 export async function POST(request: Request) {
@@ -151,22 +170,19 @@ export async function POST(request: Request) {
       }
 
       const normalizedWorkflowGroup = normalizeWorkflowGroup(service.workflowGroup)
-      const expectedStep = await getExpectedSequentialStep(customerId, propertyId, normalizedWorkflowGroup)
+      const nextStep = await getNextSequentialStep(customerId, propertyId, normalizedWorkflowGroup)
 
-      if (service.stepOrder !== expectedStep) {
-        const expectedService = await prisma.service.findFirst({
-          where: {
-            workflowGroup: { equals: normalizedWorkflowGroup, mode: 'insensitive' },
-            stepOrder: expectedStep,
-          },
-          select: { name: true },
-        })
+      if (!nextStep) {
+        return NextResponse.json(
+          { error: `This customer/property already finished available steps for "${service.workflowGroup}".` },
+          { status: 400 }
+        )
+      }
 
+      if (service.stepOrder !== nextStep.stepOrder) {
         return NextResponse.json(
           {
-            error: expectedService
-              ? `Before "${service.name}", you need to complete "${expectedService.name}" (step ${expectedStep}) first.`
-              : `This customer/property already finished available steps for "${service.workflowGroup}".`,
+            error: `Before "${service.name}", you need to complete "${nextStep.name}" (step ${nextStep.stepOrder}) first.`,
           },
           { status: 400 }
         )
