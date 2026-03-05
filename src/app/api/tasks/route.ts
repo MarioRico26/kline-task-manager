@@ -7,6 +7,10 @@ import { formatPhone } from '@/lib/formatPhone'
 
 const prisma = new PrismaClient()
 
+function normalizeWorkflowGroup(value: string) {
+  return value.trim().toLowerCase()
+}
+
 export async function GET() {
   try {
     console.log('🔄 Fetching tasks from database...')
@@ -55,13 +59,15 @@ async function getDefaultCompletedStatusId() {
 }
 
 async function getExpectedSequentialStep(customerId: string, propertyId: string, workflowGroup: string) {
+  const normalizedWorkflowGroup = normalizeWorkflowGroup(workflowGroup)
+
   const previousTasks = await prisma.task.findMany({
     where: {
       customerId,
       propertyId,
       service: {
         isSequential: true,
-        workflowGroup,
+        workflowGroup: { equals: normalizedWorkflowGroup, mode: 'insensitive' },
       },
     },
     select: {
@@ -144,12 +150,13 @@ export async function POST(request: Request) {
         )
       }
 
-      const expectedStep = await getExpectedSequentialStep(customerId, propertyId, service.workflowGroup)
+      const normalizedWorkflowGroup = normalizeWorkflowGroup(service.workflowGroup)
+      const expectedStep = await getExpectedSequentialStep(customerId, propertyId, normalizedWorkflowGroup)
 
       if (service.stepOrder !== expectedStep) {
         const expectedService = await prisma.service.findFirst({
           where: {
-            workflowGroup: service.workflowGroup,
+            workflowGroup: { equals: normalizedWorkflowGroup, mode: 'insensitive' },
             stepOrder: expectedStep,
           },
           select: { name: true },

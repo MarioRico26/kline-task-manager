@@ -51,6 +51,10 @@ interface TaskHistoryItem {
   }
 }
 
+function normalizeWorkflowKey(value?: string | null) {
+  return (value || '').trim().toLowerCase()
+}
+
 export default function NewTaskPage() {
   const router = useRouter()
   const [customers, setCustomers] = useState<CustomerItem[]>([])
@@ -128,11 +132,14 @@ export default function NewTaskPage() {
       if (task.customer?.id !== customerId) return
       if (task.property?.id !== propertyId) return
       if (!task.service?.isSequential) return
-      if (!task.service.workflowGroup || !task.service.stepOrder) return
+      if (!task.service.stepOrder) return
 
-      const currentMax = progress.get(task.service.workflowGroup) || 0
+      const groupKey = normalizeWorkflowKey(task.service.workflowGroup)
+      if (!groupKey) return
+
+      const currentMax = progress.get(groupKey) || 0
       if (task.service.stepOrder > currentMax) {
-        progress.set(task.service.workflowGroup, task.service.stepOrder)
+        progress.set(groupKey, task.service.stepOrder)
       }
     })
 
@@ -142,10 +149,13 @@ export default function NewTaskPage() {
   const filteredServices = useMemo(() => {
     return services.filter((service) => {
       if (!service.isSequential) return true
-      if (!service.workflowGroup || !service.stepOrder) return false
+      if (!service.stepOrder) return false
       if (!propertyId) return false
 
-      const expectedStep = (customerWorkflowProgress.get(service.workflowGroup) || 0) + 1
+      const groupKey = normalizeWorkflowKey(service.workflowGroup)
+      if (!groupKey) return false
+
+      const expectedStep = (customerWorkflowProgress.get(groupKey) || 0) + 1
       return service.stepOrder === expectedStep
     })
   }, [services, propertyId, customerWorkflowProgress])
@@ -153,22 +163,31 @@ export default function NewTaskPage() {
   const workflowNextSteps = useMemo(() => {
     if (!customerId || !propertyId) return []
 
-    const grouped = new Map<string, ServiceItem[]>()
+    const grouped = new Map<string, { label: string; services: ServiceItem[] }>()
     services.forEach((service) => {
-      if (!service.isSequential || !service.workflowGroup || !service.stepOrder) return
-      const list = grouped.get(service.workflowGroup) || []
-      list.push(service)
-      grouped.set(service.workflowGroup, list)
+      if (!service.isSequential || !service.stepOrder) return
+      const groupKey = normalizeWorkflowKey(service.workflowGroup)
+      if (!groupKey) return
+
+      const current = grouped.get(groupKey)
+      if (current) {
+        current.services.push(service)
+      } else {
+        grouped.set(groupKey, {
+          label: (service.workflowGroup || '').trim(),
+          services: [service],
+        })
+      }
     })
 
     return Array.from(grouped.entries())
-      .map(([group, list]) => {
-        const sorted = [...list].sort((a, b) => (a.stepOrder || 0) - (b.stepOrder || 0))
-        const expectedStep = (customerWorkflowProgress.get(group) || 0) + 1
+      .map(([groupKey, groupData]) => {
+        const sorted = [...groupData.services].sort((a, b) => (a.stepOrder || 0) - (b.stepOrder || 0))
+        const expectedStep = (customerWorkflowProgress.get(groupKey) || 0) + 1
         const nextService = sorted.find((service) => service.stepOrder === expectedStep)
 
         return {
-          group,
+          group: groupData.label || groupKey,
           expectedStep,
           nextServiceName: nextService?.name || null,
           isComplete: !nextService,

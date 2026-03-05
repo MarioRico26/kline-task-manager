@@ -9,6 +9,10 @@ const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient }
 const prisma = globalForPrisma.prisma ?? new PrismaClient()
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma
 
+function normalizeWorkflowGroup(value: string | null) {
+  return (value || '').trim().toLowerCase()
+}
+
 async function validateSequentialServiceTransition(
   currentService: {
     id: string
@@ -26,22 +30,25 @@ async function validateSequentialServiceTransition(
   }
 ): Promise<string | null> {
   if (!targetService.isSequential) return null
-  if (!targetService.workflowGroup || targetService.stepOrder === null) {
+  const targetGroup = normalizeWorkflowGroup(targetService.workflowGroup)
+  if (!targetGroup || targetService.stepOrder === null) {
     return `Service "${targetService.name}" is misconfigured. Missing workflowGroup or stepOrder.`
   }
 
   if (currentService.id === targetService.id) return null
 
+  const currentGroup = normalizeWorkflowGroup(currentService.workflowGroup)
+
   if (
     currentService.isSequential &&
-    currentService.workflowGroup === targetService.workflowGroup &&
+    currentGroup === targetGroup &&
     currentService.stepOrder !== null
   ) {
     const expectedStep = currentService.stepOrder + 1
     if (targetService.stepOrder !== expectedStep) {
       const expectedService = await prisma.service.findFirst({
         where: {
-          workflowGroup: targetService.workflowGroup,
+          workflowGroup: { equals: targetGroup, mode: 'insensitive' },
           stepOrder: expectedStep,
         },
         select: { name: true },
@@ -59,7 +66,7 @@ async function validateSequentialServiceTransition(
   if (targetService.stepOrder !== 1) {
     const firstStepService = await prisma.service.findFirst({
       where: {
-        workflowGroup: targetService.workflowGroup,
+        workflowGroup: { equals: targetGroup, mode: 'insensitive' },
         stepOrder: 1,
       },
       select: { name: true },
