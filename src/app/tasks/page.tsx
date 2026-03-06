@@ -89,19 +89,25 @@ type CaseItem = {
 
 type PermitStageStatus = 'COMPLETED' | 'IN_PROGRESS' | 'NOT_STARTED'
 
-type PermitStageCase = {
+type PermitWorkflowCase = {
   caseKey: string
   customerId: string
   propertyId: string
   customerName: string
   propertyLabel: string
-  stageOrder: number
-  stageName: string
-  stageServiceId: string
-  stageTaskId: string | null
-  status: PermitStageStatus
-  currentStageOrder: number
-  currentStageLabel: string
+  currentStepOrder: number
+  currentStepName: string
+  currentStepServiceId: string
+  currentStepTaskId: string | null
+  currentStepStatus: PermitStageStatus
+  completedSteps: number
+  totalSteps: number
+  progressPercent: number
+}
+
+type PermitStageCaseAction = {
+  stageCase: PermitWorkflowCase
+  actionStatus: PermitStageStatus
 }
 
 type PermitStageSummary = {
@@ -110,10 +116,7 @@ type PermitStageSummary = {
   color: string
   totalCases: number
   activeCasesCount: number
-  completedCount: number
-  inProgressCount: number
-  notStartedCount: number
-  cases: PermitStageCase[]
+  cases: PermitWorkflowCase[]
 }
 
 function normalizeWorkflow(value?: string | null) {
@@ -465,12 +468,10 @@ export default function TasksPage() {
     return cases.sort((a, b) => a.customerName.localeCompare(b.customerName))
   }, [searchFilteredTasks, sequentialCatalogByWorkflow, scheduleFilter, serviceFilter, statusFilter])
 
-  const permitStageSummaries = useMemo<PermitStageSummary[]>(() => {
-    const stageColors = ['#e30613', '#fd7e14', '#f4b400', '#20c997', '#0d6efd', '#6f42c1']
+  const permitWorkflowCases = useMemo<PermitWorkflowCase[]>(() => {
     const permitSteps = services
       .filter((service) => service.isSequential && service.stepOrder !== null && isPermitsWorkflowLabel(service.workflowGroup || service.name))
       .sort((a, b) => (a.stepOrder || 0) - (b.stepOrder || 0))
-
     if (permitSteps.length === 0) return []
 
     const permitTasks = searchFilteredTasks.filter(
@@ -489,17 +490,7 @@ export default function TasksPage() {
       permitCases.get(key)?.push(task)
     })
 
-    const summaries = permitSteps.map((step) => ({
-      stepOrder: step.stepOrder as number,
-      stepName: step.name,
-      color: stageColors[(step.stepOrder as number - 1) % stageColors.length],
-      totalCases: permitCases.size,
-      activeCasesCount: 0,
-      completedCount: 0,
-      inProgressCount: 0,
-      notStartedCount: 0,
-      cases: [] as PermitStageCase[],
-    }))
+    const mappedCases: PermitWorkflowCase[] = []
 
     permitCases.forEach((caseTasks, caseKey) => {
       const firstTask = caseTasks[0]
@@ -521,53 +512,74 @@ export default function TasksPage() {
         statusesByStepOrder.set(permitStep.stepOrder as number, status)
       })
 
+      const completedSteps = Array.from(statusesByStepOrder.values()).filter((value) => value === 'COMPLETED').length
+      const totalSteps = permitSteps.length
+      const progressPercent = Math.round((completedSteps / totalSteps) * 100)
+
       const currentStage =
         permitSteps.find((permitStep) => statusesByStepOrder.get(permitStep.stepOrder as number) === 'IN_PROGRESS') ||
         permitSteps.find((permitStep) => statusesByStepOrder.get(permitStep.stepOrder as number) === 'NOT_STARTED') ||
         permitSteps[permitSteps.length - 1]
 
-      const currentStageOrder = currentStage?.stepOrder as number
-      const currentStageLabel = `Step ${currentStageOrder}: ${currentStage?.name || 'Unknown'}`
-
-      summaries.forEach((summary) => {
-        const permitService = permitSteps.find((step) => step.stepOrder === summary.stepOrder)
-        if (!permitService) return
-
-        const status = statusesByStepOrder.get(summary.stepOrder) || 'NOT_STARTED'
-        const taskForStage = latestTaskByServiceId.get(permitService.id)
-
-        if (status === 'COMPLETED') summary.completedCount += 1
-        if (status === 'IN_PROGRESS') summary.inProgressCount += 1
-        if (status === 'NOT_STARTED') summary.notStartedCount += 1
-        if (summary.stepOrder === currentStageOrder) summary.activeCasesCount += 1
-
-        summary.cases.push({
-          caseKey,
-          customerId: firstTask.customer?.id || '',
-          propertyId: firstTask.property?.id || '',
-          customerName: firstTask.customer?.fullName || 'Unknown customer',
-          propertyLabel: firstTask.property
-            ? `${firstTask.property.address} · ${firstTask.property.city}, ${firstTask.property.state}`
-            : 'No property assigned',
-          stageOrder: summary.stepOrder,
-          stageName: summary.stepName,
-          stageServiceId: permitService.id,
-          stageTaskId: taskForStage?.id || null,
-          status,
-          currentStageOrder,
-          currentStageLabel,
-        })
+      mappedCases.push({
+        caseKey,
+        customerId: firstTask.customer?.id || '',
+        propertyId: firstTask.property?.id || '',
+        customerName: firstTask.customer?.fullName || 'Unknown customer',
+        propertyLabel: firstTask.property
+          ? `${firstTask.property.address} · ${firstTask.property.city}, ${firstTask.property.state}`
+          : 'No property assigned',
+        currentStepOrder: currentStage.stepOrder as number,
+        currentStepName: currentStage.name,
+        currentStepServiceId: currentStage.id,
+        currentStepTaskId: latestTaskByServiceId.get(currentStage.id)?.id || null,
+        currentStepStatus: statusesByStepOrder.get(currentStage.stepOrder as number) || 'NOT_STARTED',
+        completedSteps,
+        totalSteps,
+        progressPercent,
       })
     })
 
-    return summaries
+    return mappedCases.sort((a, b) => a.customerName.localeCompare(b.customerName))
   }, [scheduleFilter, searchFilteredTasks, services])
+
+  const permitStageSummaries = useMemo<PermitStageSummary[]>(() => {
+    const stageColors = ['#e30613', '#fd7e14', '#f4b400', '#20c997', '#0d6efd', '#6f42c1']
+    const permitSteps = services
+      .filter((service) => service.isSequential && service.stepOrder !== null && isPermitsWorkflowLabel(service.workflowGroup || service.name))
+      .sort((a, b) => (a.stepOrder || 0) - (b.stepOrder || 0))
+    if (permitSteps.length === 0) return []
+
+    return permitSteps.map((step) => {
+      const stageCases = permitWorkflowCases.filter((item) => item.currentStepOrder === step.stepOrder)
+      return {
+        stepOrder: step.stepOrder as number,
+        stepName: step.name,
+        color: stageColors[(step.stepOrder as number - 1) % stageColors.length],
+        totalCases: permitWorkflowCases.length,
+        activeCasesCount: stageCases.length,
+        cases: stageCases,
+      }
+    })
+  }, [permitWorkflowCases, services])
 
   const activePermitStage = useMemo(() => {
     if (permitStageSummaries.length === 0) return null
     const selected = permitStageSummaries.find((stage) => stage.stepOrder === selectedPermitStage)
     return selected || permitStageSummaries[0]
   }, [permitStageSummaries, selectedPermitStage])
+
+  const activePermitStageActions = useMemo<PermitStageCaseAction[]>(() => {
+    if (!activePermitStage) return []
+
+    return activePermitStage.cases.map((stageCase) => {
+      const actionStatus = stageCase.currentStepStatus
+      return {
+        stageCase,
+        actionStatus,
+      }
+    })
+  }, [activePermitStage])
 
   useEffect(() => {
     if (permitStageSummaries.length === 0) {
@@ -631,7 +643,7 @@ export default function TasksPage() {
     }
   }
 
-  const handleStartSpecificStage = async (item: PermitStageCase) => {
+  const handleStartSpecificStage = async (item: PermitWorkflowCase) => {
     if (!inProgressStatusId) {
       setErrorMsg('Status "In Progress" (or "Open") is required to start the next stage.')
       return
@@ -642,7 +654,7 @@ export default function TasksPage() {
       const formData = new FormData()
       formData.set('customerId', item.customerId)
       formData.set('propertyId', item.propertyId)
-      formData.set('serviceId', item.stageServiceId)
+      formData.set('serviceId', item.currentStepServiceId)
       formData.set('statusId', inProgressStatusId)
 
       const response = await fetch('/api/tasks', {
@@ -665,11 +677,11 @@ export default function TasksPage() {
     }
   }
 
-  const handleAdvanceCase = async (item: PermitStageCase) => {
-    if (item.status === 'COMPLETED') return
+  const handleAdvanceCase = async (item: PermitWorkflowCase) => {
+    if (item.currentStepStatus === 'COMPLETED') return
 
-    if (item.stageTaskId) {
-      const task = taskById.get(item.stageTaskId)
+    if (item.currentStepTaskId) {
+      const task = taskById.get(item.currentStepTaskId)
       if (!task) {
         setErrorMsg('Could not find the task for this stage. Please refresh and try again.')
         return
@@ -683,9 +695,9 @@ export default function TasksPage() {
       return
     }
 
-    const canStartStage = item.status === 'NOT_STARTED' && item.stageOrder === item.currentStageOrder
+    const canStartStage = item.currentStepStatus === 'NOT_STARTED'
     if (!canStartStage) {
-      setErrorMsg(`This stage cannot be started yet. Current stage is ${item.currentStageLabel}.`)
+      setErrorMsg(`This stage cannot be started yet. Current stage is Step ${item.currentStepOrder}: ${item.currentStepName}.`)
       return
     }
 
@@ -1122,29 +1134,68 @@ export default function TasksPage() {
                         Detail · Step {activePermitStage.stepOrder}: {activePermitStage.stepName}
                       </div>
 
-                      <div style={{ padding: 14 }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
-                          <KanbanStageColumn
-                            title="Completed"
-                            color="#198754"
-                            items={activePermitStage.cases.filter((item) => item.status === 'COMPLETED')}
-                            processingCaseKey={processingCaseKey}
-                            onAdvanceCase={handleAdvanceCase}
-                          />
-                          <KanbanStageColumn
-                            title="In Progress"
-                            color="#fd7e14"
-                            items={activePermitStage.cases.filter((item) => item.status === 'IN_PROGRESS')}
-                            processingCaseKey={processingCaseKey}
-                            onAdvanceCase={handleAdvanceCase}
-                          />
-                          <KanbanStageColumn
-                            title="Not Started"
-                            color="#6c757d"
-                            items={activePermitStage.cases.filter((item) => item.status === 'NOT_STARTED')}
-                            processingCaseKey={processingCaseKey}
-                            onAdvanceCase={handleAdvanceCase}
-                          />
+                      <div style={{ padding: 14, display: 'grid', gap: 14 }}>
+                        {activePermitStage.cases.length === 0 ? (
+                          <div style={{ color: 'var(--kline-text-light)', fontWeight: 700 }}>No active cases in this stage.</div>
+                        ) : (
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 10 }}>
+                            {activePermitStageActions.map(({ stageCase }) => (
+                              <article key={`${activePermitStage.stepOrder}-${stageCase.caseKey}`} style={{ border: '1px solid var(--kline-gray)', borderRadius: 12, padding: 10 }}>
+                                <div style={{ fontWeight: 900, color: 'var(--kline-text)', fontSize: '0.86rem' }}>{stageCase.customerName}</div>
+                                <div style={{ marginTop: 2, color: 'var(--kline-text-light)', fontSize: '0.78rem' }}>{stageCase.propertyLabel}</div>
+                                <div style={{ marginTop: 6, color: 'var(--kline-text-light)', fontSize: '0.75rem', fontWeight: 700 }}>
+                                  Progress: {stageCase.completedSteps}/{stageCase.totalSteps} · {stageCase.progressPercent}%
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleAdvanceCase(stageCase)}
+                                  disabled={stageCase.currentStepStatus === 'COMPLETED' || processingCaseKey === stageCase.caseKey}
+                                  style={{
+                                    marginTop: 8,
+                                    border: '1px solid var(--kline-red)',
+                                    background: '#fff',
+                                    color: 'var(--kline-red)',
+                                    borderRadius: 999,
+                                    padding: '5px 9px',
+                                    fontWeight: 800,
+                                    fontSize: '0.72rem',
+                                    cursor:
+                                      stageCase.currentStepStatus === 'COMPLETED' || processingCaseKey === stageCase.caseKey
+                                        ? 'not-allowed'
+                                        : 'pointer',
+                                    opacity:
+                                      stageCase.currentStepStatus === 'COMPLETED' || processingCaseKey === stageCase.caseKey
+                                        ? 0.6
+                                        : 1,
+                                  }}
+                                >
+                                  {processingCaseKey === stageCase.caseKey
+                                    ? 'Processing...'
+                                    : stageCase.currentStepStatus === 'IN_PROGRESS'
+                                      ? 'Complete & trigger next'
+                                      : stageCase.currentStepStatus === 'NOT_STARTED'
+                                        ? 'Start stage'
+                                        : 'Completed'}
+                                </button>
+                              </article>
+                            ))}
+                          </div>
+                        )}
+
+                        <div>
+                          <div style={{ fontWeight: 900, color: 'var(--kline-text)', marginBottom: 8 }}>Workflow Board</div>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: 12 }}>
+                            {permitStageSummaries.map((stage) => (
+                              <KanbanStageColumn
+                                key={stage.stepOrder}
+                                title={`Step ${stage.stepOrder}: ${stage.stepName}`}
+                                color={stage.color}
+                                items={stage.cases}
+                                processingCaseKey={processingCaseKey}
+                                onAdvanceCase={handleAdvanceCase}
+                              />
+                            ))}
+                          </div>
                         </div>
                       </div>
                     </section>
@@ -1670,9 +1721,9 @@ function KanbanStageColumn({
 }: {
   title: string
   color: string
-  items: PermitStageCase[]
+  items: PermitWorkflowCase[]
   processingCaseKey: string | null
-  onAdvanceCase: (item: PermitStageCase) => Promise<void>
+  onAdvanceCase: (item: PermitWorkflowCase) => Promise<void>
 }) {
   return (
     <div style={{ border: '1px solid var(--kline-gray)', borderRadius: 12, overflow: 'hidden', background: '#fff' }}>
@@ -1698,9 +1749,9 @@ function KanbanStageColumn({
               <div style={{ fontWeight: 900, color: 'var(--kline-text)', fontSize: '0.84rem' }}>{item.customerName}</div>
               <div style={{ marginTop: 3, color: 'var(--kline-text-light)', fontSize: '0.78rem' }}>{item.propertyLabel}</div>
               <div style={{ marginTop: 6, color: 'var(--kline-text-light)', fontSize: '0.75rem', fontWeight: 700 }}>
-                Current pipeline stage: {item.currentStageLabel}
+                Progress: {item.completedSteps}/{item.totalSteps} · {item.progressPercent}%
               </div>
-              {(item.status === 'IN_PROGRESS' || (item.status === 'NOT_STARTED' && item.stageOrder === item.currentStageOrder)) && (
+              {(item.currentStepStatus === 'IN_PROGRESS' || item.currentStepStatus === 'NOT_STARTED') && (
                 <button
                   type="button"
                   onClick={() => onAdvanceCase(item)}
@@ -1718,7 +1769,11 @@ function KanbanStageColumn({
                     opacity: processingCaseKey === item.caseKey ? 0.6 : 1,
                   }}
                 >
-                  {item.status === 'IN_PROGRESS' ? 'Complete & trigger next' : 'Start this stage'}
+                  {processingCaseKey === item.caseKey
+                    ? 'Processing...'
+                    : item.currentStepStatus === 'IN_PROGRESS'
+                      ? 'Complete & trigger next'
+                      : 'Start stage'}
                 </button>
               )}
             </article>
