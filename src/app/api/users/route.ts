@@ -8,6 +8,14 @@ const prisma = new PrismaClient()
 
 export async function GET() {
   try {
+    const sessionUser = await getSessionUser(prisma)
+    if (!sessionUser) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+    }
+    if (sessionUser.accessScope === 'PERMITS_ONLY') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
     const users = await prisma.user.findMany({
       select: {
         id: true,
@@ -42,9 +50,16 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const sessionUser = await getSessionUser(prisma)
+    if (!sessionUser) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+    }
+    if (sessionUser.accessScope === 'PERMITS_ONLY') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
     const { email, password, role, accessScope } = await request.json()
     const selectedScope: UserAccessScope = accessScope === 'PERMITS_ONLY' ? 'PERMITS_ONLY' : 'ALL'
-    const sessionUser = await getSessionUser(prisma)
 
     // Verificar si el usuario ya existe
     const existingUser = await prisma.user.findUnique({

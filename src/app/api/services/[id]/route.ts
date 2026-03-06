@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { PrismaClient } from '@prisma/client'
+import { getSessionUser } from '@/lib/sessionUser'
 
 const prisma = new PrismaClient()
 
@@ -49,11 +50,25 @@ function parseServicePayload(raw: unknown): { data?: ServicePayload; error?: str
   }
 }
 
+async function ensureManageAccess() {
+  const sessionUser = await getSessionUser(prisma)
+  if (!sessionUser) {
+    return { error: NextResponse.json({ error: 'Not authenticated' }, { status: 401 }) }
+  }
+  if (sessionUser.accessScope === 'PERMITS_ONLY') {
+    return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) }
+  }
+  return { sessionUser }
+}
+
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const access = await ensureManageAccess()
+    if ('error' in access) return access.error
+
     const { id } = await params
     const body = await request.json()
     const parsed = parseServicePayload(body)
@@ -119,6 +134,9 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const access = await ensureManageAccess()
+    if ('error' in access) return access.error
+
     const { id } = await params
 
     await prisma.service.delete({

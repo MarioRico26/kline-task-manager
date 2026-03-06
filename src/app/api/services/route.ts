@@ -53,6 +53,10 @@ function parseServicePayload(raw: unknown): { data?: ServicePayload; error?: str
 export async function GET() {
   try {
     const sessionUser = await getSessionUser(prisma)
+    if (!sessionUser) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+    }
+
     const services = await prisma.service.findMany({
       where: sessionUser?.accessScope === 'PERMITS_ONLY'
         ? {
@@ -84,6 +88,14 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const sessionUser = await getSessionUser(prisma)
+    if (!sessionUser) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+    }
+    if (sessionUser.accessScope === 'PERMITS_ONLY') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
     const body = await request.json()
     const parsed = parseServicePayload(body)
 

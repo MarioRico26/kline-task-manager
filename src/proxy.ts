@@ -26,10 +26,20 @@ export function proxy(req: NextRequest) {
   const isPermitsOnly = accessScope === 'PERMITS_ONLY'
 
   if (isPermitsOnly) {
+    const allowedUiPaths = ['/tasks', '/customers', '/properties']
+    const allowedApiPaths = [
+      '/api/auth',
+      '/api/tasks',
+      '/api/customers',
+      '/api/properties',
+      '/api/services',
+      '/api/statuses',
+    ]
+
     const allowsPath =
-      pathname.startsWith('/tasks') ||
-      pathname.startsWith('/api') ||
-      pathname.startsWith('/auth/login')
+      pathname.startsWith('/auth/login') ||
+      allowedUiPaths.some((path) => pathname.startsWith(path)) ||
+      allowedApiPaths.some((path) => pathname.startsWith(path))
 
     if (!allowsPath) {
       const tasksUrl = req.nextUrl.clone()

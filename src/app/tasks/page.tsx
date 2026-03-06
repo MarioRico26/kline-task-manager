@@ -45,9 +45,46 @@ interface StatusItem {
 
 interface ServiceStep {
   id: string
+  name: string
   isSequential: boolean
   workflowGroup: string | null
   stepOrder: number | null
+}
+
+type GroupByMode = 'NONE' | 'CUSTOMER' | 'PROPERTY' | 'CUSTOMER_PROPERTY'
+type ListViewMode = 'TASKS' | 'CASES'
+
+type TaskGroup = {
+  key: string
+  label: string
+  subtitle: string
+  tasks: TaskItem[]
+}
+
+type AccessScope = 'ALL' | 'PERMITS_ONLY'
+
+type CaseStepState = 'COMPLETED' | 'IN_PROGRESS' | 'NOT_STARTED'
+
+type CaseStep = {
+  key: string
+  name: string
+  stepOrder: number
+  status: CaseStepState
+  taskId: string | null
+}
+
+type CaseItem = {
+  key: string
+  workflow: string
+  customerName: string
+  customerContact: string
+  propertyLabel: string
+  progressPercent: number
+  completedSteps: number
+  totalSteps: number
+  currentStepLabel: string
+  nextStepLabel: string
+  steps: CaseStep[]
 }
 
 function normalizeWorkflow(value?: string | null) {
@@ -56,6 +93,12 @@ function normalizeWorkflow(value?: string | null) {
 
 function isCompletedStatusName(statusName: string) {
   return statusName.trim().toLowerCase() === 'completed'
+}
+
+function formatWorkflowLabel(value: string) {
+  const trimmed = value.trim()
+  if (!trimmed) return 'Workflow'
+  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1)
 }
 
 function fmtDate(value: string | null) {
@@ -82,7 +125,10 @@ export default function TasksPage() {
   const [statusFilter, setStatusFilter] = useState('ALL')
   const [serviceFilter, setServiceFilter] = useState('ALL')
   const [scheduleFilter, setScheduleFilter] = useState<'ALL' | 'SCHEDULED' | 'UNSCHEDULED'>('ALL')
+  const [groupBy, setGroupBy] = useState<GroupByMode>('NONE')
+  const [viewMode, setViewMode] = useState<ListViewMode>('TASKS')
   const [updatingTaskId, setUpdatingTaskId] = useState<string | null>(null)
+  const [accessScope, setAccessScope] = useState<AccessScope>('ALL')
 
   const loadTasks = async () => {
     try {
@@ -121,9 +167,27 @@ export default function TasksPage() {
     }
   }
 
+  const loadSessionScope = async () => {
+    try {
+      const response = await fetch('/api/auth/check', { cache: 'no-store' })
+      if (!response.ok) return
+      const data = (await response.json()) as { user?: { accessScope?: AccessScope } }
+      if (data.user?.accessScope) {
+        setAccessScope(data.user.accessScope)
+        if (data.user.accessScope === 'PERMITS_ONLY') {
+          setGroupBy('CUSTOMER_PROPERTY')
+          setViewMode('CASES')
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching session scope:', error)
+    }
+  }
+
   useEffect(() => {
     loadTasks()
     loadTaskCatalogs()
+    loadSessionScope()
   }, [])
 
   const statusOptions = useMemo(() => {
@@ -136,15 +200,10 @@ export default function TasksPage() {
     return ['ALL', ...Array.from(services).sort()]
   }, [tasks])
 
-  const filteredTasks = useMemo(() => {
+  const searchFilteredTasks = useMemo(() => {
     const query = search.trim().toLowerCase()
 
     return tasks.filter((task) => {
-      if (statusFilter !== 'ALL' && task.status?.name !== statusFilter) return false
-      if (serviceFilter !== 'ALL' && task.service?.name !== serviceFilter) return false
-      if (scheduleFilter === 'SCHEDULED' && !task.scheduledFor) return false
-      if (scheduleFilter === 'UNSCHEDULED' && task.scheduledFor) return false
-
       if (!query) return true
 
       const haystack = [
@@ -164,12 +223,201 @@ export default function TasksPage() {
 
       return haystack.includes(query)
     })
-  }, [tasks, search, statusFilter, serviceFilter, scheduleFilter])
+  }, [tasks, search])
+
+  const filteredTasks = useMemo(() => {
+    return searchFilteredTasks.filter((task) => {
+      if (statusFilter !== 'ALL' && task.status?.name !== statusFilter) return false
+      if (serviceFilter !== 'ALL' && task.service?.name !== serviceFilter) return false
+      if (scheduleFilter === 'SCHEDULED' && !task.scheduledFor) return false
+      if (scheduleFilter === 'UNSCHEDULED' && task.scheduledFor) return false
+      return true
+    })
+  }, [searchFilteredTasks, statusFilter, serviceFilter, scheduleFilter])
 
   const completedStatusId = useMemo(() => {
     const completed = statuses.find((status) => isCompletedStatusName(status.name))
     return completed?.id || null
   }, [statuses])
+
+  const groupedTasks = useMemo<TaskGroup[]>(() => {
+    if (groupBy === 'NONE') return []
+
+    const groups = new Map<string, TaskGroup>()
+
+    filteredTasks.forEach((task) => {
+      let key = task.id
+      let label = 'Unknown'
+      let subtitle = ''
+
+      if (groupBy === 'CUSTOMER') {
+        key = task.customer?.id || task.id
+        label = task.customer?.fullName || 'Unknown customer'
+        subtitle = task.customer?.email || task.customer?.phone || 'No contact info'
+      }
+
+      if (groupBy === 'PROPERTY') {
+        key = task.property?.id || task.id
+        label = task.property?.address || 'Unknown property'
+        subtitle = task.property
+          ? `${task.property.city}, ${task.property.state} ${task.property.zip}`
+          : 'No address details'
+      }
+
+      if (groupBy === 'CUSTOMER_PROPERTY') {
+        key = `${task.customer?.id || 'unknown-customer'}::${task.property?.id || 'unknown-property'}`
+        label = task.customer?.fullName || 'Unknown customer'
+        subtitle = task.property
+          ? `${task.property.address} · ${task.property.city}, ${task.property.state}`
+          : 'No property assigned'
+      }
+
+      if (!groups.has(key)) {
+        groups.set(key, {
+          key,
+          label,
+          subtitle,
+          tasks: [],
+        })
+      }
+
+      groups.get(key)?.tasks.push(task)
+    })
+
+    return Array.from(groups.values()).sort((a, b) => a.label.localeCompare(b.label))
+  }, [filteredTasks, groupBy])
+
+  const sequentialCatalogByWorkflow = useMemo(() => {
+    const catalog = new Map<string, Array<{ id: string; name: string; stepOrder: number }>>()
+
+    services.forEach((service) => {
+      if (!service.isSequential || service.stepOrder === null) return
+      const workflowKey = normalizeWorkflow(service.workflowGroup)
+      if (!workflowKey) return
+
+      if (!catalog.has(workflowKey)) catalog.set(workflowKey, [])
+      catalog.get(workflowKey)?.push({
+        id: service.id,
+        name: service.name,
+        stepOrder: service.stepOrder,
+      })
+    })
+
+    catalog.forEach((steps) => {
+      steps.sort((a, b) => a.stepOrder - b.stepOrder)
+    })
+
+    return catalog
+  }, [services])
+
+  const caseItems = useMemo<CaseItem[]>(() => {
+    const sequentialTasks = searchFilteredTasks.filter(
+      (task) => task.service?.isSequential && task.service?.stepOrder !== null && normalizeWorkflow(task.service?.workflowGroup) !== ''
+    )
+
+    const caseMap = new Map<string, TaskItem[]>()
+    sequentialTasks.forEach((task) => {
+      const workflowKey = normalizeWorkflow(task.service.workflowGroup)
+      const key = `${task.customer?.id || 'unknown-customer'}::${task.property?.id || 'unknown-property'}::${workflowKey}`
+      if (!caseMap.has(key)) caseMap.set(key, [])
+      caseMap.get(key)?.push(task)
+    })
+
+    const cases: CaseItem[] = []
+
+    caseMap.forEach((caseTasks, caseKey) => {
+      if (caseTasks.length === 0) return
+
+      const firstTask = caseTasks[0]
+      const workflowKey = normalizeWorkflow(firstTask.service.workflowGroup)
+      const fallbackSteps = caseTasks
+        .filter((task) => task.service.stepOrder !== null)
+        .map((task) => ({
+          id: task.service.id,
+          name: task.service.name,
+          stepOrder: task.service.stepOrder as number,
+        }))
+        .sort((a, b) => a.stepOrder - b.stepOrder)
+
+      const catalogSteps = sequentialCatalogByWorkflow.get(workflowKey) || fallbackSteps
+      if (catalogSteps.length === 0) return
+
+      const latestTaskByServiceId = new Map<string, TaskItem>()
+      caseTasks.forEach((task) => {
+        const existing = latestTaskByServiceId.get(task.service.id)
+        if (!existing) {
+          latestTaskByServiceId.set(task.service.id, task)
+          return
+        }
+        const existingDate = new Date(existing.createdAt).getTime()
+        const nextDate = new Date(task.createdAt).getTime()
+        if (nextDate >= existingDate) latestTaskByServiceId.set(task.service.id, task)
+      })
+
+      const steps: CaseStep[] = catalogSteps.map((step) => {
+        const taskForStep = latestTaskByServiceId.get(step.id)
+        const status: CaseStepState = !taskForStep
+          ? 'NOT_STARTED'
+          : isCompletedStatusName(taskForStep.status.name)
+            ? 'COMPLETED'
+            : 'IN_PROGRESS'
+        return {
+          key: `${caseKey}::${step.id}`,
+          name: step.name,
+          stepOrder: step.stepOrder,
+          status,
+          taskId: taskForStep?.id || null,
+        }
+      })
+
+      const completedSteps = steps.filter((step) => step.status === 'COMPLETED').length
+      const totalSteps = steps.length
+      const progressPercent = Math.round((completedSteps / totalSteps) * 100)
+      const activeStep = steps.find((step) => step.status === 'IN_PROGRESS')
+      const nextStep = steps.find((step) => step.status === 'NOT_STARTED')
+      const currentStepLabel = activeStep
+        ? `Step ${activeStep.stepOrder}: ${activeStep.name}`
+        : completedSteps === totalSteps
+          ? `Step ${steps[steps.length - 1].stepOrder}: ${steps[steps.length - 1].name}`
+          : 'Not started'
+      const nextStepLabel = nextStep ? `Step ${nextStep.stepOrder}: ${nextStep.name}` : 'No remaining steps'
+
+      if (serviceFilter !== 'ALL' && !steps.some((step) => step.name === serviceFilter)) return
+      if (statusFilter !== 'ALL') {
+        if (statusFilter === 'Completed' && progressPercent < 100) return
+        if (statusFilter === 'In Progress' && (progressPercent === 100 || !activeStep)) return
+        if (statusFilter !== 'Completed' && statusFilter !== 'In Progress') {
+          const hasStatus = caseTasks.some((task) => task.status?.name === statusFilter)
+          if (!hasStatus) return
+        }
+      }
+
+      const scheduledDates = caseTasks
+        .map((task) => task.scheduledFor)
+        .filter((value): value is string => Boolean(value))
+      const hasScheduled = scheduledDates.length > 0
+      if (scheduleFilter === 'SCHEDULED' && !hasScheduled) return
+      if (scheduleFilter === 'UNSCHEDULED' && hasScheduled) return
+
+      cases.push({
+        key: caseKey,
+        workflow: formatWorkflowLabel(firstTask.service.workflowGroup || ''),
+        customerName: firstTask.customer?.fullName || 'Unknown customer',
+        customerContact: firstTask.customer?.email || firstTask.customer?.phone || 'No contact info',
+        propertyLabel: firstTask.property
+          ? `${firstTask.property.address} · ${firstTask.property.city}, ${firstTask.property.state}`
+          : 'No property assigned',
+        progressPercent,
+        completedSteps,
+        totalSteps,
+        currentStepLabel,
+        nextStepLabel,
+        steps,
+      })
+    })
+
+    return cases.sort((a, b) => a.customerName.localeCompare(b.customerName))
+  }, [searchFilteredTasks, sequentialCatalogByWorkflow, scheduleFilter, serviceFilter, statusFilter])
 
   const workflowStepTotals = useMemo(() => {
     const totals = new Map<string, number>()
@@ -269,21 +517,56 @@ export default function TasksPage() {
             </div>
 
             <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-              <button
-                onClick={() => router.push('/dashboard')}
-                style={{
-                  padding: '10px 14px',
-                  background: 'transparent',
-                  color: 'var(--kline-text-light)',
-                  fontWeight: 700,
-                  borderRadius: '10px',
-                  border: '2px solid var(--kline-gray)',
-                  cursor: 'pointer',
-                  fontSize: '0.9rem',
-                }}
-              >
-                Dashboard
-              </button>
+              {accessScope === 'ALL' ? (
+                <button
+                  onClick={() => router.push('/dashboard')}
+                  style={{
+                    padding: '10px 14px',
+                    background: 'transparent',
+                    color: 'var(--kline-text-light)',
+                    fontWeight: 700,
+                    borderRadius: '10px',
+                    border: '2px solid var(--kline-gray)',
+                    cursor: 'pointer',
+                    fontSize: '0.9rem',
+                  }}
+                >
+                  Dashboard
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={() => router.push('/customers')}
+                    style={{
+                      padding: '10px 14px',
+                      background: 'transparent',
+                      color: 'var(--kline-text-light)',
+                      fontWeight: 700,
+                      borderRadius: '10px',
+                      border: '2px solid var(--kline-gray)',
+                      cursor: 'pointer',
+                      fontSize: '0.9rem',
+                    }}
+                  >
+                    Customers
+                  </button>
+                  <button
+                    onClick={() => router.push('/properties')}
+                    style={{
+                      padding: '10px 14px',
+                      background: 'transparent',
+                      color: 'var(--kline-text-light)',
+                      fontWeight: 700,
+                      borderRadius: '10px',
+                      border: '2px solid var(--kline-gray)',
+                      cursor: 'pointer',
+                      fontSize: '0.9rem',
+                    }}
+                  >
+                    Properties
+                  </button>
+                </>
+              )}
               <button
                 onClick={handleLogout}
                 style={{
@@ -318,13 +601,56 @@ export default function TasksPage() {
         {/* Title + actions */}
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
           <div>
-            <h2 style={{ margin: 0, fontSize: '2rem', fontWeight: 800, color: 'var(--kline-text)' }}>All Tasks</h2>
+            <h2 style={{ margin: 0, fontSize: '2rem', fontWeight: 800, color: 'var(--kline-text)' }}>
+              {viewMode === 'TASKS' ? 'All Tasks' : 'Case View'}
+            </h2>
             <p style={{ margin: '6px 0 0', color: 'var(--kline-text-light)', fontSize: '1rem' }}>
-              Latest tasks from the system
+              {viewMode === 'TASKS'
+                ? 'Latest tasks from the system'
+                : 'Grouped by customer + property + workflow to track one process end-to-end'}
             </p>
           </div>
 
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <div
+              style={{
+                display: 'inline-flex',
+                border: '1px solid var(--kline-gray)',
+                borderRadius: 10,
+                overflow: 'hidden',
+                background: '#fff',
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setViewMode('TASKS')}
+                style={{
+                  padding: '10px 12px',
+                  border: 'none',
+                  borderRight: '1px solid var(--kline-gray)',
+                  cursor: 'pointer',
+                  fontWeight: 800,
+                  color: viewMode === 'TASKS' ? '#fff' : 'var(--kline-text-light)',
+                  background: viewMode === 'TASKS' ? 'var(--kline-red)' : 'transparent',
+                }}
+              >
+                Task View
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('CASES')}
+                style={{
+                  padding: '10px 12px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontWeight: 800,
+                  color: viewMode === 'CASES' ? '#fff' : 'var(--kline-text-light)',
+                  background: viewMode === 'CASES' ? 'var(--kline-red)' : 'transparent',
+                }}
+              >
+                Case View
+              </button>
+            </div>
             <button
               onClick={() => router.push('/tasks/new')}
               style={{
@@ -357,7 +683,17 @@ export default function TasksPage() {
         </div>
 
         <div className="kline-card" style={{ marginTop: 20, padding: 16 }}>
-          <div className="task-filters-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 1.8fr) repeat(3, minmax(160px, 1fr))', gap: 10 }}>
+          <div
+            className="task-filters-grid"
+            style={{
+              display: 'grid',
+              gridTemplateColumns:
+                viewMode === 'TASKS'
+                  ? 'minmax(220px, 1.8fr) repeat(4, minmax(160px, 1fr))'
+                  : 'minmax(220px, 1.8fr) repeat(3, minmax(160px, 1fr))',
+              gap: 10,
+            }}
+          >
             <input
               type="text"
               className="kline-input"
@@ -388,11 +724,26 @@ export default function TasksPage() {
               <option value="SCHEDULED">Scheduled only</option>
               <option value="UNSCHEDULED">Unscheduled only</option>
             </select>
+            {viewMode === 'TASKS' && (
+              <select className="kline-input" value={groupBy} onChange={(e) => setGroupBy(e.target.value as GroupByMode)}>
+                <option value="NONE">No grouping</option>
+                <option value="CUSTOMER">Group by customer</option>
+                <option value="PROPERTY">Group by property</option>
+                <option value="CUSTOMER_PROPERTY">Group by customer + property</option>
+              </select>
+            )}
           </div>
           <div style={{ marginTop: 10, color: 'var(--kline-text-light)', fontSize: '0.85rem', fontWeight: 600 }}>
-            Showing {filteredTasks.length} of {tasks.length} tasks
+            {viewMode === 'TASKS' ? (
+              <>
+                Showing {filteredTasks.length} of {tasks.length} tasks
+                {groupBy !== 'NONE' ? ` in ${groupedTasks.length} groups` : ''}
+              </>
+            ) : (
+              <>Showing {caseItems.length} cases from {searchFilteredTasks.length} matching tasks</>
+            )}
           </div>
-          {completedStatusId && (
+          {viewMode === 'TASKS' && completedStatusId && (
             <div style={{ marginTop: 6, color: 'var(--kline-text-light)', fontSize: '0.8rem' }}>
               Tip: click a non-completed status badge to mark task as Completed.
             </div>
@@ -441,9 +792,207 @@ export default function TasksPage() {
 
         {!loading && !errorMsg && (
           <div className="kline-card" style={{ padding: 18, marginTop: 22 }}>
-            {filteredTasks.length === 0 ? (
+            {viewMode === 'CASES' ? (
+              caseItems.length === 0 ? (
+                <div style={{ padding: 28, textAlign: 'center', color: 'var(--kline-text-light)', fontWeight: 700 }}>
+                  No cases match the current filters.
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gap: 14 }}>
+                  {caseItems.map((caseItem) => (
+                    <section key={caseItem.key} style={{ border: '1px solid var(--kline-gray)', borderRadius: 12, overflow: 'hidden' }}>
+                      <div
+                        style={{
+                          padding: '12px 14px',
+                          background: 'var(--kline-gray-light)',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          gap: 12,
+                          flexWrap: 'wrap',
+                        }}
+                      >
+                        <div>
+                          <div style={{ fontWeight: 900, color: 'var(--kline-text)', fontSize: '1rem' }}>
+                            {caseItem.workflow}: {caseItem.customerName}
+                          </div>
+                          <div style={{ marginTop: 2, color: 'var(--kline-text-light)', fontSize: '0.85rem' }}>
+                            {caseItem.customerContact} · {caseItem.propertyLabel}
+                          </div>
+                        </div>
+                        <div style={{ minWidth: 240 }}>
+                          <div
+                            style={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              fontSize: '0.78rem',
+                              fontWeight: 800,
+                              color: 'var(--kline-text-light)',
+                            }}
+                          >
+                            <span>
+                              {caseItem.completedSteps}/{caseItem.totalSteps} steps completed
+                            </span>
+                            <span>{caseItem.progressPercent}%</span>
+                          </div>
+                          <div
+                            style={{
+                              marginTop: 5,
+                              height: 7,
+                              borderRadius: 999,
+                              background: '#e7e9ec',
+                              overflow: 'hidden',
+                            }}
+                          >
+                            <div
+                              style={{
+                                width: `${caseItem.progressPercent}%`,
+                                height: '100%',
+                                borderRadius: 999,
+                                background: 'linear-gradient(90deg, var(--kline-red), var(--kline-yellow))',
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style={{ padding: '12px 14px' }}>
+                        <div style={{ fontSize: '0.86rem', color: 'var(--kline-text-light)', fontWeight: 700 }}>
+                          Current: <span style={{ color: 'var(--kline-text)' }}>{caseItem.currentStepLabel}</span>
+                        </div>
+                        <div style={{ marginTop: 2, fontSize: '0.86rem', color: 'var(--kline-text-light)', fontWeight: 700 }}>
+                          Next: <span style={{ color: 'var(--kline-text)' }}>{caseItem.nextStepLabel}</span>
+                        </div>
+
+                        <div style={{ marginTop: 10, display: 'grid', gap: 8 }}>
+                          {caseItem.steps.map((step) => (
+                            <div
+                              key={step.key}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                gap: 12,
+                                padding: '8px 10px',
+                                borderRadius: 10,
+                                border: '1px solid var(--kline-gray)',
+                                background: '#fff',
+                              }}
+                            >
+                              <div style={{ fontWeight: 800, color: 'var(--kline-text)', fontSize: '0.9rem' }}>
+                                Step {step.stepOrder}: {step.name}
+                              </div>
+                              <WorkflowStatePill status={step.status} />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </section>
+                  ))}
+                </div>
+              )
+            ) : filteredTasks.length === 0 ? (
               <div style={{ padding: 28, textAlign: 'center', color: 'var(--kline-text-light)', fontWeight: 700 }}>
                 {tasks.length === 0 ? 'No tasks yet. Create one to get started.' : 'No tasks match the current filters.'}
+              </div>
+            ) : groupBy !== 'NONE' ? (
+              <div style={{ display: 'grid', gap: 14 }}>
+                {groupedTasks.map((group) => (
+                  <section key={group.key} style={{ border: '1px solid var(--kline-gray)', borderRadius: 12, overflow: 'hidden' }}>
+                    <div
+                      style={{
+                        padding: '12px 14px',
+                        background: 'var(--kline-gray-light)',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'flex-start',
+                        gap: 12,
+                        flexWrap: 'wrap',
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontWeight: 900, color: 'var(--kline-text)', fontSize: '1rem' }}>{group.label}</div>
+                        <div style={{ marginTop: 2, color: 'var(--kline-text-light)', fontSize: '0.85rem' }}>{group.subtitle}</div>
+                      </div>
+                      <div
+                        style={{
+                          borderRadius: 999,
+                          padding: '4px 10px',
+                          fontSize: '0.78rem',
+                          fontWeight: 800,
+                          color: 'var(--kline-text-light)',
+                          background: '#fff',
+                          border: '1px solid var(--kline-gray)',
+                        }}
+                      >
+                        {group.tasks.length} task{group.tasks.length === 1 ? '' : 's'}
+                      </div>
+                    </div>
+
+                    <div style={{ overflowX: 'auto' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 760 }}>
+                        <thead>
+                          <tr style={{ background: '#fff' }}>
+                            <Th>Service</Th>
+                            {groupBy === 'PROPERTY' && <Th>Customer</Th>}
+                            {groupBy === 'CUSTOMER' && <Th>Property</Th>}
+                            <Th>Status</Th>
+                            <Th>Scheduled</Th>
+                            <Th>Created</Th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {group.tasks.map((t) => (
+                            <tr key={t.id}>
+                              <Td>
+                                <div style={{ fontWeight: 900, color: 'var(--kline-text)' }}>{t.service?.name || '—'}</div>
+                                {t.service?.description ? (
+                                  <div style={{ marginTop: 2, color: 'var(--kline-text-light)', fontSize: '0.85rem' }}>
+                                    {t.service.description}
+                                  </div>
+                                ) : null}
+                                {t.service?.isSequential && t.service.stepOrder ? (
+                                  <WorkflowProgress
+                                    stepOrder={t.service.stepOrder}
+                                    workflowGroup={t.service.workflowGroup || ''}
+                                    workflowStepTotals={workflowStepTotals}
+                                  />
+                                ) : null}
+                              </Td>
+                              {groupBy === 'PROPERTY' && (
+                                <Td>
+                                  <div style={{ fontWeight: 900, color: 'var(--kline-text)' }}>{t.customer?.fullName || '—'}</div>
+                                  <div style={{ marginTop: 2, color: 'var(--kline-text-light)', fontSize: '0.85rem' }}>
+                                    {t.customer?.email || t.customer?.phone || '—'}
+                                  </div>
+                                </Td>
+                              )}
+                              {groupBy === 'CUSTOMER' && (
+                                <Td>
+                                  <div style={{ fontWeight: 800, color: 'var(--kline-text)' }}>{t.property?.address || '—'}</div>
+                                  <div style={{ marginTop: 2, color: 'var(--kline-text-light)', fontSize: '0.85rem' }}>
+                                    {t.property ? `${t.property.city}, ${t.property.state} ${t.property.zip}` : '—'}
+                                  </div>
+                                </Td>
+                              )}
+                              <Td>
+                                <StatusBadge
+                                  name={t.status?.name || 'Unknown'}
+                                  color={t.status?.color || '#0d6efd'}
+                                  clickable={Boolean(completedStatusId) && !isCompletedStatusName(t.status?.name || '')}
+                                  loading={updatingTaskId === t.id}
+                                  onClick={() => handleMarkCompleted(t)}
+                                />
+                              </Td>
+                              <Td>{fmtDate(t.scheduledFor)}</Td>
+                              <Td>{fmtDateTime(t.createdAt)}</Td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </section>
+                ))}
               </div>
             ) : (
               <div style={{ overflowX: 'auto' }}>
@@ -598,6 +1147,32 @@ function WorkflowProgress({
         />
       </div>
     </div>
+  )
+}
+
+function WorkflowStatePill({ status }: { status: CaseStepState }) {
+  const styleByState: Record<CaseStepState, { label: string; color: string }> = {
+    COMPLETED: { label: 'Completed', color: '#198754' },
+    IN_PROGRESS: { label: 'In Progress', color: '#fd7e14' },
+    NOT_STARTED: { label: 'Not Started', color: '#6c757d' },
+  }
+
+  const config = styleByState[status]
+  return (
+    <span
+      style={{
+        display: 'inline-flex',
+        padding: '5px 9px',
+        borderRadius: 999,
+        fontWeight: 800,
+        fontSize: '0.75rem',
+        color: config.color,
+        background: `${config.color}1A`,
+        border: `1px solid ${config.color}55`,
+      }}
+    >
+      {config.label}
+    </span>
   )
 }
 

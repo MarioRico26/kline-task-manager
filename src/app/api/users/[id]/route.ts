@@ -5,15 +5,28 @@ import { UserAccessScope, getUserAccessScopeById, setUserAccessScope } from '@/l
 
 const prisma = new PrismaClient()
 
+async function ensureUserAdminAccess() {
+  const sessionUser = await getSessionUser(prisma)
+  if (!sessionUser) {
+    return { error: NextResponse.json({ error: 'Not authenticated' }, { status: 401 }) }
+  }
+  if (sessionUser.accessScope === 'PERMITS_ONLY') {
+    return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) }
+  }
+  return { sessionUser }
+}
+
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const access = await ensureUserAdminAccess()
+    if ('error' in access) return access.error
+
     const { email, role, accessScope } = await request.json()
     const { id } = await params
     const selectedScope: UserAccessScope = accessScope === 'PERMITS_ONLY' ? 'PERMITS_ONLY' : 'ALL'
-    const sessionUser = await getSessionUser(prisma)
 
     const user = await prisma.user.update({
       where: { id },
@@ -26,7 +39,7 @@ export async function PUT(
       }
     })
 
-    await setUserAccessScope(prisma, id, selectedScope, sessionUser?.id)
+    await setUserAccessScope(prisma, id, selectedScope, access.sessionUser.id)
 
     return NextResponse.json({
       ...user,
@@ -46,6 +59,9 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const access = await ensureUserAdminAccess()
+    if ('error' in access) return access.error
+
     const { id } = await params
 
     await prisma.user.delete({
@@ -67,6 +83,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const access = await ensureUserAdminAccess()
+    if ('error' in access) return access.error
+
     const { id } = await params
     const user = await prisma.user.findUnique({
       where: { id },

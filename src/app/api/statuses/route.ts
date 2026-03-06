@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { PrismaClient } from '@prisma/client'
+import { getSessionUser } from '@/lib/sessionUser'
 
 const prisma = new PrismaClient()
 
@@ -60,6 +61,11 @@ function parseStatusPayload(raw: unknown): { data?: StatusPayload; error?: strin
 
 export async function GET() {
   try {
+    const sessionUser = await getSessionUser(prisma)
+    if (!sessionUser) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+    }
+
     const statuses = await prisma.taskStatus.findMany({
       select: {
         id: true,
@@ -84,6 +90,14 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const sessionUser = await getSessionUser(prisma)
+    if (!sessionUser) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+    }
+    if (sessionUser.accessScope === 'PERMITS_ONLY') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
     const body = await request.json()
     const parsed = parseStatusPayload(body)
 
