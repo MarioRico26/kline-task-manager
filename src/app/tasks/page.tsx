@@ -52,7 +52,7 @@ interface ServiceStep {
 }
 
 type GroupByMode = 'NONE' | 'CUSTOMER' | 'PROPERTY' | 'CUSTOMER_PROPERTY'
-type ListViewMode = 'TASKS' | 'CASES'
+type ListViewMode = 'TASKS' | 'CASES' | 'PERMITS_CHART'
 
 type TaskGroup = {
   key: string
@@ -87,6 +87,25 @@ type CaseItem = {
   steps: CaseStep[]
 }
 
+type PermitStageStatus = 'COMPLETED' | 'IN_PROGRESS' | 'NOT_STARTED'
+
+type PermitStageCase = {
+  caseKey: string
+  customerName: string
+  propertyLabel: string
+  status: PermitStageStatus
+}
+
+type PermitStageSummary = {
+  stepOrder: number
+  stepName: string
+  totalCases: number
+  completedCount: number
+  inProgressCount: number
+  notStartedCount: number
+  cases: PermitStageCase[]
+}
+
 function normalizeWorkflow(value?: string | null) {
   return (value || '').trim().toLowerCase()
 }
@@ -99,6 +118,10 @@ function formatWorkflowLabel(value: string) {
   const trimmed = value.trim()
   if (!trimmed) return 'Workflow'
   return trimmed.charAt(0).toUpperCase() + trimmed.slice(1)
+}
+
+function isPermitsWorkflowLabel(value?: string | null) {
+  return normalizeWorkflow(value).includes('permit')
 }
 
 function fmtDate(value: string | null) {
@@ -129,6 +152,7 @@ export default function TasksPage() {
   const [viewMode, setViewMode] = useState<ListViewMode>('TASKS')
   const [updatingTaskId, setUpdatingTaskId] = useState<string | null>(null)
   const [accessScope, setAccessScope] = useState<AccessScope>('ALL')
+  const [selectedPermitStage, setSelectedPermitStage] = useState<number | null>(null)
 
   const loadTasks = async () => {
     try {
@@ -419,6 +443,94 @@ export default function TasksPage() {
     return cases.sort((a, b) => a.customerName.localeCompare(b.customerName))
   }, [searchFilteredTasks, sequentialCatalogByWorkflow, scheduleFilter, serviceFilter, statusFilter])
 
+  const permitStageSummaries = useMemo<PermitStageSummary[]>(() => {
+    const permitSteps = services
+      .filter((service) => service.isSequential && service.stepOrder !== null && isPermitsWorkflowLabel(service.workflowGroup || service.name))
+      .sort((a, b) => (a.stepOrder || 0) - (b.stepOrder || 0))
+
+    if (permitSteps.length === 0) return []
+
+    const permitTasks = searchFilteredTasks.filter(
+      (task) =>
+        task.service?.isSequential &&
+        task.service?.stepOrder !== null &&
+        isPermitsWorkflowLabel(task.service.workflowGroup || task.service.name) &&
+        (scheduleFilter !== 'SCHEDULED' || Boolean(task.scheduledFor)) &&
+        (scheduleFilter !== 'UNSCHEDULED' || !task.scheduledFor)
+    )
+
+    const permitCases = new Map<string, TaskItem[]>()
+    permitTasks.forEach((task) => {
+      const key = `${task.customer?.id || 'unknown-customer'}::${task.property?.id || 'unknown-property'}`
+      if (!permitCases.has(key)) permitCases.set(key, [])
+      permitCases.get(key)?.push(task)
+    })
+
+    const summaries = permitSteps.map((step) => ({
+      stepOrder: step.stepOrder as number,
+      stepName: step.name,
+      totalCases: permitCases.size,
+      completedCount: 0,
+      inProgressCount: 0,
+      notStartedCount: 0,
+      cases: [] as PermitStageCase[],
+    }))
+
+    permitCases.forEach((caseTasks, caseKey) => {
+      const firstTask = caseTasks[0]
+      const latestTaskByServiceId = new Map<string, TaskItem>()
+      caseTasks.forEach((task) => {
+        const existing = latestTaskByServiceId.get(task.service.id)
+        if (!existing || new Date(task.createdAt).getTime() >= new Date(existing.createdAt).getTime()) {
+          latestTaskByServiceId.set(task.service.id, task)
+        }
+      })
+
+      summaries.forEach((summary) => {
+        const permitService = permitSteps.find((step) => step.stepOrder === summary.stepOrder)
+        const taskForStep = permitService ? latestTaskByServiceId.get(permitService.id) : undefined
+
+        let status: PermitStageStatus = 'NOT_STARTED'
+        if (taskForStep) {
+          status = isCompletedStatusName(taskForStep.status.name) ? 'COMPLETED' : 'IN_PROGRESS'
+        }
+
+        if (status === 'COMPLETED') summary.completedCount += 1
+        if (status === 'IN_PROGRESS') summary.inProgressCount += 1
+        if (status === 'NOT_STARTED') summary.notStartedCount += 1
+
+        summary.cases.push({
+          caseKey,
+          customerName: firstTask.customer?.fullName || 'Unknown customer',
+          propertyLabel: firstTask.property
+            ? `${firstTask.property.address} · ${firstTask.property.city}, ${firstTask.property.state}`
+            : 'No property assigned',
+          status,
+        })
+      })
+    })
+
+    return summaries
+  }, [scheduleFilter, searchFilteredTasks, services])
+
+  const activePermitStage = useMemo(() => {
+    if (permitStageSummaries.length === 0) return null
+    const selected = permitStageSummaries.find((stage) => stage.stepOrder === selectedPermitStage)
+    return selected || permitStageSummaries[0]
+  }, [permitStageSummaries, selectedPermitStage])
+
+  useEffect(() => {
+    if (permitStageSummaries.length === 0) {
+      setSelectedPermitStage(null)
+      return
+    }
+
+    const exists = permitStageSummaries.some((stage) => stage.stepOrder === selectedPermitStage)
+    if (!exists) {
+      setSelectedPermitStage(permitStageSummaries[0].stepOrder)
+    }
+  }, [permitStageSummaries, selectedPermitStage])
+
   const workflowStepTotals = useMemo(() => {
     const totals = new Map<string, number>()
 
@@ -602,12 +714,14 @@ export default function TasksPage() {
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
           <div>
             <h2 style={{ margin: 0, fontSize: '2rem', fontWeight: 800, color: 'var(--kline-text)' }}>
-              {viewMode === 'TASKS' ? 'All Tasks' : 'Case View'}
+              {viewMode === 'TASKS' ? 'All Tasks' : viewMode === 'CASES' ? 'Case View' : 'Permits Workflow View'}
             </h2>
             <p style={{ margin: '6px 0 0', color: 'var(--kline-text-light)', fontSize: '1rem' }}>
               {viewMode === 'TASKS'
                 ? 'Latest tasks from the system'
-                : 'Grouped by customer + property + workflow to track one process end-to-end'}
+                : viewMode === 'CASES'
+                  ? 'Grouped by customer + property + workflow to track one process end-to-end'
+                  : 'Pie charts by permits stage with clickable detail per stage'}
             </p>
           </div>
 
@@ -650,6 +764,21 @@ export default function TasksPage() {
               >
                 Case View
               </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('PERMITS_CHART')}
+                style={{
+                  padding: '10px 12px',
+                  border: 'none',
+                  borderLeft: '1px solid var(--kline-gray)',
+                  cursor: 'pointer',
+                  fontWeight: 800,
+                  color: viewMode === 'PERMITS_CHART' ? '#fff' : 'var(--kline-text-light)',
+                  background: viewMode === 'PERMITS_CHART' ? 'var(--kline-red)' : 'transparent',
+                }}
+              >
+                Permits Pie
+              </button>
             </div>
             <button
               onClick={() => router.push('/tasks/new')}
@@ -690,7 +819,9 @@ export default function TasksPage() {
               gridTemplateColumns:
                 viewMode === 'TASKS'
                   ? 'minmax(220px, 1.8fr) repeat(4, minmax(160px, 1fr))'
-                  : 'minmax(220px, 1.8fr) repeat(3, minmax(160px, 1fr))',
+                  : viewMode === 'CASES'
+                    ? 'minmax(220px, 1.8fr) repeat(3, minmax(160px, 1fr))'
+                    : 'minmax(220px, 2fr) minmax(180px, 1fr)',
               gap: 10,
             }}
           >
@@ -701,20 +832,24 @@ export default function TasksPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
-            <select className="kline-input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-              {statusOptions.map((status) => (
-                <option key={status} value={status}>
-                  {status === 'ALL' ? 'All statuses' : status}
-                </option>
-              ))}
-            </select>
-            <select className="kline-input" value={serviceFilter} onChange={(e) => setServiceFilter(e.target.value)}>
-              {serviceOptions.map((service) => (
-                <option key={service} value={service}>
-                  {service === 'ALL' ? 'All services' : service}
-                </option>
-              ))}
-            </select>
+            {viewMode !== 'PERMITS_CHART' && (
+              <select className="kline-input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+                {statusOptions.map((status) => (
+                  <option key={status} value={status}>
+                    {status === 'ALL' ? 'All statuses' : status}
+                  </option>
+                ))}
+              </select>
+            )}
+            {viewMode !== 'PERMITS_CHART' && (
+              <select className="kline-input" value={serviceFilter} onChange={(e) => setServiceFilter(e.target.value)}>
+                {serviceOptions.map((service) => (
+                  <option key={service} value={service}>
+                    {service === 'ALL' ? 'All services' : service}
+                  </option>
+                ))}
+              </select>
+            )}
             <select
               className="kline-input"
               value={scheduleFilter}
@@ -739,8 +874,10 @@ export default function TasksPage() {
                 Showing {filteredTasks.length} of {tasks.length} tasks
                 {groupBy !== 'NONE' ? ` in ${groupedTasks.length} groups` : ''}
               </>
-            ) : (
+            ) : viewMode === 'CASES' ? (
               <>Showing {caseItems.length} cases from {searchFilteredTasks.length} matching tasks</>
+            ) : (
+              <>Showing {permitStageSummaries.length} permit stages across {permitStageSummaries[0]?.totalCases || 0} cases</>
             )}
           </div>
           {viewMode === 'TASKS' && completedStatusId && (
@@ -792,7 +929,99 @@ export default function TasksPage() {
 
         {!loading && !errorMsg && (
           <div className="kline-card" style={{ padding: 18, marginTop: 22 }}>
-            {viewMode === 'CASES' ? (
+            {viewMode === 'PERMITS_CHART' ? (
+              permitStageSummaries.length === 0 ? (
+                <div style={{ padding: 28, textAlign: 'center', color: 'var(--kline-text-light)', fontWeight: 700 }}>
+                  No permit stages found for the current filters.
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gap: 16 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 12 }}>
+                    {permitStageSummaries.map((stage) => {
+                      const total = Math.max(1, stage.totalCases)
+                      const completedPercent = Math.round((stage.completedCount / total) * 100)
+                      const inProgressPercent = Math.round((stage.inProgressCount / total) * 100)
+                      const selected = activePermitStage?.stepOrder === stage.stepOrder
+                      return (
+                        <button
+                          key={stage.stepOrder}
+                          type="button"
+                          onClick={() => setSelectedPermitStage(stage.stepOrder)}
+                          style={{
+                            textAlign: 'left',
+                            border: selected ? '2px solid var(--kline-red)' : '1px solid var(--kline-gray)',
+                            borderRadius: 12,
+                            background: '#fff',
+                            padding: 12,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          <div style={{ fontWeight: 900, color: 'var(--kline-text)', fontSize: '0.95rem' }}>
+                            Step {stage.stepOrder}: {stage.stepName}
+                          </div>
+                          <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <div
+                              style={{
+                                width: 56,
+                                height: 56,
+                                borderRadius: '50%',
+                                background: `conic-gradient(#198754 0 ${completedPercent}%, #fd7e14 ${completedPercent}% ${
+                                  completedPercent + inProgressPercent
+                                }%, #ced4da ${completedPercent + inProgressPercent}% 100%)`,
+                                border: '1px solid var(--kline-gray)',
+                              }}
+                            />
+                            <div style={{ fontSize: '0.8rem', color: 'var(--kline-text-light)', fontWeight: 700 }}>
+                              <div style={{ color: '#198754' }}>Completed: {stage.completedCount}</div>
+                              <div style={{ color: '#fd7e14' }}>In Progress: {stage.inProgressCount}</div>
+                              <div style={{ color: '#6c757d' }}>Not Started: {stage.notStartedCount}</div>
+                              <div style={{ marginTop: 2 }}>Total cases: {stage.totalCases}</div>
+                            </div>
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+
+                  {activePermitStage && (
+                    <section style={{ border: '1px solid var(--kline-gray)', borderRadius: 12, overflow: 'hidden' }}>
+                      <div
+                        style={{
+                          padding: '12px 14px',
+                          background: 'var(--kline-gray-light)',
+                          fontWeight: 900,
+                          color: 'var(--kline-text)',
+                        }}
+                      >
+                        Detail · Step {activePermitStage.stepOrder}: {activePermitStage.stepName}
+                      </div>
+                      <div style={{ overflowX: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 760 }}>
+                          <thead>
+                            <tr style={{ background: '#fff' }}>
+                              <Th>Customer</Th>
+                              <Th>Property</Th>
+                              <Th>Stage Status</Th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {activePermitStage.cases.map((item) => (
+                              <tr key={`${activePermitStage.stepOrder}-${item.caseKey}`}>
+                                <Td>{item.customerName}</Td>
+                                <Td>{item.propertyLabel}</Td>
+                                <Td>
+                                  <WorkflowStatePill status={item.status} />
+                                </Td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </section>
+                  )}
+                </div>
+              )
+            ) : viewMode === 'CASES' ? (
               caseItems.length === 0 ? (
                 <div style={{ padding: 28, textAlign: 'center', color: 'var(--kline-text-light)', fontWeight: 700 }}>
                   No cases match the current filters.

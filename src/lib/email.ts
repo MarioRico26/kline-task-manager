@@ -32,7 +32,7 @@ const transporter = nodemailer.createTransport({
 })
 
 // Verificar la configuración al iniciar
-transporter.verify(function (error, success) {
+transporter.verify(function (error) {
     if (error) {
         console.log('❌ Error configurando email:', error)
     } else {
@@ -50,7 +50,6 @@ interface EmailData {
     }
     property: string
     status: string
-    scheduledFor: string | null
     notes: string | null
     images: string[]
 }
@@ -63,7 +62,6 @@ export async function sendTaskUpdateEmail(emailData: EmailData) {
             customerName,
             service,
             property,
-            scheduledFor,
             notes,
             images,
         } = emailData
@@ -179,18 +177,6 @@ export async function sendTaskUpdateEmail(emailData: EmailData) {
                 <p><strong>Service:</strong> ${service.name}</p>
                 ${service.description ? `<p>${service.description}</p>` : ''}
                 <p><strong>Property:</strong> ${property}</p>
-                ${
-            scheduledFor
-                ? `<p><strong>Scheduled Date:</strong> ${new Date(
-                    scheduledFor,
-                ).toLocaleDateString('en-US', {
-                    weekday: 'long',
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric'
-                })}</p>`
-                : ''
-        }
                 ${notes ? `<p><strong>Additional Notes:</strong> ${notes}</p>` : ''}
               </div>
 
@@ -260,7 +246,6 @@ We wanted to update you on your service request:
 
 Service: ${service.name}
 Property: ${property}
-${scheduledFor ? `Scheduled For: ${new Date(scheduledFor).toLocaleDateString()}` : ''}
 ${notes ? `Notes: ${notes}` : ''}
 
 ${

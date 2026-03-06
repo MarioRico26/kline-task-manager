@@ -44,6 +44,9 @@ interface TaskHistoryItem {
   createdAt: string
   customer: { id: string }
   property: { id: string }
+  status?: {
+    name: string
+  }
   service: {
     id: string
     isSequential?: boolean
@@ -56,36 +59,23 @@ function normalizeWorkflowKey(value?: string | null) {
   return (value || '').trim().toLowerCase()
 }
 
+function isCompletedStatusName(statusName?: string | null) {
+  return (statusName || '').trim().toLowerCase() === 'completed'
+}
+
 function getNextWorkflowStep(
   definedSteps: number[],
-  historySteps: Array<{ step: number; createdAt: string }>
+  historySteps: Array<{ step: number; createdAt: string; isCompleted: boolean }>
 ): number | null {
   if (definedSteps.length === 0) return null
 
-  const sortedHistory = [...historySteps].sort(
-    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-  )
+  const completedSteps = new Set<number>()
+  historySteps.forEach((item) => {
+    if (item.isCompleted) completedSteps.add(item.step)
+  })
 
-  const startStep = definedSteps[0]
-  let currentStep = 0
-
-  for (const item of sortedHistory) {
-    if (item.step === startStep) {
-      currentStep = startStep
-      continue
-    }
-
-    const currentIndex = definedSteps.indexOf(currentStep)
-    if (currentIndex >= 0 && definedSteps[currentIndex + 1] === item.step) {
-      currentStep = item.step
-    }
-  }
-
-  if (currentStep === 0) return startStep
-
-  const currentIndex = definedSteps.indexOf(currentStep)
-  const nextStep = definedSteps[currentIndex + 1]
-  return nextStep ?? startStep
+  const nextStep = definedSteps.find((step) => !completedSteps.has(step))
+  return nextStep ?? null
 }
 
 type WorkflowDefinition = {
@@ -163,7 +153,7 @@ export default function NewTaskPage() {
   }, [properties, customerId])
 
   const workflowHistoryByKey = useMemo(() => {
-    const history = new Map<string, Array<{ step: number; createdAt: string }>>()
+    const history = new Map<string, Array<{ step: number; createdAt: string; isCompleted: boolean }>>()
     if (!customerId || !propertyId) return history
 
     tasksHistory.forEach((task) => {
@@ -175,7 +165,11 @@ export default function NewTaskPage() {
       if (!groupKey) return
 
       const list = history.get(groupKey) || []
-      list.push({ step: task.service.stepOrder, createdAt: task.createdAt })
+      list.push({
+        step: task.service.stepOrder,
+        createdAt: task.createdAt,
+        isCompleted: isCompletedStatusName(task.status?.name),
+      })
       history.set(groupKey, list)
     })
 
@@ -517,7 +511,7 @@ export default function NewTaskPage() {
                   ))}
                 </select>
                 <div style={{ marginTop: 6, color: 'var(--kline-text-light)', fontSize: '0.8rem' }}>
-                  Sequential services are auto-filtered by customer + property.
+                  Sequential services are locked by customer + property and advance when previous step is Completed.
                 </div>
                 {customerId && propertyId && workflowNextSteps.length > 0 && (
                   <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
@@ -550,13 +544,16 @@ export default function NewTaskPage() {
                   value={statusId}
                   onChange={(e) => setStatusId(e.target.value)}
                 >
-                  <option value="">Default (In Progress)</option>
+                  <option value="">Default (Completed)</option>
                   {statuses.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.name}
                     </option>
                   ))}
                 </select>
+                <div style={{ marginTop: 6, color: 'var(--kline-text-light)', fontSize: '0.8rem' }}>
+                  For sequential workflows, step 1 starts as In Progress automatically.
+                </div>
               </div>
 
               <div>

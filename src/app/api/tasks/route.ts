@@ -78,6 +78,19 @@ async function getDefaultInProgressStatusId() {
   return open?.id || null
 }
 
+async function getDefaultCompletedStatusId() {
+  const completed = await prisma.taskStatus.findFirst({
+    where: { name: { equals: 'Completed', mode: 'insensitive' } },
+    select: { id: true },
+  })
+
+  return completed?.id || null
+}
+
+function isCompletedStatusName(statusName: string | null | undefined) {
+  return (statusName || '').trim().toLowerCase() === 'completed'
+}
+
 async function getNextSequentialStep(
   customerId: string,
   propertyId: string,
@@ -100,7 +113,7 @@ async function getNextSequentialStep(
   const definedSteps = workflowServices
     .map((service) => service.stepOrder || 0)
     .filter((step) => step > 0)
-  const startStep = definedSteps[0]
+  if (definedSteps.length === 0) return null
 
   const previousTasks = await prisma.task.findMany({
     where: {
@@ -111,35 +124,31 @@ async function getNextSequentialStep(
         workflowGroup: { equals: normalizedWorkflowGroup, mode: 'insensitive' },
       },
     },
-    orderBy: { createdAt: 'asc' },
+    orderBy: { createdAt: 'desc' },
     select: {
-      createdAt: true,
       service: {
         select: {
           stepOrder: true,
         },
       },
+      status: {
+        select: {
+          name: true,
+        },
+      },
     },
   })
 
-  let currentStep = 0
+  const completedSteps = new Set<number>()
   for (const task of previousTasks) {
     const step = task.service.stepOrder || 0
-    if (!step) continue
-
-    if (step === startStep) {
-      currentStep = startStep
-      continue
-    }
-
-    const currentIndex = definedSteps.indexOf(currentStep)
-    if (currentIndex >= 0 && definedSteps[currentIndex + 1] === step) {
-      currentStep = step
-    }
+    if (!step || !isCompletedStatusName(task.status?.name)) continue
+    if (!completedSteps.has(step)) completedSteps.add(step)
   }
 
-  const currentIndex = definedSteps.indexOf(currentStep)
-  const nextStep = currentStep === 0 ? startStep : definedSteps[currentIndex + 1] ?? startStep
+  const nextStep = definedSteps.find((step) => !completedSteps.has(step))
+  if (!nextStep) return null
+
   const nextService = workflowServices.find((service) => service.stepOrder === nextStep)
   if (!nextService?.stepOrder) return null
 
@@ -158,6 +167,7 @@ export async function POST(request: Request) {
     const propertyId = (formData.get('propertyId') as string) || ''
     const serviceId = (formData.get('serviceId') as string) || ''
     const statusIdFromForm = (formData.get('statusId') as string) || '' // puede venir vacío
+    const hasCustomStatus = Boolean(statusIdFromForm)
     const notes = (formData.get('notes') as string) || ''
     const scheduledFor = (formData.get('scheduledFor') as string) || ''
     const files = formData.getAll('files') as File[]
@@ -173,27 +183,26 @@ export async function POST(request: Request) {
     // ✅ status default = Completed si no mandan statusId
     let finalStatusId = statusIdFromForm
     if (!finalStatusId) {
-      const inProgressId = await getDefaultInProgressStatusId()
-      if (!inProgressId) {
+      const completedId = await getDefaultCompletedStatusId()
+      if (!completedId) {
         return NextResponse.json(
-          { error: 'Default status "In Progress" (or "Open") not found. Please create it in Statuses.' },
+          { error: 'Default status "Completed" not found. Please create it in Statuses.' },
           { status: 400 }
         )
       }
-      finalStatusId = inProgressId
+      finalStatusId = completedId
     }
 
     // ✅ Cargar entidades (y validar que existan)
-    const [customer, property, service, status] = await Promise.all([
+    const [customer, property, service] = await Promise.all([
       prisma.customer.findUnique({ where: { id: customerId } }),
       prisma.property.findUnique({ where: { id: propertyId }, select: { id: true, customerId: true, address: true, city: true, state: true, zip: true } }),
       prisma.service.findUnique({ where: { id: serviceId } }),
-      prisma.taskStatus.findUnique({ where: { id: finalStatusId } }),
     ])
 
-    if (!customer || !property || !service || !status) {
+    if (!customer || !property || !service) {
       return NextResponse.json(
-        { error: 'Invalid customer, property, service, or status' },
+        { error: 'Invalid customer, property, or service' },
         { status: 400 }
       )
     }
@@ -225,7 +234,7 @@ export async function POST(request: Request) {
 
       if (!nextStep) {
         return NextResponse.json(
-          { error: `Workflow "${service.workflowGroup}" is misconfigured.` },
+          { error: `Workflow "${service.workflowGroup}" is already completed for this customer and property.` },
           { status: 400 }
         )
       }
@@ -238,6 +247,47 @@ export async function POST(request: Request) {
           { status: 400 }
         )
       }
+
+      const existingStepTasks = await prisma.task.findMany({
+        where: {
+          customerId,
+          propertyId,
+          serviceId: service.id,
+        },
+        select: {
+          status: {
+            select: {
+              name: true,
+            },
+          },
+        },
+      })
+
+      const hasOpenStep = existingStepTasks.some((task) => !isCompletedStatusName(task.status?.name))
+      if (hasOpenStep) {
+        return NextResponse.json(
+          { error: `There is already an active "${service.name}" task for this customer and property.` },
+          { status: 400 }
+        )
+      }
+
+      if (!hasCustomStatus && service.stepOrder === 1) {
+        const inProgressId = await getDefaultInProgressStatusId()
+        if (inProgressId) {
+          finalStatusId = inProgressId
+        }
+      }
+    }
+
+    const status = await prisma.taskStatus.findUnique({
+      where: { id: finalStatusId },
+    })
+
+    if (!status) {
+      return NextResponse.json(
+        { error: 'Invalid status selected' },
+        { status: 400 }
+      )
     }
 
     const task = await prisma.task.create({
@@ -246,6 +296,7 @@ export async function POST(request: Request) {
         propertyId,
         serviceId,
         statusId: finalStatusId,
+        completedAt: isCompletedStatusName(status.name) ? new Date() : null,
         notes: notes || null,
         scheduledFor: scheduledFor ? new Date(scheduledFor) : null,
       },
@@ -306,7 +357,6 @@ export async function POST(request: Request) {
             },
             property: `${property.address}, ${property.city}, ${property.state} ${property.zip}`,
             status: status.name,
-            scheduledFor: task.scheduledFor?.toISOString() || null,
             notes: task.notes,
             images: uploadedImages,
           })
