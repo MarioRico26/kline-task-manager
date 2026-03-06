@@ -103,6 +103,8 @@ export default function NewTaskPage() {
   const [scheduledFor, setScheduledFor] = useState('')
   const [notes, setNotes] = useState('')
   const [files, setFiles] = useState<FileList | null>(null)
+  const [customerSearch, setCustomerSearch] = useState('')
+  const [propertySearch, setPropertySearch] = useState('')
 
   useEffect(() => {
     async function loadFormData() {
@@ -147,10 +149,40 @@ export default function NewTaskPage() {
     loadFormData()
   }, [])
 
+  const filteredCustomers = useMemo(() => {
+    const query = customerSearch.trim().toLowerCase()
+    if (!query) return customers
+
+    return customers.filter((customer) => {
+      const fullName = customer.fullName.toLowerCase()
+      const email = (customer.email || '').toLowerCase()
+      const phone = (customer.phone || '').toLowerCase()
+      return fullName.includes(query) || email.includes(query) || phone.includes(query)
+    })
+  }, [customerSearch, customers])
+
   const filteredProperties = useMemo(() => {
-    if (!customerId) return []
-    return properties.filter((p) => p.customerId === customerId)
-  }, [properties, customerId])
+    const query = propertySearch.trim().toLowerCase()
+
+    return properties.filter((property) => {
+      if (customerId && property.customerId !== customerId) return false
+
+      if (!query) return true
+
+      const relatedCustomer = customers.find((customer) => customer.id === property.customerId)
+      const haystack = [
+        property.address,
+        property.city,
+        property.state,
+        property.zip,
+        relatedCustomer?.fullName || '',
+      ]
+        .join(' ')
+        .toLowerCase()
+
+      return haystack.includes(query)
+    })
+  }, [properties, customerId, propertySearch, customers])
 
   const workflowHistoryByKey = useMemo(() => {
     const history = new Map<string, Array<{ step: number; createdAt: string; isCompleted: boolean }>>()
@@ -271,6 +303,15 @@ export default function NewTaskPage() {
       setServiceId('')
     }
   }, [filteredServices, serviceId])
+
+  useEffect(() => {
+    if (!propertyId) return
+    const selectedProperty = properties.find((property) => property.id === propertyId)
+    if (!selectedProperty) return
+    if (!customerId || customerId !== selectedProperty.customerId) {
+      setCustomerId(selectedProperty.customerId)
+    }
+  }, [propertyId, properties, customerId])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -454,6 +495,14 @@ export default function NewTaskPage() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16 }}>
               <div>
                 <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '8px', fontWeight: 700 }}>Customer</label>
+                <input
+                  type="text"
+                  className="kline-input"
+                  value={customerSearch}
+                  onChange={(e) => setCustomerSearch(e.target.value)}
+                  placeholder="Search customer name/email/phone"
+                  style={{ marginBottom: 8 }}
+                />
                 <select
                   className="kline-input"
                   value={customerId}
@@ -461,7 +510,7 @@ export default function NewTaskPage() {
                   required
                 >
                   <option value="">Select customer</option>
-                  {customers.map((c) => (
+                  {filteredCustomers.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.fullName}{c.email ? ` (${c.email})` : ''}
                     </option>
@@ -471,23 +520,42 @@ export default function NewTaskPage() {
 
               <div>
                 <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '8px', fontWeight: 700 }}>Property</label>
+                <input
+                  type="text"
+                  className="kline-input"
+                  value={propertySearch}
+                  onChange={(e) => setPropertySearch(e.target.value)}
+                  placeholder="Search property address/city/zip"
+                  style={{ marginBottom: 8 }}
+                />
                 <select
                   className="kline-input"
                   value={propertyId}
                   onChange={(e) => setPropertyId(e.target.value)}
                   required
-                  disabled={!customerId || filteredProperties.length === 0}
+                  disabled={filteredProperties.length === 0}
                 >
                   <option value="">
-                    {customerId ? (filteredProperties.length ? 'Select property' : 'No properties for this customer') : 'Select customer first'}
+                    {filteredProperties.length
+                      ? customerId
+                        ? 'Select property'
+                        : 'Select property (customer auto-fills)'
+                      : customerId
+                        ? 'No properties for this customer'
+                        : 'No properties found'}
                   </option>
                   {filteredProperties.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {p.address}, {p.city}, {p.state}
+                      {p.address}, {p.city}, {p.state} {customerId ? '' : `(${p.customer?.fullName || 'No customer'})`}
                     </option>
                   ))}
                 </select>
-                {customerId && filteredProperties.length === 1 && (
+                {propertyId && (
+                  <div style={{ marginTop: 6, color: 'var(--kline-text-light)', fontSize: '0.8rem' }}>
+                    Customer auto-selected from chosen property.
+                  </div>
+                )}
+                {customerId && filteredProperties.length === 1 && !propertyId && (
                   <div style={{ marginTop: 6, color: 'var(--kline-text-light)', fontSize: '0.8rem' }}>
                     Property auto-selected for this customer.
                   </div>
