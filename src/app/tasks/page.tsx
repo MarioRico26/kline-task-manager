@@ -7,26 +7,55 @@ interface TaskItem {
   id: string
   scheduledFor: string | null
   createdAt: string
+  notes?: string | null
   customer: {
+    id: string
     fullName: string
     email: string | null
     phone: string | null
   }
   property: {
+    id: string
     address: string
     city: string
     state: string
     zip: string
   }
   service: {
+    id: string
     name: string
     description?: string | null
+    isSequential?: boolean
+    workflowGroup?: string | null
+    stepOrder?: number | null
   }
   status: {
+    id: string
     name: string
     color?: string | null
   }
   media: Array<{ id: string; url: string }>
+}
+
+interface StatusItem {
+  id: string
+  name: string
+  color?: string | null
+}
+
+interface ServiceStep {
+  id: string
+  isSequential: boolean
+  workflowGroup: string | null
+  stepOrder: number | null
+}
+
+function normalizeWorkflow(value?: string | null) {
+  return (value || '').trim().toLowerCase()
+}
+
+function isCompletedStatusName(statusName: string) {
+  return statusName.trim().toLowerCase() === 'completed'
 }
 
 function fmtDate(value: string | null) {
@@ -45,12 +74,15 @@ function fmtDateTime(value: string) {
 export default function TasksPage() {
   const router = useRouter()
   const [tasks, setTasks] = useState<TaskItem[]>([])
+  const [statuses, setStatuses] = useState<StatusItem[]>([])
+  const [services, setServices] = useState<ServiceStep[]>([])
   const [loading, setLoading] = useState(true)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('ALL')
   const [serviceFilter, setServiceFilter] = useState('ALL')
   const [scheduleFilter, setScheduleFilter] = useState<'ALL' | 'SCHEDULED' | 'UNSCHEDULED'>('ALL')
+  const [updatingTaskId, setUpdatingTaskId] = useState<string | null>(null)
 
   const loadTasks = async () => {
     try {
@@ -72,8 +104,26 @@ export default function TasksPage() {
     }
   }
 
+  const loadTaskCatalogs = async () => {
+    const [statusRes, servicesRes] = await Promise.all([
+      fetch('/api/statuses', { cache: 'no-store' }),
+      fetch('/api/services', { cache: 'no-store' }),
+    ])
+
+    if (statusRes.ok) {
+      const statusData = (await statusRes.json()) as StatusItem[]
+      setStatuses(statusData)
+    }
+
+    if (servicesRes.ok) {
+      const servicesData = (await servicesRes.json()) as ServiceStep[]
+      setServices(servicesData)
+    }
+  }
+
   useEffect(() => {
     loadTasks()
+    loadTaskCatalogs()
   }, [])
 
   const statusOptions = useMemo(() => {
@@ -116,8 +166,62 @@ export default function TasksPage() {
     })
   }, [tasks, search, statusFilter, serviceFilter, scheduleFilter])
 
+  const completedStatusId = useMemo(() => {
+    const completed = statuses.find((status) => isCompletedStatusName(status.name))
+    return completed?.id || null
+  }, [statuses])
+
+  const workflowStepTotals = useMemo(() => {
+    const totals = new Map<string, number>()
+
+    services.forEach((service) => {
+      if (!service.isSequential || service.stepOrder === null) return
+      const groupKey = normalizeWorkflow(service.workflowGroup)
+      if (!groupKey) return
+
+      const currentMax = totals.get(groupKey) || 0
+      if (service.stepOrder > currentMax) totals.set(groupKey, service.stepOrder)
+    })
+
+    return totals
+  }, [services])
+
+  const handleMarkCompleted = async (task: TaskItem) => {
+    if (!completedStatusId || isCompletedStatusName(task.status.name)) return
+
+    try {
+      setUpdatingTaskId(task.id)
+      const formData = new FormData()
+      formData.set('customerId', task.customer.id)
+      formData.set('propertyId', task.property.id)
+      formData.set('serviceId', task.service.id)
+      formData.set('statusId', completedStatusId)
+      if (task.notes) formData.set('notes', task.notes)
+      if (task.scheduledFor) formData.set('scheduledFor', task.scheduledFor)
+
+      const response = await fetch(`/api/tasks/${task.id}`, {
+        method: 'PUT',
+        body: formData,
+      })
+
+      if (!response.ok) {
+        const data = (await response.json().catch(() => ({}))) as { error?: string }
+        throw new Error(data.error || 'Failed to update status')
+      }
+
+      await loadTasks()
+    } catch (error: unknown) {
+      console.error('❌ Error marking task completed:', error)
+      const message = error instanceof Error ? error.message : 'Failed to update status'
+      setErrorMsg(message)
+    } finally {
+      setUpdatingTaskId(null)
+    }
+  }
+
   const handleLogout = () => {
     document.cookie = 'user-id=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;'
+    document.cookie = 'access-scope=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;'
     window.location.href = '/auth/login'
   }
 
@@ -288,6 +392,11 @@ export default function TasksPage() {
           <div style={{ marginTop: 10, color: 'var(--kline-text-light)', fontSize: '0.85rem', fontWeight: 600 }}>
             Showing {filteredTasks.length} of {tasks.length} tasks
           </div>
+          {completedStatusId && (
+            <div style={{ marginTop: 6, color: 'var(--kline-text-light)', fontSize: '0.8rem' }}>
+              Tip: click a non-completed status badge to mark task as Completed.
+            </div>
+          )}
         </div>
 
         {/* Loading / error */}
@@ -359,6 +468,13 @@ export default function TasksPage() {
                               {t.service.description}
                             </div>
                           ) : null}
+                          {t.service?.isSequential && t.service.stepOrder ? (
+                            <WorkflowProgress
+                              stepOrder={t.service.stepOrder}
+                              workflowGroup={t.service.workflowGroup || ''}
+                              workflowStepTotals={workflowStepTotals}
+                            />
+                          ) : null}
                         </Td>
                         <Td>
                           <div style={{ fontWeight: 900, color: 'var(--kline-text)' }}>{t.customer?.fullName || '—'}</div>
@@ -367,7 +483,13 @@ export default function TasksPage() {
                           </div>
                         </Td>
                         <Td>
-                          <StatusBadge name={t.status?.name || 'Unknown'} color={t.status?.color || '#0d6efd'} />
+                          <StatusBadge
+                            name={t.status?.name || 'Unknown'}
+                            color={t.status?.color || '#0d6efd'}
+                            clickable={Boolean(completedStatusId) && !isCompletedStatusName(t.status?.name || '')}
+                            loading={updatingTaskId === t.id}
+                            onClick={() => handleMarkCompleted(t)}
+                          />
                         </Td>
                         <Td>{fmtDate(t.scheduledFor)}</Td>
                         <Td>
@@ -402,9 +524,24 @@ export default function TasksPage() {
   )
 }
 
-function StatusBadge({ name, color }: { name: string; color: string }) {
+function StatusBadge({
+  name,
+  color,
+  clickable = false,
+  loading = false,
+  onClick,
+}: {
+  name: string
+  color: string
+  clickable?: boolean
+  loading?: boolean
+  onClick?: () => void
+}) {
   return (
-    <span
+    <button
+      type="button"
+      onClick={clickable && !loading ? onClick : undefined}
+      title={clickable ? 'Mark as Completed' : undefined}
       style={{
         display: 'inline-block',
         padding: '6px 10px',
@@ -414,10 +551,53 @@ function StatusBadge({ name, color }: { name: string; color: string }) {
         background: `${color}1A`,
         color,
         border: `1px solid ${color}55`,
+        cursor: clickable && !loading ? 'pointer' : 'default',
+        opacity: loading ? 0.7 : 1,
       }}
     >
-      {name}
-    </span>
+      {loading ? 'Updating...' : name}
+    </button>
+  )
+}
+
+function WorkflowProgress({
+  stepOrder,
+  workflowGroup,
+  workflowStepTotals,
+}: {
+  stepOrder: number
+  workflowGroup: string
+  workflowStepTotals: Map<string, number>
+}) {
+  const groupKey = normalizeWorkflow(workflowGroup)
+  const totalSteps = workflowStepTotals.get(groupKey) || stepOrder
+  const percentage = Math.min(100, Math.round((stepOrder / totalSteps) * 100))
+
+  return (
+    <div style={{ marginTop: 8 }}>
+      <div style={{ fontSize: '0.75rem', color: 'var(--kline-text-light)', fontWeight: 700 }}>
+        Workflow progress: Step {stepOrder} of {totalSteps}
+      </div>
+      <div
+        style={{
+          marginTop: 4,
+          width: '100%',
+          height: 6,
+          borderRadius: 999,
+          background: '#e7e9ec',
+          overflow: 'hidden',
+        }}
+      >
+        <div
+          style={{
+            width: `${percentage}%`,
+            height: '100%',
+            borderRadius: 999,
+            background: 'linear-gradient(90deg, var(--kline-red), var(--kline-yellow))',
+          }}
+        />
+      </div>
+    </div>
   )
 }
 

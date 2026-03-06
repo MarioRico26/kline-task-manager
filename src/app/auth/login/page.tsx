@@ -28,7 +28,11 @@ function LoginForm() {
       const data = await res.json()
       
       if (res.ok && data.user) {
-        router.replace('/dashboard')
+        if (data.user.accessScope === 'PERMITS_ONLY') {
+          router.replace('/tasks')
+        } else {
+          router.replace('/dashboard')
+        }
         return
       } else {
         setError(data.error || 'Invalid credentials')

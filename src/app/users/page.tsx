@@ -7,6 +7,7 @@ interface User {
   id: string
   email: string
   role: 'ADMIN' | 'VIEWER'
+  accessScope: 'ALL' | 'PERMITS_ONLY'
   createdAt: string
 }
 
@@ -144,6 +145,7 @@ if (isAuthenticated === true && loading) {
 
   const handleLogout = () => {
     document.cookie = 'user-id=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;'
+    document.cookie = 'access-scope=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;'
     window.location.href = '/auth/login'
   }
 
@@ -311,7 +313,7 @@ if (isAuthenticated === true && loading) {
             <>
               <div style={{ 
                 display: 'grid', 
-                gridTemplateColumns: '1fr auto auto', 
+                gridTemplateColumns: '1fr auto auto auto', 
                 padding: '1.2rem 1.5rem',
                 background: 'var(--kline-gray-light)',
                 borderBottom: '2px solid var(--kline-gray)',
@@ -321,6 +323,7 @@ if (isAuthenticated === true && loading) {
               }}>
                 <div>Email</div>
                 <div>Role</div>
+                <div>Scope</div>
                 <div>Actions</div>
               </div>
 
@@ -329,7 +332,7 @@ if (isAuthenticated === true && loading) {
                   key={user.id}
                   style={{ 
                     display: 'grid', 
-                    gridTemplateColumns: '1fr auto auto', 
+                    gridTemplateColumns: '1fr auto auto auto', 
                     padding: '1.2rem 1.5rem',
                     borderBottom: '1px solid var(--kline-gray)',
                     alignItems: 'center',
@@ -349,6 +352,20 @@ if (isAuthenticated === true && loading) {
                       }}
                     >
                       {user.role}
+                    </span>
+                  </div>
+                  <div>
+                    <span
+                      style={{
+                        padding: '0.4rem 1rem',
+                        borderRadius: '20px',
+                        fontSize: '0.78rem',
+                        fontWeight: '700',
+                        background: user.accessScope === 'PERMITS_ONLY' ? 'rgba(32, 201, 151, 0.16)' : 'rgba(108, 117, 125, 0.12)',
+                        color: user.accessScope === 'PERMITS_ONLY' ? '#198754' : '#495057',
+                      }}
+                    >
+                      {user.accessScope === 'PERMITS_ONLY' ? 'Permits Only' : 'All'}
                     </span>
                   </div>
                   <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -433,6 +450,12 @@ if (isAuthenticated === true && loading) {
             </div>
             <div style={{ color: 'var(--kline-text-light)', fontSize: '0.9rem' }}>Viewer Users</div>
           </div>
+          <div className="kline-card" style={{ padding: '1.5rem', textAlign: 'center' }}>
+            <div style={{ fontSize: '2rem', fontWeight: '700', color: '#198754' }}>
+              {users.filter(u => u.accessScope === 'PERMITS_ONLY').length}
+            </div>
+            <div style={{ color: 'var(--kline-text-light)', fontSize: '0.9rem' }}>Permits-only Users</div>
+          </div>
         </div>
       </main>
 
@@ -471,7 +494,8 @@ function CreateUserModal({ isOpen, onClose, onUserCreated }: { isOpen: boolean, 
   const [formData, setFormData] = useState({
     email: '',
     password: '',
-    role: 'VIEWER' as 'ADMIN' | 'VIEWER'
+    role: 'VIEWER' as 'ADMIN' | 'VIEWER',
+    accessScope: 'ALL' as 'ALL' | 'PERMITS_ONLY',
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -491,7 +515,7 @@ function CreateUserModal({ isOpen, onClose, onUserCreated }: { isOpen: boolean, 
       if (response.ok) {
         onUserCreated()
         onClose()
-        setFormData({ email: '', password: '', role: 'VIEWER' })
+        setFormData({ email: '', password: '', role: 'VIEWER', accessScope: 'ALL' })
       } else {
         const data = await response.json()
         setError(data.error || 'Error creating user')
@@ -601,6 +625,20 @@ function CreateUserModal({ isOpen, onClose, onUserCreated }: { isOpen: boolean, 
             </select>
           </div>
 
+          <div>
+            <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '0.5rem', fontWeight: '600' }}>
+              Access Scope
+            </label>
+            <select
+              value={formData.accessScope}
+              onChange={(e) => setFormData({ ...formData, accessScope: e.target.value as 'ALL' | 'PERMITS_ONLY' })}
+              className="kline-input"
+            >
+              <option value="ALL">All tasks</option>
+              <option value="PERMITS_ONLY">Permits tasks only</option>
+            </select>
+          </div>
+
           <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end', marginTop: '1rem' }}>
             <button
               type="button"
@@ -637,7 +675,8 @@ function CreateUserModal({ isOpen, onClose, onUserCreated }: { isOpen: boolean, 
 function EditUserModal({ user, onClose, onUserUpdated }: { user: User | null, onClose: () => void, onUserUpdated: () => void }) {
   const [formData, setFormData] = useState({
     email: '',
-    role: 'VIEWER' as 'ADMIN' | 'VIEWER'
+    role: 'VIEWER' as 'ADMIN' | 'VIEWER',
+    accessScope: 'ALL' as 'ALL' | 'PERMITS_ONLY',
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -646,7 +685,8 @@ function EditUserModal({ user, onClose, onUserUpdated }: { user: User | null, on
     if (user) {
       setFormData({
         email: user.email,
-        role: user.role
+        role: user.role,
+        accessScope: user.accessScope || 'ALL',
       })
     }
   }, [user])
@@ -758,6 +798,20 @@ function EditUserModal({ user, onClose, onUserUpdated }: { user: User | null, on
             >
               <option value="VIEWER">Viewer</option>
               <option value="ADMIN">Admin</option>
+            </select>
+          </div>
+
+          <div>
+            <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '0.5rem', fontWeight: '600' }}>
+              Access Scope
+            </label>
+            <select
+              value={formData.accessScope}
+              onChange={(e) => setFormData({ ...formData, accessScope: e.target.value as 'ALL' | 'PERMITS_ONLY' })}
+              className="kline-input"
+            >
+              <option value="ALL">All tasks</option>
+              <option value="PERMITS_ONLY">Permits tasks only</option>
             </select>
           </div>
 

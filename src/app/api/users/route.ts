@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcryptjs'
+import { getSessionUser } from '@/lib/sessionUser'
+import { UserAccessScope, getUserAccessScopeMap, setUserAccessScope } from '@/lib/userScope'
 
 const prisma = new PrismaClient()
 
@@ -18,7 +20,17 @@ export async function GET() {
       }
     })
 
-    return NextResponse.json(users)
+    const scopeMap = await getUserAccessScopeMap(
+      prisma,
+      users.map((user) => user.id)
+    )
+
+    const usersWithScope = users.map((user) => ({
+      ...user,
+      accessScope: scopeMap.get(user.id) || 'ALL',
+    }))
+
+    return NextResponse.json(usersWithScope)
   } catch (error) {
     console.error('Error fetching users:', error)
     return NextResponse.json(
@@ -30,7 +42,9 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const { email, password, role } = await request.json()
+    const { email, password, role, accessScope } = await request.json()
+    const selectedScope: UserAccessScope = accessScope === 'PERMITS_ONLY' ? 'PERMITS_ONLY' : 'ALL'
+    const sessionUser = await getSessionUser(prisma)
 
     // Verificar si el usuario ya existe
     const existingUser = await prisma.user.findUnique({
@@ -62,7 +76,12 @@ export async function POST(request: Request) {
       }
     })
 
-    return NextResponse.json(user)
+    await setUserAccessScope(prisma, user.id, selectedScope, sessionUser?.id)
+
+    return NextResponse.json({
+      ...user,
+      accessScope: selectedScope,
+    })
   } catch (error) {
     console.error('Error creating user:', error)
     return NextResponse.json(

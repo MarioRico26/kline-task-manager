@@ -22,6 +22,22 @@ export function proxy(req: NextRequest) {
     return NextResponse.redirect(loginUrl)
   }
 
+  const accessScope = req.cookies.get('access-scope')?.value
+  const isPermitsOnly = accessScope === 'PERMITS_ONLY'
+
+  if (isPermitsOnly) {
+    const allowsPath =
+      pathname.startsWith('/tasks') ||
+      pathname.startsWith('/api') ||
+      pathname.startsWith('/auth/login')
+
+    if (!allowsPath) {
+      const tasksUrl = req.nextUrl.clone()
+      tasksUrl.pathname = '/tasks'
+      return NextResponse.redirect(tasksUrl)
+    }
+  }
+
   // ✅ Tiene sesión → permitir
   return NextResponse.next()
 }

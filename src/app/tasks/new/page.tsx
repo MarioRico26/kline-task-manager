@@ -550,7 +550,7 @@ export default function NewTaskPage() {
                   value={statusId}
                   onChange={(e) => setStatusId(e.target.value)}
                 >
-                  <option value="">Default (Completed)</option>
+                  <option value="">Default (In Progress)</option>
                   {statuses.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.name}

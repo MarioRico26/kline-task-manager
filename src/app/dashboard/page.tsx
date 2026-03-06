@@ -30,6 +30,7 @@ interface DashboardStats {
     currentStep: string
     nextStep: string
     status: 'IN_PROGRESS' | 'NOT_STARTED' | 'COMPLETED'
+    progressPercent: number
     lastActivity: string | null
   }>
 }
@@ -366,6 +367,12 @@ export default function DashboardPage() {
                           <div className="monitor-steps">
                             <span>Current: {item.currentStep}</span>
                             <span>Next: {item.nextStep}</span>
+                          </div>
+                          <div className="monitor-progress">
+                            <div className="monitor-progress-track">
+                              <div className="monitor-progress-fill" style={{ width: `${item.progressPercent}%` }} />
+                            </div>
+                            <span>{item.progressPercent}%</span>
                           </div>
                           <div className="monitor-updated">Last activity: {formatMonitorDate(item.lastActivity)}</div>
                         </div>
@@ -787,6 +794,33 @@ export default function DashboardPage() {
           margin-top: 9px;
           color: var(--kline-text-light);
           font-size: 0.76rem;
+        }
+
+        .monitor-progress {
+          margin-top: 9px;
+          display: grid;
+          grid-template-columns: 1fr auto;
+          gap: 8px;
+          align-items: center;
+        }
+
+        .monitor-progress-track {
+          height: 7px;
+          border-radius: 999px;
+          background: #e7e9ec;
+          overflow: hidden;
+        }
+
+        .monitor-progress-fill {
+          height: 100%;
+          border-radius: 999px;
+          background: linear-gradient(90deg, var(--kline-red), var(--kline-yellow));
+        }
+
+        .monitor-progress span {
+          font-size: 0.74rem;
+          font-weight: 800;
+          color: var(--kline-text-light);
         }
 
         .bar-row {

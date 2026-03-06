@@ -13,17 +13,21 @@ export function buildTaskSMS(
   customerName: string,
   serviceName: string,
   serviceDescription: string | null,
-  clientMessage: string | null = null
+  clientMessage: string | null = null,
+  notes: string | null = null
 ) {
   const body =
     (clientMessage && clientMessage.trim()) ||
     (serviceDescription && serviceDescription.trim()) ||
     `Your ${serviceName} service update is available.`
 
+  const cleanedNotes = (notes || '').trim().replace(/\s+/g, ' ')
+  const noteText = cleanedNotes ? `\n\nNote: ${cleanedNotes.slice(0, 240)}` : ''
+
   return `
 Hi ${customerName},
 
-${body}
+${body}${noteText}
 
 Thank you for choosing Kline Bros.
 Call us at 609-494-5838 for any questions.

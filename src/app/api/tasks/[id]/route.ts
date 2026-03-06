@@ -4,6 +4,8 @@ import { PrismaClient } from "@prisma/client"
 import { uploadFile } from "@/lib/upload"
 import { sendTaskUpdateEmail } from "@/lib/email"
 import { sendSMS, buildTaskSMS } from "@/lib/sendSms"
+import { getSessionUser } from "@/lib/sessionUser"
+import { isPermitsServiceLike } from "@/lib/userScope"
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient }
 const prisma = globalForPrisma.prisma ?? new PrismaClient()
@@ -84,6 +86,7 @@ async function validateSequentialServiceTransition(
 
 export async function PUT(request: NextRequest) {
   try {
+    const sessionUser = await getSessionUser(prisma)
     const url = new URL(request.url)
     const pathSegments = url.pathname.split("/")
     const taskId = pathSegments[pathSegments.length - 1]
@@ -111,6 +114,10 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "Task not found" }, { status: 404 })
     }
 
+    if (sessionUser?.accessScope === "PERMITS_ONLY" && !isPermitsServiceLike(existingTask.service)) {
+      return NextResponse.json({ error: "Your account can only manage permit-related tasks." }, { status: 403 })
+    }
+
     const newService = await prisma.service.findUnique({
       where: { id: serviceId },
       select: {
@@ -126,6 +133,10 @@ export async function PUT(request: NextRequest) {
 
     if (!newService) {
       return NextResponse.json({ error: "Service not found" }, { status: 400 })
+    }
+
+    if (sessionUser?.accessScope === "PERMITS_ONLY" && !isPermitsServiceLike(newService)) {
+      return NextResponse.json({ error: "Your account can only assign permit-related services." }, { status: 403 })
     }
 
     const newStatus = await prisma.taskStatus.findUnique({
@@ -227,7 +238,8 @@ export async function PUT(request: NextRequest) {
           existingTask.customer.fullName,
           task.service.name,
           task.service.description || null,
-          task.service.clientMessage || null
+          task.service.clientMessage || null,
+          task.notes
         )
 
         notificationPromises.push(sendSMS(existingTask.customer.phone, smsText))
@@ -249,6 +261,7 @@ export async function PUT(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
+    const sessionUser = await getSessionUser(prisma)
     const url = new URL(request.url)
     const pathSegments = url.pathname.split("/")
     const taskId = pathSegments[pathSegments.length - 1]
@@ -257,9 +270,16 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: "Task ID is required" }, { status: 400 })
     }
 
-    const existingTask = await prisma.task.findUnique({ where: { id: taskId } })
+    const existingTask = await prisma.task.findUnique({
+      where: { id: taskId },
+      include: { service: { select: { name: true, workflowGroup: true } } },
+    })
     if (!existingTask) {
       return NextResponse.json({ error: "Task not found" }, { status: 404 })
+    }
+
+    if (sessionUser?.accessScope === "PERMITS_ONLY" && !isPermitsServiceLike(existingTask.service)) {
+      return NextResponse.json({ error: "Your account can only delete permit-related tasks." }, { status: 403 })
     }
 
     await prisma.task.delete({ where: { id: taskId } })

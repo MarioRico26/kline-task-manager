@@ -1,6 +1,7 @@
 //src/app/api/dashboard/stats/route.ts
 import { NextResponse } from 'next/server'
 import { PrismaClient } from '@prisma/client'
+import { getSessionUser } from '@/lib/sessionUser'
 
 declare global {
   var prisma: PrismaClient | undefined
@@ -44,6 +45,23 @@ function getCurrentWorkflowStep(definedSteps: number[], historySteps: number[]) 
 
 export async function GET() {
   try {
+    const sessionUser = await getSessionUser(prisma)
+    const isPermitsOnly = sessionUser?.accessScope === 'PERMITS_ONLY'
+    const permitsTaskWhere = {
+      service: {
+        OR: [
+          { workflowGroup: { contains: 'permit', mode: 'insensitive' as const } },
+          { name: { contains: 'permit', mode: 'insensitive' as const } },
+        ],
+      },
+    }
+    const permitsServiceWhere = {
+      OR: [
+        { workflowGroup: { contains: 'permit', mode: 'insensitive' as const } },
+        { name: { contains: 'permit', mode: 'insensitive' as const } },
+      ],
+    }
+
     const [
       totalTasks,
       totalCustomers,
@@ -54,9 +72,13 @@ export async function GET() {
       sequentialServices,
       tasks,
     ] = await Promise.all([
-      prisma.task.count(),
+      prisma.task.count({
+        where: isPermitsOnly ? permitsTaskWhere : undefined,
+      }),
       prisma.customer.count(),
-      prisma.service.count(),
+      prisma.service.count({
+        where: isPermitsOnly ? permitsServiceWhere : undefined,
+      }),
       prisma.user.count(),
       prisma.property.count(),
       prisma.taskStatus.count(),
@@ -65,10 +87,12 @@ export async function GET() {
           isSequential: true,
           workflowGroup: { not: null },
           stepOrder: { not: null },
+          ...(isPermitsOnly ? permitsServiceWhere : {}),
         },
         select: { name: true, workflowGroup: true, stepOrder: true },
       }),
       prisma.task.findMany({
+        where: isPermitsOnly ? permitsTaskWhere : undefined,
         include: {
           service: { select: { name: true, isSequential: true, workflowGroup: true, stepOrder: true } },
           customer: { select: { id: true, fullName: true } },
@@ -79,6 +103,11 @@ export async function GET() {
         take: 2000,
       }),
     ])
+
+    const permitsCustomers = new Set(tasks.map((task) => task.customer.id)).size
+    const permitsProperties = new Set(tasks.map((task) => task.property.id)).size
+    const totalCustomersVisible = isPermitsOnly ? permitsCustomers : totalCustomers
+    const totalPropertiesVisible = isPermitsOnly ? permitsProperties : totalProperties
 
     const completedTasks = tasks.filter((t) => t.completedAt !== null).length
     const pendingTasks = tasks.filter((t) => t.completedAt === null).length
@@ -195,6 +224,10 @@ export async function GET() {
         const currentStep = getCurrentWorkflowStep(definedSteps, sortedHistory)
         const currentIndex = definedSteps.indexOf(currentStep)
         const isCompleted = currentIndex === definedSteps.length - 1 && currentIndex >= 0
+        const progressPercent =
+          currentIndex >= 0 && definedSteps.length > 0
+            ? Math.round(((currentIndex + 1) / definedSteps.length) * 100)
+            : 0
 
         const nextStep = currentStep === 0
           ? definedSteps[0]
@@ -216,6 +249,7 @@ export async function GET() {
             ? `${nextStepDef.stepOrder}. ${nextStepDef.name}`
             : '—',
           status: isCompleted ? 'COMPLETED' : currentStep === 0 ? 'NOT_STARTED' : 'IN_PROGRESS',
+          progressPercent,
           lastActivity: record.lastActivity,
         }
       })
@@ -233,10 +267,10 @@ export async function GET() {
 
     const res = NextResponse.json({
       totalTasks,
-      totalCustomers,
+      totalCustomers: totalCustomersVisible,
       totalServices,
       totalUsers,
-      totalProperties,
+      totalProperties: totalPropertiesVisible,
       totalStatuses,
       completedTasks,
       pendingTasks,

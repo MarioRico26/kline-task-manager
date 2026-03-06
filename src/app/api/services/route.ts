@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { PrismaClient } from '@prisma/client'
+import { getSessionUser } from '@/lib/sessionUser'
 
 const prisma = new PrismaClient()
 
@@ -51,7 +52,16 @@ function parseServicePayload(raw: unknown): { data?: ServicePayload; error?: str
 
 export async function GET() {
   try {
+    const sessionUser = await getSessionUser(prisma)
     const services = await prisma.service.findMany({
+      where: sessionUser?.accessScope === 'PERMITS_ONLY'
+        ? {
+            OR: [
+              { workflowGroup: { contains: 'permit', mode: 'insensitive' } },
+              { name: { contains: 'permit', mode: 'insensitive' } },
+            ],
+          }
+        : undefined,
       select: {
         id: true,
         name: true,

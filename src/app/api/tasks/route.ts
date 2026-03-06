@@ -4,6 +4,8 @@ import { uploadFile } from '@/lib/upload'
 import { sendTaskUpdateEmail } from '@/lib/email'
 import { sendSMS, buildTaskSMS } from '@/lib/sendSms'
 import { formatPhone } from '@/lib/formatPhone'
+import { getSessionUser } from '@/lib/sessionUser'
+import { isPermitsServiceLike } from '@/lib/userScope'
 
 const prisma = new PrismaClient()
 
@@ -11,11 +13,22 @@ function normalizeWorkflowGroup(value: string) {
   return value.trim().toLowerCase()
 }
 
+const permitsTaskFilter = {
+  service: {
+    OR: [
+      { workflowGroup: { contains: 'permit', mode: 'insensitive' as const } },
+      { name: { contains: 'permit', mode: 'insensitive' as const } },
+    ],
+  },
+}
+
 export async function GET() {
   try {
     console.log('🔄 Fetching tasks from database...')
+    const sessionUser = await getSessionUser(prisma)
 
     const tasks = await prisma.task.findMany({
+      where: sessionUser?.accessScope === 'PERMITS_ONLY' ? permitsTaskFilter : undefined,
       include: {
         customer: {
           select: {
@@ -49,13 +62,20 @@ export async function GET() {
   }
 }
 
-async function getDefaultCompletedStatusId() {
-  const completed = await prisma.taskStatus.findFirst({
-    where: { name: { equals: 'Completed', mode: 'insensitive' } },
+async function getDefaultInProgressStatusId() {
+  const inProgress = await prisma.taskStatus.findFirst({
+    where: { name: { equals: 'In Progress', mode: 'insensitive' } },
     select: { id: true },
   })
 
-  return completed?.id || null
+  if (inProgress?.id) return inProgress.id
+
+  const open = await prisma.taskStatus.findFirst({
+    where: { name: { equals: 'Open', mode: 'insensitive' } },
+    select: { id: true },
+  })
+
+  return open?.id || null
 }
 
 async function getNextSequentialStep(
@@ -131,6 +151,7 @@ async function getNextSequentialStep(
 
 export async function POST(request: Request) {
   try {
+    const sessionUser = await getSessionUser(prisma)
     const formData = await request.formData()
 
     const customerId = (formData.get('customerId') as string) || ''
@@ -152,14 +173,14 @@ export async function POST(request: Request) {
     // ✅ status default = Completed si no mandan statusId
     let finalStatusId = statusIdFromForm
     if (!finalStatusId) {
-      const completedId = await getDefaultCompletedStatusId()
-      if (!completedId) {
+      const inProgressId = await getDefaultInProgressStatusId()
+      if (!inProgressId) {
         return NextResponse.json(
-          { error: 'Default status "Completed" not found. Please create it in Statuses.' },
+          { error: 'Default status "In Progress" (or "Open") not found. Please create it in Statuses.' },
           { status: 400 }
         )
       }
-      finalStatusId = completedId
+      finalStatusId = inProgressId
     }
 
     // ✅ Cargar entidades (y validar que existan)
@@ -181,6 +202,13 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: 'Selected property does not belong to selected customer' },
         { status: 400 }
+      )
+    }
+
+    if (sessionUser?.accessScope === 'PERMITS_ONLY' && !isPermitsServiceLike(service)) {
+      return NextResponse.json(
+        { error: 'Your account can only create permit-related tasks.' },
+        { status: 403 }
       )
     }
 
@@ -260,6 +288,7 @@ export async function POST(request: Request) {
         service.name,
         service.description || null,
         service.clientMessage || null,
+        task.notes,
       )
 
       const notificationPromises: Promise<unknown>[] = []
