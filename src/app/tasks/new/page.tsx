@@ -83,6 +83,15 @@ type WorkflowDefinition = {
   services: ServiceItem[]
 }
 
+function getCustomerDisplay(customer: CustomerItem) {
+  return `${customer.fullName}${customer.email ? ` (${customer.email})` : ''}`
+}
+
+function getPropertyDisplay(property: PropertyItem, customerName?: string) {
+  const base = `${property.address}, ${property.city}, ${property.state} ${property.zip}`
+  return customerName ? `${base} • ${customerName}` : base
+}
+
 export default function NewTaskPage() {
   const router = useRouter()
   const [customers, setCustomers] = useState<CustomerItem[]>([])
@@ -105,6 +114,8 @@ export default function NewTaskPage() {
   const [files, setFiles] = useState<FileList | null>(null)
   const [customerSearch, setCustomerSearch] = useState('')
   const [propertySearch, setPropertySearch] = useState('')
+  const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false)
+  const [showPropertySuggestions, setShowPropertySuggestions] = useState(false)
 
   useEffect(() => {
     async function loadFormData() {
@@ -149,6 +160,10 @@ export default function NewTaskPage() {
     loadFormData()
   }, [])
 
+  const customerById = useMemo(() => {
+    return new Map(customers.map((customer) => [customer.id, customer]))
+  }, [customers])
+
   const filteredCustomers = useMemo(() => {
     const query = customerSearch.trim().toLowerCase()
     if (!query) return customers
@@ -169,7 +184,7 @@ export default function NewTaskPage() {
 
       if (!query) return true
 
-      const relatedCustomer = customers.find((customer) => customer.id === property.customerId)
+      const relatedCustomer = customerById.get(property.customerId)
       const haystack = [
         property.address,
         property.city,
@@ -182,7 +197,16 @@ export default function NewTaskPage() {
 
       return haystack.includes(query)
     })
-  }, [properties, customerId, propertySearch, customers])
+  }, [properties, customerId, propertySearch, customerById])
+
+  const customerScopedProperties = useMemo(() => {
+    if (!customerId) return []
+    return properties.filter((property) => property.customerId === customerId)
+  }, [customerId, properties])
+
+  const availableProperties = useMemo(() => {
+    return customerId ? customerScopedProperties : properties
+  }, [customerId, customerScopedProperties, properties])
 
   const workflowHistoryByKey = useMemo(() => {
     const history = new Map<string, Array<{ step: number; createdAt: string; isCompleted: boolean }>>()
@@ -286,17 +310,17 @@ export default function NewTaskPage() {
   }, [customerId, propertyId, workflowDefinitions, nextStepByWorkflow])
 
   useEffect(() => {
-    if (propertyId && !filteredProperties.find((p) => p.id === propertyId)) {
+    if (propertyId && !availableProperties.find((p) => p.id === propertyId)) {
       setPropertyId('')
     }
-  }, [filteredProperties, propertyId])
+  }, [availableProperties, propertyId])
 
   useEffect(() => {
     if (!customerId) return
-    if (filteredProperties.length === 1) {
-      setPropertyId(filteredProperties[0].id)
+    if (!propertySearch.trim() && customerScopedProperties.length === 1) {
+      setPropertyId(customerScopedProperties[0].id)
     }
-  }, [customerId, filteredProperties])
+  }, [customerId, customerScopedProperties, propertySearch])
 
   useEffect(() => {
     if (serviceId && !filteredServices.find((service) => service.id === serviceId)) {
@@ -311,7 +335,44 @@ export default function NewTaskPage() {
     if (!customerId || customerId !== selectedProperty.customerId) {
       setCustomerId(selectedProperty.customerId)
     }
-  }, [propertyId, properties, customerId])
+    const selectedCustomer = customerById.get(selectedProperty.customerId)
+    if (selectedCustomer) {
+      setCustomerSearch(getCustomerDisplay(selectedCustomer))
+    }
+    setPropertySearch(getPropertyDisplay(selectedProperty))
+  }, [propertyId, properties, customerId, customerById])
+
+  const handleSelectCustomer = (id: string) => {
+    const selectedCustomer = customerById.get(id)
+    if (!selectedCustomer) return
+
+    setCustomerId(id)
+    setCustomerSearch(getCustomerDisplay(selectedCustomer))
+    setShowCustomerSuggestions(false)
+
+    if (propertyId) {
+      const selectedProperty = properties.find((property) => property.id === propertyId)
+      if (selectedProperty && selectedProperty.customerId !== id) {
+        setPropertyId('')
+        setPropertySearch('')
+      }
+    }
+  }
+
+  const handleSelectProperty = (id: string) => {
+    const selectedProperty = properties.find((property) => property.id === id)
+    if (!selectedProperty) return
+
+    setPropertyId(id)
+    setPropertySearch(getPropertyDisplay(selectedProperty))
+    setShowPropertySuggestions(false)
+
+    const selectedCustomer = customerById.get(selectedProperty.customerId)
+    if (selectedCustomer) {
+      setCustomerId(selectedCustomer.id)
+      setCustomerSearch(getCustomerDisplay(selectedCustomer))
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -495,67 +556,138 @@ export default function NewTaskPage() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16 }}>
               <div>
                 <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '8px', fontWeight: 700 }}>Customer</label>
-                <input
-                  type="text"
-                  className="kline-input"
-                  value={customerSearch}
-                  onChange={(e) => setCustomerSearch(e.target.value)}
-                  placeholder="Search customer name/email/phone"
-                  style={{ marginBottom: 8 }}
-                />
-                <select
-                  className="kline-input"
-                  value={customerId}
-                  onChange={(e) => setCustomerId(e.target.value)}
-                  required
-                >
-                  <option value="">Select customer</option>
-                  {filteredCustomers.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.fullName}{c.email ? ` (${c.email})` : ''}
-                    </option>
-                  ))}
-                </select>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type="text"
+                    className="kline-input"
+                    value={customerSearch}
+                    onFocus={() => setShowCustomerSuggestions(true)}
+                    onBlur={() => setTimeout(() => setShowCustomerSuggestions(false), 120)}
+                    onChange={(e) => {
+                      setCustomerSearch(e.target.value)
+                      setShowCustomerSuggestions(true)
+                      if (customerId) setCustomerId('')
+                    }}
+                    placeholder="Search and select customer"
+                    required={!customerId}
+                  />
+                  {showCustomerSuggestions && filteredCustomers.length > 0 && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: 'calc(100% + 6px)',
+                        left: 0,
+                        right: 0,
+                        background: '#fff',
+                        border: '1px solid var(--kline-gray)',
+                        borderRadius: 10,
+                        boxShadow: '0 10px 24px rgba(0,0,0,0.12)',
+                        zIndex: 20,
+                        maxHeight: 240,
+                        overflowY: 'auto',
+                      }}
+                    >
+                      {filteredCustomers.slice(0, 8).map((customer) => (
+                        <button
+                          key={customer.id}
+                          type="button"
+                          onMouseDown={(e) => {
+                            e.preventDefault()
+                            handleSelectCustomer(customer.id)
+                          }}
+                          style={{
+                            width: '100%',
+                            textAlign: 'left',
+                            padding: '10px 12px',
+                            border: 'none',
+                            borderBottom: '1px solid #f0f0f0',
+                            background: customerId === customer.id ? 'rgba(227, 6, 19, 0.08)' : '#fff',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          <div style={{ fontWeight: 800, color: 'var(--kline-text)' }}>{customer.fullName}</div>
+                          <div style={{ marginTop: 2, fontSize: '0.8rem', color: 'var(--kline-text-light)' }}>
+                            {customer.email || customer.phone || 'No contact'}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {customerId && (
+                  <div style={{ marginTop: 6, color: 'var(--kline-text-light)', fontSize: '0.8rem' }}>
+                    Selected customer linked to this task.
+                  </div>
+                )}
               </div>
 
               <div>
                 <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '8px', fontWeight: 700 }}>Property</label>
-                <input
-                  type="text"
-                  className="kline-input"
-                  value={propertySearch}
-                  onChange={(e) => setPropertySearch(e.target.value)}
-                  placeholder="Search property address/city/zip"
-                  style={{ marginBottom: 8 }}
-                />
-                <select
-                  className="kline-input"
-                  value={propertyId}
-                  onChange={(e) => setPropertyId(e.target.value)}
-                  required
-                  disabled={filteredProperties.length === 0}
-                >
-                  <option value="">
-                    {filteredProperties.length
-                      ? customerId
-                        ? 'Select property'
-                        : 'Select property (customer auto-fills)'
-                      : customerId
-                        ? 'No properties for this customer'
-                        : 'No properties found'}
-                  </option>
-                  {filteredProperties.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.address}, {p.city}, {p.state} {customerId ? '' : `(${p.customer?.fullName || 'No customer'})`}
-                    </option>
-                  ))}
-                </select>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type="text"
+                    className="kline-input"
+                    value={propertySearch}
+                    onFocus={() => setShowPropertySuggestions(true)}
+                    onBlur={() => setTimeout(() => setShowPropertySuggestions(false), 120)}
+                    onChange={(e) => {
+                      setPropertySearch(e.target.value)
+                      setShowPropertySuggestions(true)
+                      if (propertyId) setPropertyId('')
+                    }}
+                    placeholder="Search property and auto-fill customer"
+                    required={!propertyId}
+                  />
+                  {showPropertySuggestions && filteredProperties.length > 0 && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: 'calc(100% + 6px)',
+                        left: 0,
+                        right: 0,
+                        background: '#fff',
+                        border: '1px solid var(--kline-gray)',
+                        borderRadius: 10,
+                        boxShadow: '0 10px 24px rgba(0,0,0,0.12)',
+                        zIndex: 20,
+                        maxHeight: 260,
+                        overflowY: 'auto',
+                      }}
+                    >
+                      {filteredProperties.slice(0, 8).map((property) => {
+                        const relatedCustomer = customerById.get(property.customerId)
+                        const displayLabel = getPropertyDisplay(property, relatedCustomer?.fullName)
+                        return (
+                          <button
+                            key={property.id}
+                            type="button"
+                            onMouseDown={(e) => {
+                              e.preventDefault()
+                              handleSelectProperty(property.id)
+                            }}
+                            style={{
+                              width: '100%',
+                              textAlign: 'left',
+                              padding: '10px 12px',
+                              border: 'none',
+                              borderBottom: '1px solid #f0f0f0',
+                              background: propertyId === property.id ? 'rgba(227, 6, 19, 0.08)' : '#fff',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            <div style={{ fontWeight: 800, color: 'var(--kline-text)' }}>{displayLabel}</div>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
                 {propertyId && (
                   <div style={{ marginTop: 6, color: 'var(--kline-text-light)', fontSize: '0.8rem' }}>
                     Customer auto-selected from chosen property.
                   </div>
                 )}
-                {customerId && filteredProperties.length === 1 && !propertyId && (
+                {customerId && customerScopedProperties.length === 1 && !propertyId && !propertySearch.trim() && (
                   <div style={{ marginTop: 6, color: 'var(--kline-text-light)', fontSize: '0.8rem' }}>
                     Property auto-selected for this customer.
                   </div>

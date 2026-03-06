@@ -94,12 +94,16 @@ type PermitStageCase = {
   customerName: string
   propertyLabel: string
   status: PermitStageStatus
+  currentStageOrder: number
+  currentStageLabel: string
 }
 
 type PermitStageSummary = {
   stepOrder: number
   stepName: string
+  color: string
   totalCases: number
+  activeCasesCount: number
   completedCount: number
   inProgressCount: number
   notStartedCount: number
@@ -444,6 +448,7 @@ export default function TasksPage() {
   }, [searchFilteredTasks, sequentialCatalogByWorkflow, scheduleFilter, serviceFilter, statusFilter])
 
   const permitStageSummaries = useMemo<PermitStageSummary[]>(() => {
+    const stageColors = ['#e30613', '#fd7e14', '#f4b400', '#20c997', '#0d6efd', '#6f42c1']
     const permitSteps = services
       .filter((service) => service.isSequential && service.stepOrder !== null && isPermitsWorkflowLabel(service.workflowGroup || service.name))
       .sort((a, b) => (a.stepOrder || 0) - (b.stepOrder || 0))
@@ -469,7 +474,9 @@ export default function TasksPage() {
     const summaries = permitSteps.map((step) => ({
       stepOrder: step.stepOrder as number,
       stepName: step.name,
+      color: stageColors[(step.stepOrder as number - 1) % stageColors.length],
       totalCases: permitCases.size,
+      activeCasesCount: 0,
       completedCount: 0,
       inProgressCount: 0,
       notStartedCount: 0,
@@ -486,18 +493,31 @@ export default function TasksPage() {
         }
       })
 
-      summaries.forEach((summary) => {
-        const permitService = permitSteps.find((step) => step.stepOrder === summary.stepOrder)
-        const taskForStep = permitService ? latestTaskByServiceId.get(permitService.id) : undefined
-
+      const statusesByStepOrder = new Map<number, PermitStageStatus>()
+      permitSteps.forEach((permitStep) => {
+        const taskForStep = latestTaskByServiceId.get(permitStep.id)
         let status: PermitStageStatus = 'NOT_STARTED'
         if (taskForStep) {
           status = isCompletedStatusName(taskForStep.status.name) ? 'COMPLETED' : 'IN_PROGRESS'
         }
+        statusesByStepOrder.set(permitStep.stepOrder as number, status)
+      })
+
+      const currentStage =
+        permitSteps.find((permitStep) => statusesByStepOrder.get(permitStep.stepOrder as number) === 'IN_PROGRESS') ||
+        permitSteps.find((permitStep) => statusesByStepOrder.get(permitStep.stepOrder as number) === 'NOT_STARTED') ||
+        permitSteps[permitSteps.length - 1]
+
+      const currentStageOrder = currentStage?.stepOrder as number
+      const currentStageLabel = `Step ${currentStageOrder}: ${currentStage?.name || 'Unknown'}`
+
+      summaries.forEach((summary) => {
+        const status = statusesByStepOrder.get(summary.stepOrder) || 'NOT_STARTED'
 
         if (status === 'COMPLETED') summary.completedCount += 1
         if (status === 'IN_PROGRESS') summary.inProgressCount += 1
         if (status === 'NOT_STARTED') summary.notStartedCount += 1
+        if (summary.stepOrder === currentStageOrder) summary.activeCasesCount += 1
 
         summary.cases.push({
           caseKey,
@@ -506,6 +526,8 @@ export default function TasksPage() {
             ? `${firstTask.property.address} · ${firstTask.property.city}, ${firstTask.property.state}`
             : 'No property assigned',
           status,
+          currentStageOrder,
+          currentStageLabel,
         })
       })
     })
@@ -527,7 +549,9 @@ export default function TasksPage() {
 
     const exists = permitStageSummaries.some((stage) => stage.stepOrder === selectedPermitStage)
     if (!exists) {
-      setSelectedPermitStage(permitStageSummaries[0].stepOrder)
+      const preferred =
+        [...permitStageSummaries].sort((a, b) => b.activeCasesCount - a.activeCasesCount)[0] || permitStageSummaries[0]
+      setSelectedPermitStage(preferred.stepOrder)
     }
   }, [permitStageSummaries, selectedPermitStage])
 
@@ -721,7 +745,7 @@ export default function TasksPage() {
                 ? 'Latest tasks from the system'
                 : viewMode === 'CASES'
                   ? 'Grouped by customer + property + workflow to track one process end-to-end'
-                  : 'Pie charts by permits stage with clickable detail per stage'}
+                  : 'Single interactive permits pie + stage detail board'}
             </p>
           </div>
 
@@ -935,52 +959,65 @@ export default function TasksPage() {
                   No permit stages found for the current filters.
                 </div>
               ) : (
-                <div style={{ display: 'grid', gap: 16 }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 12 }}>
-                    {permitStageSummaries.map((stage) => {
-                      const total = Math.max(1, stage.totalCases)
-                      const completedPercent = Math.round((stage.completedCount / total) * 100)
-                      const inProgressPercent = Math.round((stage.inProgressCount / total) * 100)
-                      const selected = activePermitStage?.stepOrder === stage.stepOrder
-                      return (
-                        <button
-                          key={stage.stepOrder}
-                          type="button"
-                          onClick={() => setSelectedPermitStage(stage.stepOrder)}
-                          style={{
-                            textAlign: 'left',
-                            border: selected ? '2px solid var(--kline-red)' : '1px solid var(--kline-gray)',
-                            borderRadius: 12,
-                            background: '#fff',
-                            padding: 12,
-                            cursor: 'pointer',
-                          }}
-                        >
-                          <div style={{ fontWeight: 900, color: 'var(--kline-text)', fontSize: '0.95rem' }}>
-                            Step {stage.stepOrder}: {stage.stepName}
-                          </div>
-                          <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
-                            <div
+                <div style={{ display: 'grid', gap: 18 }}>
+                  <div
+                    style={{
+                      border: '1px solid var(--kline-gray)',
+                      borderRadius: 12,
+                      background: '#fff',
+                      padding: 16,
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+                      gap: 18,
+                      alignItems: 'center',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'center' }}>
+                      <PermitsStagePie
+                        stages={permitStageSummaries}
+                        selectedStepOrder={activePermitStage?.stepOrder || null}
+                        onSelect={(stepOrder) => setSelectedPermitStage(stepOrder)}
+                      />
+                    </div>
+                    <div style={{ display: 'grid', gap: 8 }}>
+                      <div style={{ fontWeight: 900, color: 'var(--kline-text)', fontSize: '1.05rem' }}>
+                        Permits distribution by current stage
+                      </div>
+                      <div style={{ color: 'var(--kline-text-light)', fontSize: '0.86rem' }}>
+                        Click any stage slice or legend row to open detail and board.
+                      </div>
+                      <div style={{ display: 'grid', gap: 6 }}>
+                        {permitStageSummaries.map((stage) => {
+                          const selected = activePermitStage?.stepOrder === stage.stepOrder
+                          return (
+                            <button
+                              key={stage.stepOrder}
+                              type="button"
+                              onClick={() => setSelectedPermitStage(stage.stepOrder)}
                               style={{
-                                width: 56,
-                                height: 56,
-                                borderRadius: '50%',
-                                background: `conic-gradient(#198754 0 ${completedPercent}%, #fd7e14 ${completedPercent}% ${
-                                  completedPercent + inProgressPercent
-                                }%, #ced4da ${completedPercent + inProgressPercent}% 100%)`,
-                                border: '1px solid var(--kline-gray)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                gap: 10,
+                                border: selected ? `2px solid ${stage.color}` : '1px solid var(--kline-gray)',
+                                borderRadius: 10,
+                                background: '#fff',
+                                padding: '8px 10px',
+                                cursor: 'pointer',
                               }}
-                            />
-                            <div style={{ fontSize: '0.8rem', color: 'var(--kline-text-light)', fontWeight: 700 }}>
-                              <div style={{ color: '#198754' }}>Completed: {stage.completedCount}</div>
-                              <div style={{ color: '#fd7e14' }}>In Progress: {stage.inProgressCount}</div>
-                              <div style={{ color: '#6c757d' }}>Not Started: {stage.notStartedCount}</div>
-                              <div style={{ marginTop: 2 }}>Total cases: {stage.totalCases}</div>
-                            </div>
-                          </div>
-                        </button>
-                      )
-                    })}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <span style={{ width: 10, height: 10, borderRadius: '50%', background: stage.color }} />
+                                <span style={{ fontWeight: 800, color: 'var(--kline-text)', fontSize: '0.86rem' }}>
+                                  Step {stage.stepOrder}: {stage.stepName}
+                                </span>
+                              </div>
+                              <span style={{ fontWeight: 900, color: stage.color }}>{stage.activeCasesCount}</span>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
                   </div>
 
                   {activePermitStage && (
@@ -995,27 +1032,25 @@ export default function TasksPage() {
                       >
                         Detail · Step {activePermitStage.stepOrder}: {activePermitStage.stepName}
                       </div>
-                      <div style={{ overflowX: 'auto' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 760 }}>
-                          <thead>
-                            <tr style={{ background: '#fff' }}>
-                              <Th>Customer</Th>
-                              <Th>Property</Th>
-                              <Th>Stage Status</Th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {activePermitStage.cases.map((item) => (
-                              <tr key={`${activePermitStage.stepOrder}-${item.caseKey}`}>
-                                <Td>{item.customerName}</Td>
-                                <Td>{item.propertyLabel}</Td>
-                                <Td>
-                                  <WorkflowStatePill status={item.status} />
-                                </Td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
+
+                      <div style={{ padding: 14 }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+                          <KanbanStageColumn
+                            title="Completed"
+                            color="#198754"
+                            items={activePermitStage.cases.filter((item) => item.status === 'COMPLETED')}
+                          />
+                          <KanbanStageColumn
+                            title="In Progress"
+                            color="#fd7e14"
+                            items={activePermitStage.cases.filter((item) => item.status === 'IN_PROGRESS')}
+                          />
+                          <KanbanStageColumn
+                            title="Not Started"
+                            color="#6c757d"
+                            items={activePermitStage.cases.filter((item) => item.status === 'NOT_STARTED')}
+                          />
+                        </div>
                       </div>
                     </section>
                   )}
@@ -1402,6 +1437,146 @@ function WorkflowStatePill({ status }: { status: CaseStepState }) {
     >
       {config.label}
     </span>
+  )
+}
+
+function PermitsStagePie({
+  stages,
+  selectedStepOrder,
+  onSelect,
+}: {
+  stages: PermitStageSummary[]
+  selectedStepOrder: number | null
+  onSelect: (stepOrder: number) => void
+}) {
+  const size = 220
+  const radius = 98
+  const center = size / 2
+  const total = Math.max(1, stages.reduce((sum, stage) => sum + stage.activeCasesCount, 0))
+
+  const slices = stages.reduce<{
+    cursor: number
+    items: Array<{ stepOrder: number; color: string; value: number; path: string; selected: boolean }>
+  }>(
+    (acc, stage) => {
+      const ratio = stage.activeCasesCount / total
+      const angle = ratio * Math.PI * 2
+      const start = acc.cursor
+      const end = acc.cursor + angle
+
+      const x1 = center + radius * Math.cos(start)
+      const y1 = center + radius * Math.sin(start)
+      const x2 = center + radius * Math.cos(end)
+      const y2 = center + radius * Math.sin(end)
+      const largeArcFlag = angle > Math.PI ? 1 : 0
+      const path = `M ${center} ${center} L ${x1} ${y1} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${x2} ${y2} Z`
+
+      return {
+        cursor: end,
+        items: [
+          ...acc.items,
+          {
+            stepOrder: stage.stepOrder,
+            color: stage.color,
+            value: stage.activeCasesCount,
+            path,
+            selected: selectedStepOrder === stage.stepOrder,
+          },
+        ],
+      }
+    },
+    { cursor: -Math.PI / 2, items: [] }
+  ).items
+
+  return (
+    <div style={{ position: 'relative', width: size, height: size }}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-label="Permits stage distribution">
+        {slices.map((slice) => (
+          <path
+            key={slice.stepOrder}
+            d={slice.path}
+            fill={slice.color}
+            stroke={slice.selected ? '#111' : '#fff'}
+            strokeWidth={slice.selected ? 3 : 1}
+            style={{ cursor: 'pointer', opacity: slice.value > 0 ? 1 : 0.25 }}
+            onClick={() => onSelect(slice.stepOrder)}
+          />
+        ))}
+      </svg>
+
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          pointerEvents: 'none',
+        }}
+      >
+        <div
+          style={{
+            width: 92,
+            height: 92,
+            borderRadius: '50%',
+            background: '#fff',
+            border: '2px solid var(--kline-gray)',
+            display: 'grid',
+            placeItems: 'center',
+            textAlign: 'center',
+            padding: 6,
+          }}
+        >
+          <div style={{ fontSize: '0.72rem', fontWeight: 800, color: 'var(--kline-text-light)' }}>Active Cases</div>
+          <div style={{ fontSize: '1.2rem', fontWeight: 900, color: 'var(--kline-text)' }}>
+            {stages.reduce((sum, stage) => sum + stage.activeCasesCount, 0)}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function KanbanStageColumn({
+  title,
+  color,
+  items,
+}: {
+  title: string
+  color: string
+  items: PermitStageCase[]
+}) {
+  return (
+    <div style={{ border: '1px solid var(--kline-gray)', borderRadius: 12, overflow: 'hidden', background: '#fff' }}>
+      <div
+        style={{
+          padding: '10px 12px',
+          borderBottom: '1px solid var(--kline-gray)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          background: `${color}12`,
+        }}
+      >
+        <span style={{ fontWeight: 900, color, fontSize: '0.86rem' }}>{title}</span>
+        <span style={{ fontWeight: 900, color }}>{items.length}</span>
+      </div>
+      <div style={{ padding: 10, display: 'grid', gap: 8, minHeight: 120 }}>
+        {items.length === 0 ? (
+          <div style={{ fontSize: '0.8rem', color: 'var(--kline-text-light)' }}>No cases in this column</div>
+        ) : (
+          items.map((item) => (
+            <article key={`${item.caseKey}-${title}`} style={{ border: '1px solid var(--kline-gray)', borderRadius: 10, padding: 10 }}>
+              <div style={{ fontWeight: 900, color: 'var(--kline-text)', fontSize: '0.84rem' }}>{item.customerName}</div>
+              <div style={{ marginTop: 3, color: 'var(--kline-text-light)', fontSize: '0.78rem' }}>{item.propertyLabel}</div>
+              <div style={{ marginTop: 6, color: 'var(--kline-text-light)', fontSize: '0.75rem', fontWeight: 700 }}>
+                Current pipeline stage: {item.currentStageLabel}
+              </div>
+            </article>
+          ))
+        )}
+      </div>
+    </div>
   )
 }
 
