@@ -1085,7 +1085,7 @@ export default function TasksPage() {
                         Permits distribution by current stage
                       </div>
                       <div style={{ color: 'var(--kline-text-light)', fontSize: '0.86rem' }}>
-                        Click any stage slice or legend row to open detail and board.
+                        Click any stage segment or legend row to open detail and board.
                       </div>
                       <div style={{ display: 'grid', gap: 6 }}>
                         {permitStageSummaries.map((stage) => {
@@ -1620,94 +1620,79 @@ function PermitsStagePie({
   selectedStepOrder: number | null
   onSelect: (stepOrder: number) => void
 }) {
-  const size = 220
-  const radius = 88
-  const strokeWidth = 38
-  const center = size / 2
-  const circumference = 2 * Math.PI * radius
   const total = stages.reduce((sum, stage) => sum + stage.activeCasesCount, 0)
-  const useEqualDistribution = total === 0
-  const denominator = useEqualDistribution ? Math.max(1, stages.length) : total
-
-  const segments = stages.reduce<{
-    offset: number
-    items: Array<{ stepOrder: number; color: string; value: number; length: number; offset: number; selected: boolean }>
-  }>(
-    (acc, stage) => {
-      const ratio = (useEqualDistribution ? 1 : stage.activeCasesCount) / denominator
-      const length = ratio * circumference
-      const item = {
-        stepOrder: stage.stepOrder,
-        color: stage.color,
-        value: stage.activeCasesCount,
-        length,
-        offset: acc.offset,
-        selected: selectedStepOrder === stage.stepOrder,
-      }
-      return {
-        offset: acc.offset + length,
-        items: [...acc.items, item],
-      }
-    },
-    { offset: 0, items: [] }
-  ).items
+  const denominator = Math.max(1, total)
 
   return (
-    <div style={{ position: 'relative', width: size, height: size }}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-label="Permits stage distribution" style={{ overflow: 'visible' }}>
-        <g transform={`rotate(-90 ${center} ${center})`}>
-          {segments.map((segment) => (
-            <circle
-              key={segment.stepOrder}
-              cx={center}
-              cy={center}
-              r={radius}
-              fill="none"
-              stroke={segment.color}
-              strokeWidth={segment.selected ? strokeWidth + 2 : strokeWidth}
-              strokeLinecap="butt"
-              strokeDasharray={`${Math.max(segment.length, 1)} ${circumference}`}
-              strokeDashoffset={-segment.offset}
-              style={{
-                cursor: 'pointer',
-                opacity: segment.value > 0 || useEqualDistribution ? 1 : 0.25,
-                transition: 'stroke-width 120ms ease',
-              }}
-              onClick={() => onSelect(segment.stepOrder)}
-            />
-          ))}
-        </g>
-      </svg>
-
-      <div
-        style={{
-          position: 'absolute',
-          inset: 0,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          pointerEvents: 'none',
-        }}
-      >
-        <div
-          style={{
-            width: 92,
-            height: 92,
-            borderRadius: '50%',
-            background: '#fff',
-            border: '2px solid var(--kline-gray)',
-            display: 'grid',
-            placeItems: 'center',
-            textAlign: 'center',
-            padding: 6,
-          }}
-        >
-          <div style={{ fontSize: '0.72rem', fontWeight: 800, color: 'var(--kline-text-light)' }}>Active Cases</div>
-          <div style={{ fontSize: '1.2rem', fontWeight: 900, color: 'var(--kline-text)' }}>
-            {total}
-          </div>
-        </div>
+    <div style={{ width: '100%', maxWidth: 520 }}>
+      <div style={{ fontSize: '0.78rem', fontWeight: 800, color: 'var(--kline-text-light)', marginBottom: 8 }}>
+        Active cases: {total}
       </div>
+      <div style={{ display: 'flex', width: '100%', height: 26, borderRadius: 999, overflow: 'hidden', border: '1px solid var(--kline-gray)' }}>
+        {stages.map((stage) => {
+          const widthPercent = (stage.activeCasesCount / denominator) * 100
+          const selected = selectedStepOrder === stage.stepOrder
+          return (
+            <button
+              key={stage.stepOrder}
+              type="button"
+              onClick={() => onSelect(stage.stepOrder)}
+              title={`Step ${stage.stepOrder}: ${stage.stepName} (${stage.activeCasesCount})`}
+              style={{
+                width: `${Math.max(widthPercent, stage.activeCasesCount > 0 ? 10 : 0)}%`,
+                minWidth: stage.activeCasesCount > 0 ? 34 : 0,
+                border: 'none',
+                borderRight: '1px solid rgba(255,255,255,0.45)',
+                background: stage.color,
+                color: '#fff',
+                fontWeight: 900,
+                fontSize: '0.75rem',
+                cursor: 'pointer',
+                opacity: selected ? 1 : 0.82,
+              }}
+            >
+              {stage.activeCasesCount}
+            </button>
+          )
+        })}
+      </div>
+      <div style={{ marginTop: 10, display: 'grid', gap: 6 }}>
+        {stages.map((stage) => {
+          const selected = selectedStepOrder === stage.stepOrder
+          const percent = Math.round((stage.activeCasesCount / denominator) * 100)
+          return (
+            <button
+              key={stage.stepOrder}
+              type="button"
+              onClick={() => onSelect(stage.stepOrder)}
+              style={{
+                width: '100%',
+                textAlign: 'left',
+                border: selected ? `2px solid ${stage.color}` : '1px solid var(--kline-gray)',
+                borderRadius: 10,
+                background: '#fff',
+                padding: '8px 10px',
+                cursor: 'pointer',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 800, color: 'var(--kline-text)', fontSize: '0.84rem' }}>
+                  <span style={{ width: 10, height: 10, borderRadius: '50%', background: stage.color }} />
+                  Step {stage.stepOrder}: {stage.stepName}
+                </span>
+                <span style={{ fontWeight: 900, color: stage.color }}>
+                  {stage.activeCasesCount} ({percent}%)
+                </span>
+              </div>
+            </button>
+          )
+        })}
+      </div>
+      {total === 0 && (
+        <div style={{ marginTop: 8, fontSize: '0.8rem', color: 'var(--kline-text-light)' }}>
+          No active permit cases yet.
+        </div>
+      )}
     </div>
   )
 }
