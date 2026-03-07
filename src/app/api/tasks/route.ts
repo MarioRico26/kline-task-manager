@@ -114,6 +114,7 @@ async function getNextSequentialStep(
     .map((service) => service.stepOrder || 0)
     .filter((step) => step > 0)
   if (definedSteps.length === 0) return null
+  const startStep = definedSteps[0]
 
   const previousTasks = await prisma.task.findMany({
     where: {
@@ -124,7 +125,7 @@ async function getNextSequentialStep(
         workflowGroup: { equals: normalizedWorkflowGroup, mode: 'insensitive' },
       },
     },
-    orderBy: { createdAt: 'desc' },
+    orderBy: { createdAt: 'asc' },
     select: {
       service: {
         select: {
@@ -139,17 +140,18 @@ async function getNextSequentialStep(
     },
   })
 
-  const completedSteps = new Set<number>()
+  let nextIndex = 0
   for (const task of previousTasks) {
     const step = task.service.stepOrder || 0
-    if (!step || !isCompletedStatusName(task.status?.name)) continue
-    if (!completedSteps.has(step)) completedSteps.add(step)
+    const expectedStep = definedSteps[nextIndex]
+    if (!step || step !== expectedStep) continue
+    if (!isCompletedStatusName(task.status?.name)) continue
+    nextIndex = (nextIndex + 1) % definedSteps.length
   }
 
-  const nextStep = definedSteps.find((step) => !completedSteps.has(step))
-  if (!nextStep) return null
+  const resolvedStep = definedSteps[nextIndex] ?? startStep
 
-  const nextService = workflowServices.find((service) => service.stepOrder === nextStep)
+  const nextService = workflowServices.find((service) => service.stepOrder === resolvedStep)
   if (!nextService?.stepOrder) return null
 
   return {
@@ -234,7 +236,7 @@ export async function POST(request: Request) {
 
       if (!nextStep) {
         return NextResponse.json(
-          { error: `Workflow "${service.workflowGroup}" is already completed for this customer and property.` },
+          { error: `Workflow "${service.workflowGroup}" is misconfigured.` },
           { status: 400 }
         )
       }

@@ -69,13 +69,19 @@ function getNextWorkflowStep(
 ): number | null {
   if (definedSteps.length === 0) return null
 
-  const completedSteps = new Set<number>()
-  historySteps.forEach((item) => {
-    if (item.isCompleted) completedSteps.add(item.step)
+  const orderedHistory = [...historySteps].sort(
+    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+  )
+
+  let nextIndex = 0
+  orderedHistory.forEach((item) => {
+    const expectedStep = definedSteps[nextIndex]
+    if (item.step !== expectedStep) return
+    if (!item.isCompleted) return
+    nextIndex = (nextIndex + 1) % definedSteps.length
   })
 
-  const nextStep = definedSteps.find((step) => !completedSteps.has(step))
-  return nextStep ?? null
+  return definedSteps[nextIndex] ?? null
 }
 
 type WorkflowDefinition = {
@@ -566,7 +572,12 @@ export default function NewTaskPage() {
                     onChange={(e) => {
                       setCustomerSearch(e.target.value)
                       setShowCustomerSuggestions(true)
-                      if (customerId) setCustomerId('')
+                      if (customerId) {
+                        setCustomerId('')
+                        setPropertyId('')
+                        setPropertySearch('')
+                        setServiceId('')
+                      }
                     }}
                     placeholder="Search and select customer"
                     required={!customerId}
@@ -615,8 +626,32 @@ export default function NewTaskPage() {
                   )}
                 </div>
                 {customerId && (
-                  <div style={{ marginTop: 6, color: 'var(--kline-text-light)', fontSize: '0.8rem' }}>
-                    Selected customer linked to this task.
+                  <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                    <span style={{ color: 'var(--kline-text-light)', fontSize: '0.8rem' }}>
+                      Selected customer linked to this task.
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCustomerId('')
+                        setCustomerSearch('')
+                        setPropertyId('')
+                        setPropertySearch('')
+                        setServiceId('')
+                      }}
+                      style={{
+                        border: '1px solid var(--kline-gray)',
+                        background: '#fff',
+                        borderRadius: 999,
+                        padding: '2px 8px',
+                        fontSize: '0.72rem',
+                        fontWeight: 700,
+                        color: 'var(--kline-text-light)',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Change
+                    </button>
                   </div>
                 )}
               </div>
@@ -633,7 +668,10 @@ export default function NewTaskPage() {
                     onChange={(e) => {
                       setPropertySearch(e.target.value)
                       setShowPropertySuggestions(true)
-                      if (propertyId) setPropertyId('')
+                      if (propertyId) {
+                        setPropertyId('')
+                        setServiceId('')
+                      }
                     }}
                     placeholder="Search property and auto-fill customer"
                     required={!propertyId}
@@ -683,8 +721,30 @@ export default function NewTaskPage() {
                   )}
                 </div>
                 {propertyId && (
-                  <div style={{ marginTop: 6, color: 'var(--kline-text-light)', fontSize: '0.8rem' }}>
-                    Customer auto-selected from chosen property.
+                  <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                    <span style={{ color: 'var(--kline-text-light)', fontSize: '0.8rem' }}>
+                      Customer auto-selected from chosen property.
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPropertyId('')
+                        setPropertySearch('')
+                        setServiceId('')
+                      }}
+                      style={{
+                        border: '1px solid var(--kline-gray)',
+                        background: '#fff',
+                        borderRadius: 999,
+                        padding: '2px 8px',
+                        fontSize: '0.72rem',
+                        fontWeight: 700,
+                        color: 'var(--kline-text-light)',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Change
+                    </button>
                   </div>
                 )}
                 {customerId && customerScopedProperties.length === 1 && !propertyId && !propertySearch.trim() && (
@@ -711,7 +771,7 @@ export default function NewTaskPage() {
                   ))}
                 </select>
                 <div style={{ marginTop: 6, color: 'var(--kline-text-light)', fontSize: '0.8rem' }}>
-                  Sequential services are locked by customer + property and advance when previous step is Completed.
+                  Sequential services are locked by customer + property and advance when previous step is Completed. After final step, cycle restarts at step 1.
                 </div>
                 {customerId && propertyId && workflowNextSteps.length > 0 && (
                   <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
