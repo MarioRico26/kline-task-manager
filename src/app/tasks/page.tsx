@@ -1663,6 +1663,8 @@ function PermitsStagePie({
     return acc
   }, [])
 
+  const visibleSegments = hasData ? segments.filter((segment) => segment.value > 0) : segments
+
   const getPiePath = (start: number, sweep: number) => {
     if (sweep >= 359.99) {
       return `
@@ -1689,21 +1691,34 @@ function PermitsStagePie({
   return (
     <div style={{ position: 'relative', width: size, height: size }}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-label="Permits stage distribution">
-        {segments.map((segment) => (
-          <path
-            key={segment.stepOrder}
-            d={getPiePath(segment.start, segment.sweep)}
-            fill={segment.color}
-            stroke={segment.selected ? '#1f2328' : '#fff'}
-            strokeWidth={segment.selected ? 2.6 : 2}
-            style={{
-              cursor: 'pointer',
-              opacity: hasData ? (segment.value > 0 ? 1 : 0.2) : 0.35,
-              transition: 'opacity 120ms ease, stroke-width 120ms ease',
-            }}
-            onClick={() => onSelect(segment.stepOrder)}
+        {hasData && visibleSegments.length === 1 ? (
+          <circle
+            cx={center}
+            cy={center}
+            r={radius}
+            fill={visibleSegments[0].color}
+            stroke={visibleSegments[0].selected ? '#1f2328' : '#fff'}
+            strokeWidth={visibleSegments[0].selected ? 2.6 : 2}
+            style={{ cursor: 'pointer' }}
+            onClick={() => onSelect(visibleSegments[0].stepOrder)}
           />
-        ))}
+        ) : (
+          visibleSegments.map((segment) => (
+            <path
+              key={segment.stepOrder}
+              d={getPiePath(segment.start, segment.sweep)}
+              fill={segment.color}
+              stroke={segment.selected ? '#1f2328' : '#fff'}
+              strokeWidth={segment.selected ? 2.6 : 2}
+              style={{
+                cursor: 'pointer',
+                opacity: hasData ? 1 : 0.35,
+                transition: 'opacity 120ms ease, stroke-width 120ms ease',
+              }}
+              onClick={() => onSelect(segment.stepOrder)}
+            />
+          ))
+        )}
       </svg>
 
     </div>
