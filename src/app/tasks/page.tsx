@@ -544,7 +544,7 @@ export default function TasksPage() {
   }, [scheduleFilter, searchFilteredTasks, services])
 
   const permitStageSummaries = useMemo<PermitStageSummary[]>(() => {
-    const stageColors = ['#e30613', '#fd7e14', '#f4b400', '#20c997', '#0d6efd', '#6f42c1']
+    const stageColors = ['#4c6fbf', '#d98645', '#a5a5a5', '#5aa469', '#8b6ccf', '#2f7da7']
     const permitSteps = services
       .filter((service) => service.isSequential && service.stepOrder !== null && isPermitsWorkflowLabel(service.workflowGroup || service.name))
       .sort((a, b) => (a.stepOrder || 0) - (b.stepOrder || 0))
@@ -1626,8 +1626,7 @@ function PermitsStagePie({
   const total = stages.reduce((sum, stage) => sum + stage.activeCasesCount, 0)
   const size = 240
   const center = size / 2
-  const outerRadius = 96
-  const innerRadius = 56
+  const radius = 92
   const hasData = total > 0
   const denominator = hasData ? total : Math.max(1, stages.length)
 
@@ -1664,31 +1663,25 @@ function PermitsStagePie({
     return acc
   }, [])
 
-  const getDonutPath = (start: number, sweep: number) => {
+  const getPiePath = (start: number, sweep: number) => {
     if (sweep >= 359.99) {
       return `
-        M ${center} ${center - outerRadius}
-        A ${outerRadius} ${outerRadius} 0 1 1 ${center - 0.01} ${center - outerRadius}
-        A ${outerRadius} ${outerRadius} 0 1 1 ${center} ${center - outerRadius}
-        L ${center} ${center - innerRadius}
-        A ${innerRadius} ${innerRadius} 0 1 0 ${center - 0.01} ${center - innerRadius}
-        A ${innerRadius} ${innerRadius} 0 1 0 ${center} ${center - innerRadius}
+        M ${center} ${center - radius}
+        A ${radius} ${radius} 0 1 1 ${center - 0.01} ${center - radius}
+        A ${radius} ${radius} 0 1 1 ${center} ${center - radius}
         Z
       `
     }
 
     const end = start + sweep
     const largeArc = sweep > 180 ? 1 : 0
-    const outerStart = toPoint(outerRadius, start)
-    const outerEnd = toPoint(outerRadius, end)
-    const innerEnd = toPoint(innerRadius, end)
-    const innerStart = toPoint(innerRadius, start)
+    const startPoint = toPoint(radius, start)
+    const endPoint = toPoint(radius, end)
 
     return `
-      M ${outerStart.x} ${outerStart.y}
-      A ${outerRadius} ${outerRadius} 0 ${largeArc} 1 ${outerEnd.x} ${outerEnd.y}
-      L ${innerEnd.x} ${innerEnd.y}
-      A ${innerRadius} ${innerRadius} 0 ${largeArc} 0 ${innerStart.x} ${innerStart.y}
+      M ${center} ${center}
+      L ${startPoint.x} ${startPoint.y}
+      A ${radius} ${radius} 0 ${largeArc} 1 ${endPoint.x} ${endPoint.y}
       Z
     `
   }
@@ -1699,10 +1692,10 @@ function PermitsStagePie({
         {segments.map((segment) => (
           <path
             key={segment.stepOrder}
-            d={getDonutPath(segment.start, segment.sweep)}
+            d={getPiePath(segment.start, segment.sweep)}
             fill={segment.color}
             stroke={segment.selected ? '#1f2328' : '#fff'}
-            strokeWidth={segment.selected ? 3 : 1.5}
+            strokeWidth={segment.selected ? 2.6 : 2}
             style={{
               cursor: 'pointer',
               opacity: hasData ? (segment.value > 0 ? 1 : 0.2) : 0.35,
@@ -1713,33 +1706,6 @@ function PermitsStagePie({
         ))}
       </svg>
 
-      <div
-        style={{
-          position: 'absolute',
-          inset: 0,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          pointerEvents: 'none',
-        }}
-      >
-        <div
-          style={{
-            width: 96,
-            height: 96,
-            borderRadius: '50%',
-            background: '#fff',
-            border: '2px solid var(--kline-gray)',
-            display: 'grid',
-            placeItems: 'center',
-            textAlign: 'center',
-            padding: 6,
-          }}
-        >
-          <div style={{ fontSize: '0.72rem', fontWeight: 800, color: 'var(--kline-text-light)' }}>Active Cases</div>
-          <div style={{ fontSize: '1.25rem', fontWeight: 900, color: 'var(--kline-text)' }}>{total}</div>
-        </div>
-      </div>
     </div>
   )
 }
