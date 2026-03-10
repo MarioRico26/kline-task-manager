@@ -98,6 +98,14 @@ function getPropertyDisplay(property: PropertyItem, customerName?: string) {
   return customerName ? `${base} • ${customerName}` : base
 }
 
+const MAX_UPLOAD_TOTAL_BYTES = 4 * 1024 * 1024
+
+function formatBytes(value: number) {
+  if (value >= 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(1)} MB`
+  if (value >= 1024) return `${Math.round(value / 1024)} KB`
+  return `${value} B`
+}
+
 export default function NewTaskPage() {
   const router = useRouter()
   const [customers, setCustomers] = useState<CustomerItem[]>([])
@@ -109,6 +117,7 @@ export default function NewTaskPage() {
   const [loading, setLoading] = useState(true)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [attachmentError, setAttachmentError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
   const [customerId, setCustomerId] = useState('')
@@ -383,9 +392,18 @@ export default function NewTaskPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setSubmitError(null)
+    setAttachmentError(null)
 
     if (!customerId || !propertyId || !serviceId) {
       setSubmitError('Customer, property, and service are required')
+      return
+    }
+
+    const totalUploadBytes = files ? Array.from(files).reduce((sum, file) => sum + file.size, 0) : 0
+    if (totalUploadBytes > MAX_UPLOAD_TOTAL_BYTES) {
+      setAttachmentError(
+        `Attachments are too large (${formatBytes(totalUploadBytes)}). Vercel limit is about ${formatBytes(MAX_UPLOAD_TOTAL_BYTES)} per request.`
+      )
       return
     }
 
@@ -408,6 +426,11 @@ export default function NewTaskPage() {
       })
 
       if (!res.ok) {
+        if (res.status === 413) {
+          throw new Error(
+            `Attachments are too large for Vercel request limits. Please upload fewer/smaller images (max ${formatBytes(MAX_UPLOAD_TOTAL_BYTES)} total).`
+          )
+        }
         let errorMessage = `Create failed (${res.status})`
         try {
           const data = (await res.json()) as { error?: string }
@@ -428,6 +451,26 @@ export default function NewTaskPage() {
     } finally {
       setSubmitting(false)
     }
+  }
+
+  const handleFileSelection = (list: FileList | null, clearInput?: () => void) => {
+    setAttachmentError(null)
+    if (!list || list.length === 0) {
+      setFiles(null)
+      return
+    }
+
+    const totalUploadBytes = Array.from(list).reduce((sum, file) => sum + file.size, 0)
+    if (totalUploadBytes > MAX_UPLOAD_TOTAL_BYTES) {
+      setFiles(null)
+      setAttachmentError(
+        `Selected files total ${formatBytes(totalUploadBytes)}. Please keep attachments under ${formatBytes(MAX_UPLOAD_TOTAL_BYTES)} total.`
+      )
+      if (clearInput) clearInput()
+      return
+    }
+
+    setFiles(list)
   }
 
   return (
@@ -771,7 +814,7 @@ export default function NewTaskPage() {
                   ))}
                 </select>
                 <div style={{ marginTop: 6, color: 'var(--kline-text-light)', fontSize: '0.8rem' }}>
-                  Sequential services are locked by customer + property and advance when previous step is Completed. After final step, cycle restarts at step 1.
+                  Independent services can be created anytime. Sequential services are locked by customer + property and advance when previous step is Completed (after final step, cycle restarts at step 1).
                 </div>
                 {customerId && propertyId && workflowNextSteps.length > 0 && (
                   <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
@@ -833,8 +876,20 @@ export default function NewTaskPage() {
                   multiple
                   accept="image/*"
                   className="kline-input"
-                  onChange={(e) => setFiles(e.target.files)}
+                  onChange={(e) =>
+                    handleFileSelection(e.target.files, () => {
+                      e.currentTarget.value = ''
+                    })
+                  }
                 />
+                {attachmentError && (
+                  <div style={{ marginTop: 6, color: 'var(--kline-red)', fontSize: '0.8rem', fontWeight: 700 }}>
+                    {attachmentError}
+                  </div>
+                )}
+                <div style={{ marginTop: 6, color: 'var(--kline-text-light)', fontSize: '0.78rem' }}>
+                  Max total attachments per task: {formatBytes(MAX_UPLOAD_TOTAL_BYTES)}.
+                </div>
               </div>
             </div>
 
