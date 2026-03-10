@@ -173,6 +173,14 @@ export async function POST(request: Request) {
     const notes = (formData.get('notes') as string) || ''
     const scheduledFor = (formData.get('scheduledFor') as string) || ''
     const files = formData.getAll('files') as File[]
+    const uploadedImageUrls = Array.from(
+      new Set(
+        formData
+          .getAll('uploadedImageUrls')
+          .map((value) => (typeof value === 'string' ? value.trim() : ''))
+          .filter(Boolean)
+      )
+    )
 
     // ✅ requeridos reales
     if (!customerId || !propertyId || !serviceId) {
@@ -313,6 +321,19 @@ export async function POST(request: Request) {
 
     // ✅ uploads
     const uploadedImages: string[] = []
+    if (uploadedImageUrls.length > 0) {
+      for (const imageUrl of uploadedImageUrls) {
+        try {
+          await prisma.taskMedia.create({
+            data: { url: imageUrl, taskId: task.id },
+          })
+          uploadedImages.push(imageUrl)
+        } catch (uploadErr) {
+          console.error('⚠ Error linking pre-uploaded file:', uploadErr)
+        }
+      }
+    }
+
     if (files?.length > 0) {
       for (const file of files) {
         if (file.size > 0) {
@@ -383,7 +404,18 @@ export async function POST(request: Request) {
     }
 
     console.log('✅ Task created + notifications sent (if enabled)')
-    return NextResponse.json(task)
+    const taskWithMedia = await prisma.task.findUnique({
+      where: { id: task.id },
+      include: {
+        customer: true,
+        property: true,
+        service: true,
+        status: true,
+        media: true,
+      },
+    })
+
+    return NextResponse.json(taskWithMedia || task)
   } catch (error) {
     console.error('❌ Error creating task:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

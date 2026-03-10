@@ -98,13 +98,69 @@ function getPropertyDisplay(property: PropertyItem, customerName?: string) {
   return customerName ? `${base} • ${customerName}` : base
 }
 
-// Keep a safety margin under Vercel request limit (multipart adds overhead).
-const MAX_UPLOAD_TOTAL_BYTES = 3 * 1024 * 1024
+const MAX_UPLOAD_TOTAL_BYTES = 24 * 1024 * 1024
+const MAX_UPLOAD_FILE_BYTES = 3.5 * 1024 * 1024
+const TARGET_COMPRESSED_FILE_BYTES = 2.2 * 1024 * 1024
+const MAX_IMAGE_DIMENSION = 1920
 
 function formatBytes(value: number) {
   if (value >= 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(1)} MB`
   if (value >= 1024) return `${Math.round(value / 1024)} KB`
   return `${value} B`
+}
+
+function canvasToBlob(canvas: HTMLCanvasElement, quality: number) {
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => {
+        if (blob) {
+          resolve(blob)
+          return
+        }
+        reject(new Error('Unable to process image'))
+      },
+      'image/jpeg',
+      quality
+    )
+  })
+}
+
+async function compressImageForUpload(file: File) {
+  if (!file.type.startsWith('image/')) return file
+  if (typeof createImageBitmap !== 'function') return file
+  if (file.size <= TARGET_COMPRESSED_FILE_BYTES) return file
+
+  const image = await createImageBitmap(file)
+  const scale = Math.min(1, MAX_IMAGE_DIMENSION / Math.max(image.width, image.height))
+  const width = Math.max(1, Math.round(image.width * scale))
+  const height = Math.max(1, Math.round(image.height * scale))
+
+  const canvas = document.createElement('canvas')
+  canvas.width = width
+  canvas.height = height
+  const context = canvas.getContext('2d')
+  if (!context) {
+    image.close()
+    return file
+  }
+
+  context.drawImage(image, 0, 0, width, height)
+  image.close()
+
+  let quality = 0.84
+  let blob = await canvasToBlob(canvas, quality)
+  while (blob.size > TARGET_COMPRESSED_FILE_BYTES && quality > 0.45) {
+    quality -= 0.08
+    blob = await canvasToBlob(canvas, quality)
+  }
+
+  if (blob.size >= file.size) return file
+
+  const normalizedName = file.name.replace(/\.[^.]+$/, '')
+  return new File([blob], `${normalizedName}.jpg`, {
+    type: 'image/jpeg',
+    lastModified: Date.now(),
+  })
 }
 
 export default function NewTaskPage() {
@@ -119,6 +175,7 @@ export default function NewTaskPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [attachmentError, setAttachmentError] = useState<string | null>(null)
+  const [uploadProgress, setUploadProgress] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
   const [customerId, setCustomerId] = useState('')
@@ -394,10 +451,51 @@ export default function NewTaskPage() {
     }
   }
 
+  const uploadSelectedFiles = async (selectedFiles: FileList) => {
+    const totalFiles = selectedFiles.length
+    const uploadedUrls: string[] = []
+
+    for (let index = 0; index < totalFiles; index += 1) {
+      const originalFile = selectedFiles[index]
+      setUploadProgress(`Processing attachment ${index + 1} of ${totalFiles}...`)
+      const processedFile = await compressImageForUpload(originalFile)
+
+      if (processedFile.size > MAX_UPLOAD_FILE_BYTES) {
+        throw new Error(
+          `"${originalFile.name}" is still too large after optimization (${formatBytes(processedFile.size)}). Keep each file under ${formatBytes(MAX_UPLOAD_FILE_BYTES)}.`
+        )
+      }
+
+      setUploadProgress(`Uploading attachment ${index + 1} of ${totalFiles}...`)
+      const uploadData = new FormData()
+      uploadData.set('file', processedFile)
+      uploadData.set('folder', 'tasks/manual')
+
+      const uploadResponse = await fetch('/api/uploads', {
+        method: 'POST',
+        body: uploadData,
+      })
+
+      if (!uploadResponse.ok) {
+        const payload = (await uploadResponse.json().catch(() => ({}))) as { error?: string }
+        throw new Error(payload.error || `Upload failed for "${originalFile.name}" (${uploadResponse.status}).`)
+      }
+
+      const uploadPayload = (await uploadResponse.json()) as { url?: string }
+      if (!uploadPayload.url) {
+        throw new Error(`Upload finished without URL for "${originalFile.name}".`)
+      }
+      uploadedUrls.push(uploadPayload.url)
+    }
+
+    return uploadedUrls
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setSubmitError(null)
     setAttachmentError(null)
+    setUploadProgress(null)
 
     if (!customerId || !propertyId || !serviceId) {
       setSubmitError('Customer, property, and service are required')
@@ -407,13 +505,19 @@ export default function NewTaskPage() {
     const totalUploadBytes = files ? Array.from(files).reduce((sum, file) => sum + file.size, 0) : 0
     if (totalUploadBytes > MAX_UPLOAD_TOTAL_BYTES) {
       setAttachmentError(
-        `Attachments are too large (${formatBytes(totalUploadBytes)}). Vercel limit is about ${formatBytes(MAX_UPLOAD_TOTAL_BYTES)} per request.`
+        `Selected files total ${formatBytes(totalUploadBytes)}. Please keep total attachments under ${formatBytes(MAX_UPLOAD_TOTAL_BYTES)}.`
       )
       return
     }
 
     try {
       setSubmitting(true)
+      let uploadedImageUrls: string[] = []
+      if (files && files.length > 0) {
+        uploadedImageUrls = await uploadSelectedFiles(files)
+      }
+
+      setUploadProgress('Creating task...')
       const formData = new FormData()
       formData.set('customerId', customerId)
       formData.set('propertyId', propertyId)
@@ -421,9 +525,7 @@ export default function NewTaskPage() {
       if (statusId) formData.set('statusId', statusId)
       if (notes) formData.set('notes', notes)
       if (scheduledFor) formData.set('scheduledFor', scheduledFor)
-      if (files && files.length > 0) {
-        Array.from(files).forEach((file) => formData.append('files', file))
-      }
+      uploadedImageUrls.forEach((url) => formData.append('uploadedImageUrls', url))
 
       const res = await fetch('/api/tasks', {
         method: 'POST',
@@ -433,7 +535,7 @@ export default function NewTaskPage() {
       if (!res.ok) {
         if (res.status === 413) {
           throw new Error(
-            `Attachments are too large for Vercel request limits. Please upload fewer/smaller images (max ${formatBytes(MAX_UPLOAD_TOTAL_BYTES)} total).`
+            `Attachments are too large for Vercel limits. Please use smaller photos (max ${formatBytes(MAX_UPLOAD_FILE_BYTES)} each).`
           )
         }
         let errorMessage = `Create failed (${res.status})`
@@ -454,14 +556,34 @@ export default function NewTaskPage() {
       console.error('❌ Task create error:', err)
       setSubmitError(err instanceof Error ? err.message : 'Failed to create task')
     } finally {
+      setUploadProgress(null)
       setSubmitting(false)
     }
   }
 
   const handleFileSelection = (list: FileList | null, clearInput?: () => void) => {
     setAttachmentError(null)
+    setUploadProgress(null)
     if (!list || list.length === 0) {
       setFiles(null)
+      return
+    }
+
+    const unsupportedFile = Array.from(list).find((file) => !file.type.startsWith('image/'))
+    if (unsupportedFile) {
+      setFiles(null)
+      setAttachmentError(`"${unsupportedFile.name}" is not an image. Please upload image files only.`)
+      if (clearInput) clearInput()
+      return
+    }
+
+    const oversizedFile = Array.from(list).find((file) => file.size > 10 * 1024 * 1024)
+    if (oversizedFile) {
+      setFiles(null)
+      setAttachmentError(
+        `"${oversizedFile.name}" is ${formatBytes(oversizedFile.size)}. Please keep each original file under 10 MB before upload.`
+      )
+      if (clearInput) clearInput()
       return
     }
 
@@ -469,7 +591,7 @@ export default function NewTaskPage() {
     if (totalUploadBytes > MAX_UPLOAD_TOTAL_BYTES) {
       setFiles(null)
       setAttachmentError(
-        `Selected files total ${formatBytes(totalUploadBytes)}. Please keep attachments under ${formatBytes(MAX_UPLOAD_TOTAL_BYTES)} total.`
+        `Selected files total ${formatBytes(totalUploadBytes)}. Please keep total attachments under ${formatBytes(MAX_UPLOAD_TOTAL_BYTES)}.`
       )
       if (clearInput) clearInput()
       return
@@ -891,8 +1013,13 @@ export default function NewTaskPage() {
                     {attachmentError}
                   </div>
                 )}
+                {uploadProgress && (
+                  <div style={{ marginTop: 6, color: 'var(--kline-text-light)', fontSize: '0.8rem', fontWeight: 700 }}>
+                    {uploadProgress}
+                  </div>
+                )}
                 <div style={{ marginTop: 6, color: 'var(--kline-text-light)', fontSize: '0.78rem' }}>
-                  Max total attachments per task: {formatBytes(MAX_UPLOAD_TOTAL_BYTES)} (recommended to compress photos).
+                  Images are auto-optimized before upload. Max total: {formatBytes(MAX_UPLOAD_TOTAL_BYTES)}. Max per processed image: {formatBytes(MAX_UPLOAD_FILE_BYTES)}.
                 </div>
               </div>
             </div>
@@ -923,7 +1050,7 @@ export default function NewTaskPage() {
                   opacity: submitting ? 0.7 : 1,
                 }}
               >
-                {submitting ? 'Creating…' : 'Create Task'}
+                {submitting ? uploadProgress || 'Creating…' : 'Create Task'}
               </button>
               <button
                 type="button"
