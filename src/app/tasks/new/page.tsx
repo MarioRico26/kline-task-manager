@@ -98,7 +98,8 @@ function getPropertyDisplay(property: PropertyItem, customerName?: string) {
   return customerName ? `${base} • ${customerName}` : base
 }
 
-const MAX_UPLOAD_TOTAL_BYTES = 4 * 1024 * 1024
+// Keep a safety margin under Vercel request limit (multipart adds overhead).
+const MAX_UPLOAD_TOTAL_BYTES = 3 * 1024 * 1024
 
 function formatBytes(value: number) {
   if (value >= 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(1)} MB`
@@ -303,26 +304,30 @@ export default function NewTaskPage() {
     })
   }, [services, propertyId, nextStepByWorkflow])
 
-  const workflowNextSteps = useMemo(() => {
-    if (!customerId || !propertyId) return []
+  const selectedService = useMemo(
+    () => services.find((service) => service.id === serviceId) || null,
+    [services, serviceId]
+  )
 
-    return Array.from(workflowDefinitions.entries())
-      .map(([groupKey, definition]) => {
-        const nextStep = nextStepByWorkflow.get(groupKey) || null
-        const nextService =
-          nextStep === null
-            ? null
-            : definition.services.find((service) => service.stepOrder === nextStep)
+  const selectedWorkflowHint = useMemo(() => {
+    if (!selectedService?.isSequential) return null
+    const workflowKey = normalizeWorkflowKey(selectedService.workflowGroup)
+    if (!workflowKey) return null
 
-        return {
-          group: definition.label || groupKey,
-          expectedStep: nextStep,
-          nextServiceName: nextService?.name || null,
-          isComplete: nextStep === null,
-        }
-      })
-      .sort((a, b) => a.group.localeCompare(b.group))
-  }, [customerId, propertyId, workflowDefinitions, nextStepByWorkflow])
+    const definition = workflowDefinitions.get(workflowKey)
+    if (!definition) return null
+
+    const nextStep = nextStepByWorkflow.get(workflowKey) || null
+    const nextService =
+      nextStep === null ? null : definition.services.find((service) => service.stepOrder === nextStep)
+
+    return {
+      group: definition.label || workflowKey,
+      expectedStep: nextStep,
+      nextServiceName: nextService?.name || null,
+      isComplete: nextStep === null,
+    }
+  }, [selectedService, workflowDefinitions, nextStepByWorkflow])
 
   useEffect(() => {
     if (propertyId && !availableProperties.find((p) => p.id === propertyId)) {
@@ -816,26 +821,23 @@ export default function NewTaskPage() {
                 <div style={{ marginTop: 6, color: 'var(--kline-text-light)', fontSize: '0.8rem' }}>
                   Independent services can be created anytime. Sequential services are locked by customer + property and advance when previous step is Completed (after final step, cycle restarts at step 1).
                 </div>
-                {customerId && propertyId && workflowNextSteps.length > 0 && (
+                {customerId && propertyId && selectedWorkflowHint && (
                   <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                    {workflowNextSteps.map((item) => (
-                      <span
-                        key={item.group}
-                        style={{
-                          fontSize: '0.78rem',
-                          fontWeight: 700,
-                          color: item.isComplete ? '#1f7a43' : 'var(--kline-text-light)',
-                          background: item.isComplete ? 'rgba(25, 135, 84, 0.12)' : 'var(--kline-gray-light)',
-                          border: `1px solid ${item.isComplete ? 'rgba(25, 135, 84, 0.25)' : 'var(--kline-gray)'}`,
-                          borderRadius: 999,
-                          padding: '6px 10px',
-                        }}
-                      >
-                        {item.isComplete
-                          ? `${item.group}: completed`
-                          : `${item.group}: next ${item.nextServiceName || `step ${item.expectedStep ?? ''}`}`}
-                      </span>
-                    ))}
+                    <span
+                      style={{
+                        fontSize: '0.78rem',
+                        fontWeight: 700,
+                        color: selectedWorkflowHint.isComplete ? '#1f7a43' : 'var(--kline-text-light)',
+                        background: selectedWorkflowHint.isComplete ? 'rgba(25, 135, 84, 0.12)' : 'var(--kline-gray-light)',
+                        border: `1px solid ${selectedWorkflowHint.isComplete ? 'rgba(25, 135, 84, 0.25)' : 'var(--kline-gray)'}`,
+                        borderRadius: 999,
+                        padding: '6px 10px',
+                      }}
+                    >
+                      {selectedWorkflowHint.isComplete
+                        ? `${selectedWorkflowHint.group}: completed`
+                        : `${selectedWorkflowHint.group}: next ${selectedWorkflowHint.nextServiceName || `step ${selectedWorkflowHint.expectedStep ?? ''}`}`}
+                    </span>
                   </div>
                 )}
               </div>
@@ -855,7 +857,9 @@ export default function NewTaskPage() {
                   ))}
                 </select>
                 <div style={{ marginTop: 6, color: 'var(--kline-text-light)', fontSize: '0.8rem' }}>
-                  For sequential workflows, step 1 starts as In Progress automatically.
+                  {selectedService?.isSequential
+                    ? 'For sequential workflows, step 1 starts as In Progress automatically.'
+                    : 'For independent services, selected status is applied directly.'}
                 </div>
               </div>
 
@@ -888,7 +892,7 @@ export default function NewTaskPage() {
                   </div>
                 )}
                 <div style={{ marginTop: 6, color: 'var(--kline-text-light)', fontSize: '0.78rem' }}>
-                  Max total attachments per task: {formatBytes(MAX_UPLOAD_TOTAL_BYTES)}.
+                  Max total attachments per task: {formatBytes(MAX_UPLOAD_TOTAL_BYTES)} (recommended to compress photos).
                 </div>
               </div>
             </div>

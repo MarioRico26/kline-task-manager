@@ -1066,14 +1066,14 @@ export default function TasksPage() {
                       border: '1px solid var(--kline-gray)',
                       borderRadius: 12,
                       background: '#fff',
-                      padding: 16,
+                      padding: 20,
                       display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-                      gap: 18,
-                      alignItems: 'center',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))',
+                      gap: 22,
+                      alignItems: 'stretch',
                     }}
                   >
-                    <div style={{ display: 'flex', justifyContent: 'center' }}>
+                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                       <PermitsStagePie
                         stages={permitStageSummaries}
                         selectedStepOrder={activePermitStage?.stepOrder || null}
@@ -1624,9 +1624,9 @@ function PermitsStagePie({
   onSelect: (stepOrder: number) => void
 }) {
   const total = stages.reduce((sum, stage) => sum + stage.activeCasesCount, 0)
-  const size = 240
+  const size = 340
   const center = size / 2
-  const radius = 92
+  const radius = 126
   const hasData = total > 0
   const denominator = hasData ? total : Math.max(1, stages.length)
 
@@ -1641,6 +1641,7 @@ function PermitsStagePie({
   const segments = stages.reduce<
     Array<{
       stepOrder: number
+      stepName: string
       color: string
       value: number
       start: number
@@ -1654,6 +1655,7 @@ function PermitsStagePie({
     const sweep = (value / denominator) * 360
     acc.push({
       stepOrder: stage.stepOrder,
+      stepName: stage.stepName,
       color: stage.color,
       value: stage.activeCasesCount,
       start,
@@ -1664,6 +1666,7 @@ function PermitsStagePie({
   }, [])
 
   const visibleSegments = hasData ? segments.filter((segment) => segment.value > 0) : segments
+  const selectedSegment = visibleSegments.find((segment) => segment.selected) || visibleSegments[0] || null
 
   const getPiePath = (start: number, sweep: number) => {
     if (sweep >= 359.99) {
@@ -1688,9 +1691,30 @@ function PermitsStagePie({
     `
   }
 
+  const getLabelPoint = (start: number, sweep: number) => {
+    const midAngle = start + sweep / 2
+    return toPoint(radius * 0.62, midAngle)
+  }
+
   return (
-    <div style={{ position: 'relative', width: size, height: size }}>
+    <div
+      style={{
+        position: 'relative',
+        width: '100%',
+        maxWidth: 400,
+        aspectRatio: '1 / 1',
+        margin: '0 auto',
+        borderRadius: '50%',
+        background: 'radial-gradient(circle at 30% 30%, #ffffff 0%, #f5f7fa 65%, #ebeff3 100%)',
+        border: '1px solid #e0e4e8',
+        boxShadow: '0 18px 36px rgba(15, 23, 42, 0.12), inset 0 1px 0 rgba(255,255,255,0.85)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-label="Permits stage distribution">
+        <circle cx={center} cy={center} r={radius + 3} fill="#f4f6f9" />
         {hasData && visibleSegments.length === 1 ? (
           <circle
             cx={center}
@@ -1698,7 +1722,7 @@ function PermitsStagePie({
             r={radius}
             fill={visibleSegments[0].color}
             stroke={visibleSegments[0].selected ? '#1f2328' : '#fff'}
-            strokeWidth={visibleSegments[0].selected ? 2.6 : 2}
+            strokeWidth={visibleSegments[0].selected ? 4 : 2.5}
             style={{ cursor: 'pointer' }}
             onClick={() => onSelect(visibleSegments[0].stepOrder)}
           />
@@ -1709,7 +1733,7 @@ function PermitsStagePie({
               d={getPiePath(segment.start, segment.sweep)}
               fill={segment.color}
               stroke={segment.selected ? '#1f2328' : '#fff'}
-              strokeWidth={segment.selected ? 2.6 : 2}
+              strokeWidth={segment.selected ? 4 : 2.5}
               style={{
                 cursor: 'pointer',
                 opacity: hasData ? 1 : 0.35,
@@ -1719,8 +1743,49 @@ function PermitsStagePie({
             />
           ))
         )}
+
+        {hasData &&
+          visibleSegments.map((segment) => {
+            const percent = Math.round((segment.value / total) * 100)
+            if (percent < 7) return null
+            const point = getLabelPoint(segment.start, segment.sweep)
+            return (
+              <text
+                key={`label-${segment.stepOrder}`}
+                x={point.x}
+                y={point.y}
+                textAnchor="middle"
+                dominantBaseline="middle"
+                fill="#fff"
+                style={{ fontWeight: 900, fontSize: 18, pointerEvents: 'none' }}
+              >
+                {percent}%
+              </text>
+            )
+          })}
       </svg>
 
+      <div
+        style={{
+          position: 'absolute',
+          bottom: 30,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          background: 'rgba(255,255,255,0.92)',
+          border: `1px solid ${selectedSegment?.color || '#d3d8de'}`,
+          borderRadius: 999,
+          padding: '6px 12px',
+          fontSize: '0.78rem',
+          fontWeight: 900,
+          color: 'var(--kline-text)',
+          boxShadow: '0 8px 18px rgba(15,23,42,0.12)',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {selectedSegment
+          ? `Step ${selectedSegment.stepOrder}: ${selectedSegment.value} case${selectedSegment.value === 1 ? '' : 's'}`
+          : `Total active cases: ${total}`}
+      </div>
     </div>
   )
 }
