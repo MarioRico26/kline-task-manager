@@ -98,7 +98,6 @@ function getPropertyDisplay(property: PropertyItem, customerName?: string) {
   return customerName ? `${base} • ${customerName}` : base
 }
 
-const MAX_UPLOAD_TOTAL_BYTES = 24 * 1024 * 1024
 const MAX_UPLOAD_FILE_BYTES = 3.5 * 1024 * 1024
 const TARGET_COMPRESSED_FILE_BYTES = 2.2 * 1024 * 1024
 const MAX_IMAGE_DIMENSION = 1920
@@ -502,14 +501,6 @@ export default function NewTaskPage() {
       return
     }
 
-    const totalUploadBytes = files ? Array.from(files).reduce((sum, file) => sum + file.size, 0) : 0
-    if (totalUploadBytes > MAX_UPLOAD_TOTAL_BYTES) {
-      setAttachmentError(
-        `Selected files total ${formatBytes(totalUploadBytes)}. Please keep total attachments under ${formatBytes(MAX_UPLOAD_TOTAL_BYTES)}.`
-      )
-      return
-    }
-
     try {
       setSubmitting(true)
       let uploadedImageUrls: string[] = []
@@ -582,16 +573,6 @@ export default function NewTaskPage() {
       setFiles(null)
       setAttachmentError(
         `"${oversizedFile.name}" is ${formatBytes(oversizedFile.size)}. Please keep each original file under 10 MB before upload.`
-      )
-      if (clearInput) clearInput()
-      return
-    }
-
-    const totalUploadBytes = Array.from(list).reduce((sum, file) => sum + file.size, 0)
-    if (totalUploadBytes > MAX_UPLOAD_TOTAL_BYTES) {
-      setFiles(null)
-      setAttachmentError(
-        `Selected files total ${formatBytes(totalUploadBytes)}. Please keep total attachments under ${formatBytes(MAX_UPLOAD_TOTAL_BYTES)}.`
       )
       if (clearInput) clearInput()
       return
@@ -1019,7 +1000,7 @@ export default function NewTaskPage() {
                   </div>
                 )}
                 <div style={{ marginTop: 6, color: 'var(--kline-text-light)', fontSize: '0.78rem' }}>
-                  Images are auto-optimized before upload. Max total: {formatBytes(MAX_UPLOAD_TOTAL_BYTES)}. Max per processed image: {formatBytes(MAX_UPLOAD_FILE_BYTES)}.
+                  Images are auto-optimized before upload. No total batch cap. Max per processed image: {formatBytes(MAX_UPLOAD_FILE_BYTES)}.
                 </div>
               </div>
             </div>
