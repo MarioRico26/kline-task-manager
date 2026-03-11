@@ -167,6 +167,10 @@ export default function TasksPage() {
   const [processingCaseKey, setProcessingCaseKey] = useState<string | null>(null)
   const [accessScope, setAccessScope] = useState<AccessScope>('ALL')
   const [selectedPermitStage, setSelectedPermitStage] = useState<number | null>(null)
+  const [detailTaskId, setDetailTaskId] = useState<string | null>(null)
+  const [detailNotes, setDetailNotes] = useState('')
+  const [detailNotesDirty, setDetailNotesDirty] = useState(false)
+  const [savingDetailTaskId, setSavingDetailTaskId] = useState<string | null>(null)
 
   const loadTasks = async () => {
     try {
@@ -288,6 +292,21 @@ export default function TasksPage() {
   const taskById = useMemo(() => {
     return new Map(tasks.map((task) => [task.id, task]))
   }, [tasks])
+
+  const detailTask = useMemo(() => {
+    if (!detailTaskId) return null
+    return taskById.get(detailTaskId) || null
+  }, [detailTaskId, taskById])
+
+  useEffect(() => {
+    if (!detailTask) {
+      setDetailNotes('')
+      setDetailNotesDirty(false)
+      return
+    }
+    setDetailNotes(detailTask.notes || '')
+    setDetailNotesDirty(false)
+  }, [detailTask])
 
   const groupedTasks = useMemo<TaskGroup[]>(() => {
     if (groupBy === 'NONE') return []
@@ -702,6 +721,49 @@ export default function TasksPage() {
     }
 
     await handleStartSpecificStage(item)
+  }
+
+  const openTaskDetails = (task: TaskItem) => {
+    setDetailTaskId(task.id)
+  }
+
+  const closeTaskDetails = () => {
+    if (savingDetailTaskId) return
+    setDetailTaskId(null)
+  }
+
+  const handleSaveDetailNotes = async () => {
+    if (!detailTask || !detailNotesDirty) return
+
+    try {
+      setSavingDetailTaskId(detailTask.id)
+      const formData = new FormData()
+      formData.set('customerId', detailTask.customer.id)
+      formData.set('propertyId', detailTask.property.id)
+      formData.set('serviceId', detailTask.service.id)
+      formData.set('statusId', detailTask.status.id)
+      formData.set('notes', detailNotes)
+      if (detailTask.scheduledFor) formData.set('scheduledFor', detailTask.scheduledFor)
+
+      const response = await fetch(`/api/tasks/${detailTask.id}`, {
+        method: 'PUT',
+        body: formData,
+      })
+
+      if (!response.ok) {
+        const data = (await response.json().catch(() => ({}))) as { error?: string }
+        throw new Error(data.error || 'Failed to save notes')
+      }
+
+      await loadTasks()
+      setDetailNotesDirty(false)
+    } catch (error: unknown) {
+      console.error('❌ Error saving task notes:', error)
+      const message = error instanceof Error ? error.message : 'Failed to save notes'
+      setErrorMsg(message)
+    } finally {
+      setSavingDetailTaskId(null)
+    }
   }
 
   const handleLogout = () => {
@@ -1377,6 +1439,7 @@ export default function TasksPage() {
                             <Th>Status</Th>
                             <Th>Scheduled</Th>
                             <Th>Created</Th>
+                            <Th>Actions</Th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1424,6 +1487,24 @@ export default function TasksPage() {
                               </Td>
                               <Td>{fmtDate(t.scheduledFor)}</Td>
                               <Td>{fmtDateTime(t.createdAt)}</Td>
+                              <Td>
+                                <button
+                                  type="button"
+                                  onClick={() => openTaskDetails(t)}
+                                  style={{
+                                    border: '1px solid var(--kline-gray)',
+                                    background: '#fff',
+                                    color: 'var(--kline-text)',
+                                    borderRadius: 8,
+                                    padding: '6px 10px',
+                                    fontWeight: 800,
+                                    fontSize: '0.78rem',
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  View
+                                </button>
+                              </Td>
                             </tr>
                           ))}
                         </tbody>
@@ -1443,6 +1524,7 @@ export default function TasksPage() {
                       <Th>Scheduled</Th>
                       <Th>Property</Th>
                       <Th>Created</Th>
+                      <Th>Actions</Th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1486,6 +1568,24 @@ export default function TasksPage() {
                           </div>
                         </Td>
                         <Td>{fmtDateTime(t.createdAt)}</Td>
+                        <Td>
+                          <button
+                            type="button"
+                            onClick={() => openTaskDetails(t)}
+                            style={{
+                              border: '1px solid var(--kline-gray)',
+                              background: '#fff',
+                              color: 'var(--kline-text)',
+                              borderRadius: 8,
+                              padding: '6px 10px',
+                              fontWeight: 800,
+                              fontSize: '0.78rem',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            View
+                          </button>
+                        </Td>
                       </tr>
                     ))}
                   </tbody>
@@ -1493,6 +1593,21 @@ export default function TasksPage() {
               </div>
             )}
           </div>
+        )}
+
+        {detailTask && (
+          <TaskDetailsModal
+            task={detailTask}
+            notesDraft={detailNotes}
+            notesDirty={detailNotesDirty}
+            saving={savingDetailTaskId === detailTask.id}
+            onChangeNotes={(value) => {
+              setDetailNotes(value)
+              setDetailNotesDirty(value !== (detailTask.notes || ''))
+            }}
+            onSaveNotes={handleSaveDetailNotes}
+            onClose={closeTaskDetails}
+          />
         )}
       </main>
 
@@ -1857,6 +1972,166 @@ function KanbanStageColumn({
             </article>
           ))
         )}
+      </div>
+    </div>
+  )
+}
+
+function TaskDetailsModal({
+  task,
+  notesDraft,
+  notesDirty,
+  saving,
+  onChangeNotes,
+  onSaveNotes,
+  onClose,
+}: {
+  task: TaskItem
+  notesDraft: string
+  notesDirty: boolean
+  saving: boolean
+  onChangeNotes: (value: string) => void
+  onSaveNotes: () => Promise<void>
+  onClose: () => void
+}) {
+  const canSave = notesDirty && !saving
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(15, 23, 42, 0.45)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1000,
+        padding: 20,
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{
+          width: 'min(980px, 100%)',
+          maxHeight: '90vh',
+          overflowY: 'auto',
+          background: '#fff',
+          borderRadius: 14,
+          border: '1px solid var(--kline-gray)',
+          boxShadow: '0 20px 40px rgba(15,23,42,0.2)',
+        }}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div
+          style={{
+            padding: '14px 16px',
+            borderBottom: '1px solid var(--kline-gray)',
+            display: 'flex',
+            justifyContent: 'space-between',
+            gap: 12,
+            alignItems: 'center',
+          }}
+        >
+          <div>
+            <div style={{ fontWeight: 900, color: 'var(--kline-text)', fontSize: '1.05rem' }}>{task.service.name}</div>
+            <div style={{ marginTop: 2, fontSize: '0.84rem', color: 'var(--kline-text-light)' }}>
+              {task.customer.fullName} · {task.property.address}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              border: '1px solid var(--kline-gray)',
+              background: '#fff',
+              color: 'var(--kline-text)',
+              borderRadius: 8,
+              padding: '6px 10px',
+              fontWeight: 800,
+              cursor: 'pointer',
+            }}
+          >
+            Close
+          </button>
+        </div>
+
+        <div style={{ padding: 16, display: 'grid', gap: 14 }}>
+          <div style={{ display: 'grid', gap: 4, fontSize: '0.86rem', color: 'var(--kline-text-light)', fontWeight: 700 }}>
+            <div>
+              Status: <span style={{ color: 'var(--kline-text)' }}>{task.status.name}</span>
+            </div>
+            <div>
+              Scheduled: <span style={{ color: 'var(--kline-text)' }}>{fmtDate(task.scheduledFor)}</span>
+            </div>
+            <div>
+              Created: <span style={{ color: 'var(--kline-text)' }}>{fmtDateTime(task.createdAt)}</span>
+            </div>
+          </div>
+
+          <div>
+            <div style={{ fontWeight: 900, color: 'var(--kline-text)', marginBottom: 8 }}>Notes</div>
+            <textarea
+              value={notesDraft}
+              onChange={(event) => onChangeNotes(event.target.value)}
+              rows={4}
+              className="kline-input"
+              placeholder="No notes for this task."
+            />
+            <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
+              <button
+                type="button"
+                onClick={onSaveNotes}
+                disabled={!canSave}
+                style={{
+                  border: 'none',
+                  background: 'var(--kline-red)',
+                  color: '#fff',
+                  borderRadius: 8,
+                  padding: '8px 12px',
+                  fontWeight: 800,
+                  cursor: canSave ? 'pointer' : 'not-allowed',
+                  opacity: canSave ? 1 : 0.6,
+                }}
+              >
+                {saving ? 'Saving...' : 'Save Notes'}
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <div style={{ fontWeight: 900, color: 'var(--kline-text)', marginBottom: 8 }}>
+              Attachments ({task.media.length})
+            </div>
+            {task.media.length === 0 ? (
+              <div style={{ color: 'var(--kline-text-light)', fontWeight: 700 }}>No photos attached.</div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 10 }}>
+                {task.media.map((item) => (
+                  <a
+                    key={item.id}
+                    href={item.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{
+                      border: '1px solid var(--kline-gray)',
+                      borderRadius: 10,
+                      overflow: 'hidden',
+                      display: 'block',
+                      background: '#fff',
+                    }}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={item.url}
+                      alt="Task attachment"
+                      style={{ width: '100%', height: 140, objectFit: 'cover', display: 'block' }}
+                    />
+                  </a>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   )
