@@ -276,6 +276,11 @@ export default function NewTaskPage() {
     return properties.filter((property) => property.customerId === customerId)
   }, [customerId, properties])
 
+  const selectedCustomer = useMemo(
+    () => (customerId ? customerById.get(customerId) || null : null),
+    [customerById, customerId]
+  )
+
   const availableProperties = useMemo(() => {
     return customerId ? customerScopedProperties : properties
   }, [customerId, customerScopedProperties, properties])
@@ -425,14 +430,10 @@ export default function NewTaskPage() {
     setCustomerId(id)
     setCustomerSearch(getCustomerDisplay(selectedCustomer))
     setShowCustomerSuggestions(false)
-
-    if (propertyId) {
-      const selectedProperty = properties.find((property) => property.id === propertyId)
-      if (selectedProperty && selectedProperty.customerId !== id) {
-        setPropertyId('')
-        setPropertySearch('')
-      }
-    }
+    setPropertySearch('')
+    setPropertyId('')
+    setServiceId('')
+    setShowPropertySuggestions(true)
   }
 
   const handleSelectProperty = (id: string) => {
@@ -805,10 +806,74 @@ export default function NewTaskPage() {
                     </button>
                   </div>
                 )}
+                {customerId && (
+                  <div
+                    style={{
+                      marginTop: 10,
+                      padding: '10px 12px',
+                      borderRadius: 12,
+                      background: customerScopedProperties.length > 1 ? 'rgba(253, 126, 20, 0.08)' : 'var(--kline-gray-light)',
+                      border: `1px solid ${customerScopedProperties.length > 1 ? 'rgba(253, 126, 20, 0.22)' : 'var(--kline-gray)'}`,
+                    }}
+                  >
+                    <div style={{ fontWeight: 800, color: 'var(--kline-text)', fontSize: '0.84rem' }}>
+                      {selectedCustomer?.fullName || 'Customer'} has {customerScopedProperties.length} propert{customerScopedProperties.length === 1 ? 'y' : 'ies'} linked to {selectedCustomer?.email || 'this account'}.
+                    </div>
+                    <div style={{ marginTop: 4, color: 'var(--kline-text-light)', fontSize: '0.78rem' }}>
+                      {customerScopedProperties.length === 0
+                        ? 'Add a property to this customer before creating a task.'
+                        : customerScopedProperties.length === 1
+                          ? 'The property will auto-select for this task.'
+                          : 'This is allowed. Pick the exact property below before selecting the service.'}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div>
                 <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '8px', fontWeight: 700 }}>Property</label>
+                {customerId && customerScopedProperties.length > 1 && (
+                  <div
+                    style={{
+                      marginBottom: 10,
+                      padding: '12px 14px',
+                      borderRadius: 12,
+                      background: '#fff8f1',
+                      border: '1px solid rgba(253, 126, 20, 0.22)',
+                    }}
+                  >
+                    <div style={{ fontWeight: 800, color: 'var(--kline-text)', fontSize: '0.84rem' }}>
+                      Select the property for this task
+                    </div>
+                    <div style={{ marginTop: 4, color: 'var(--kline-text-light)', fontSize: '0.78rem' }}>
+                      Multiple properties are tied to the same customer/email. The task will be created only for the property you choose here.
+                    </div>
+                    <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                      {customerScopedProperties.slice(0, 6).map((property) => {
+                        const isSelected = property.id === propertyId
+                        return (
+                          <button
+                            key={property.id}
+                            type="button"
+                            onClick={() => handleSelectProperty(property.id)}
+                            style={{
+                              border: isSelected ? '1px solid var(--kline-red)' : '1px solid var(--kline-gray)',
+                              background: isSelected ? 'rgba(227, 6, 19, 0.08)' : '#fff',
+                              color: 'var(--kline-text)',
+                              borderRadius: 999,
+                              padding: '7px 11px',
+                              fontSize: '0.76rem',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            {property.address}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
                 <div style={{ position: 'relative' }}>
                   <input
                     type="text"
@@ -824,7 +889,13 @@ export default function NewTaskPage() {
                         setServiceId('')
                       }
                     }}
-                    placeholder="Search property and auto-fill customer"
+                    placeholder={
+                      customerId && customerScopedProperties.length > 1
+                        ? 'Search within this customer properties'
+                        : customerId && customerScopedProperties.length === 1
+                          ? 'Property will auto-select for this customer'
+                          : 'Search property and auto-fill customer'
+                    }
                     required={!propertyId}
                   />
                   {showPropertySuggestions && filteredProperties.length > 0 && (
@@ -901,6 +972,11 @@ export default function NewTaskPage() {
                 {customerId && customerScopedProperties.length === 1 && !propertyId && !propertySearch.trim() && (
                   <div style={{ marginTop: 6, color: 'var(--kline-text-light)', fontSize: '0.8rem' }}>
                     Property auto-selected for this customer.
+                  </div>
+                )}
+                {customerId && customerScopedProperties.length > 1 && !propertyId && (
+                  <div style={{ marginTop: 6, color: '#b35a00', fontSize: '0.8rem', fontWeight: 700 }}>
+                    Choose one property before creating the task.
                   </div>
                 )}
               </div>
