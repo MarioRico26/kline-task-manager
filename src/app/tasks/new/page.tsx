@@ -661,7 +661,7 @@ export default function NewTaskPage() {
         </div>
       </header>
 
-      <main style={{ maxWidth: '1280px', margin: '0 auto', padding: '28px 20px 60px' }}>
+      <main style={{ maxWidth: '1320px', margin: '0 auto', padding: '34px 24px 72px' }}>
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
           <div>
             <h2 style={{ margin: 0, fontSize: '2rem', fontWeight: 800, color: 'var(--kline-text)' }}>Create Task</h2>
@@ -696,22 +696,39 @@ export default function NewTaskPage() {
         )}
 
         {!loading && !errorMsg && (
-          <form onSubmit={handleSubmit} className="kline-card" style={{ padding: 24, marginTop: 22 }}>
+          <form onSubmit={handleSubmit} className="kline-card" style={{ padding: 32, marginTop: 26 }}>
             {submitError && (
               <div style={{
                 background: 'rgba(227, 6, 19, 0.1)',
                 border: '1px solid var(--kline-red)',
                 color: 'var(--kline-red)',
-                padding: '12px 14px',
+                padding: '14px 16px',
                 borderRadius: '8px',
-                marginBottom: '16px',
+                marginBottom: '22px',
                 fontWeight: 700,
               }}>
                 {submitError}
               </div>
             )}
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16 }}>
+            <div style={{ marginBottom: 18 }}>
+              <div style={{ fontSize: '0.75rem', fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--kline-text-light)' }}>
+                Task Setup
+              </div>
+              <div style={{ marginTop: 6, color: 'var(--kline-text-light)', fontSize: '0.92rem' }}>
+                Select the customer, property, service, and status first.
+              </div>
+            </div>
+
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+                columnGap: 22,
+                rowGap: 26,
+                alignItems: 'start',
+              }}
+            >
               <div>
                 <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '8px', fontWeight: 700 }}>Customer</label>
                 <div style={{ position: 'relative' }}>
@@ -813,7 +830,7 @@ export default function NewTaskPage() {
                 {customerId && customerScopedProperties.length > 1 && (
                   <div
                     style={{
-                      marginBottom: 10,
+                      marginBottom: 12,
                       display: 'flex',
                       flexWrap: 'wrap',
                       alignItems: 'center',
@@ -841,7 +858,7 @@ export default function NewTaskPage() {
                   </div>
                 )}
                 {customerId && customerScopedProperties.length > 1 && (
-                  <div style={{ marginBottom: 10, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  <div style={{ marginBottom: 12, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                     {customerScopedProperties.slice(0, 6).map((property) => {
                       const isSelected = property.id === propertyId
                       return (
@@ -989,7 +1006,7 @@ export default function NewTaskPage() {
                     </option>
                   ))}
                 </select>
-                <div style={{ marginTop: 6, color: 'var(--kline-text-light)', fontSize: '0.8rem' }}>
+                <div style={{ marginTop: 8, color: 'var(--kline-text-light)', fontSize: '0.8rem', maxWidth: 420, lineHeight: 1.45 }}>
                   Independent services can be created anytime. Sequential services are locked by customer + property and advance when previous step is Completed (after final step, cycle restarts at step 1).
                 </div>
                 {customerId && propertyId && selectedWorkflowHint && (
@@ -1027,7 +1044,7 @@ export default function NewTaskPage() {
                     </option>
                   ))}
                 </select>
-                <div style={{ marginTop: 6, color: 'var(--kline-text-light)', fontSize: '0.8rem' }}>
+                <div style={{ marginTop: 8, color: 'var(--kline-text-light)', fontSize: '0.8rem', maxWidth: 360, lineHeight: 1.45 }}>
                   {selectedService?.isSequential
                     ? 'For sequential workflows, step 1 starts as In Progress automatically.'
                     : 'For independent services, selected status is applied directly.'}
@@ -1043,48 +1060,69 @@ export default function NewTaskPage() {
                   onChange={(e) => setScheduledFor(e.target.value)}
                 />
               </div>
+            </div>
 
-              <div>
-                <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '8px', fontWeight: 700 }}>Attachments</label>
-                <input
-                  type="file"
-                  multiple
-                  accept="image/*"
-                  className="kline-input"
-                  onChange={(e) =>
-                    handleFileSelection(e.target.files, () => {
-                      e.currentTarget.value = ''
-                    })
-                  }
-                />
-                {attachmentError && (
-                  <div style={{ marginTop: 6, color: 'var(--kline-red)', fontSize: '0.8rem', fontWeight: 700 }}>
-                    {attachmentError}
+            <div style={{ marginTop: 28, paddingTop: 24, borderTop: '1px solid var(--kline-gray)' }}>
+              <div style={{ marginBottom: 18 }}>
+                <div style={{ fontSize: '0.75rem', fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--kline-text-light)' }}>
+                  Scheduling & Files
+                </div>
+                <div style={{ marginTop: 6, color: 'var(--kline-text-light)', fontSize: '0.92rem' }}>
+                  Add timing, photos, and internal notes if needed.
+                </div>
+              </div>
+
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+                  columnGap: 22,
+                  rowGap: 22,
+                  alignItems: 'start',
+                }}
+              >
+                <div>
+                  <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '8px', fontWeight: 700 }}>Attachments</label>
+                  <input
+                    type="file"
+                    multiple
+                    accept="image/*"
+                    className="kline-input"
+                    onChange={(e) =>
+                      handleFileSelection(e.target.files, () => {
+                        e.currentTarget.value = ''
+                      })
+                    }
+                  />
+                  {attachmentError && (
+                    <div style={{ marginTop: 8, color: 'var(--kline-red)', fontSize: '0.8rem', fontWeight: 700 }}>
+                      {attachmentError}
+                    </div>
+                  )}
+                  {uploadProgress && (
+                    <div style={{ marginTop: 8, color: 'var(--kline-text-light)', fontSize: '0.8rem', fontWeight: 700 }}>
+                      {uploadProgress}
+                    </div>
+                  )}
+                  <div style={{ marginTop: 8, color: 'var(--kline-text-light)', fontSize: '0.78rem', maxWidth: 430, lineHeight: 1.45 }}>
+                    Images are auto-optimized before upload. No total batch cap. Max per processed image: {formatBytes(MAX_UPLOAD_FILE_BYTES)}.
                   </div>
-                )}
-                {uploadProgress && (
-                  <div style={{ marginTop: 6, color: 'var(--kline-text-light)', fontSize: '0.8rem', fontWeight: 700 }}>
-                    {uploadProgress}
-                  </div>
-                )}
-                <div style={{ marginTop: 6, color: 'var(--kline-text-light)', fontSize: '0.78rem' }}>
-                  Images are auto-optimized before upload. No total batch cap. Max per processed image: {formatBytes(MAX_UPLOAD_FILE_BYTES)}.
                 </div>
               </div>
             </div>
 
-            <div style={{ marginTop: 16 }}>
+            <div style={{ marginTop: 28 }}>
               <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '8px', fontWeight: 700 }}>Notes</label>
               <textarea
                 className="kline-input"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                rows={4}
+                rows={5}
                 placeholder="Add notes for this task"
               />
             </div>
 
-            <div style={{ marginTop: 20, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <div style={{ marginTop: 28, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
               <button
                 type="submit"
                 disabled={submitting}
