@@ -806,28 +806,6 @@ export default function NewTaskPage() {
                     </button>
                   </div>
                 )}
-                {customerId && (
-                  <div
-                    style={{
-                      marginTop: 10,
-                      padding: '10px 12px',
-                      borderRadius: 12,
-                      background: customerScopedProperties.length > 1 ? 'rgba(253, 126, 20, 0.08)' : 'var(--kline-gray-light)',
-                      border: `1px solid ${customerScopedProperties.length > 1 ? 'rgba(253, 126, 20, 0.22)' : 'var(--kline-gray)'}`,
-                    }}
-                  >
-                    <div style={{ fontWeight: 800, color: 'var(--kline-text)', fontSize: '0.84rem' }}>
-                      {selectedCustomer?.fullName || 'Customer'} has {customerScopedProperties.length} propert{customerScopedProperties.length === 1 ? 'y' : 'ies'} linked to {selectedCustomer?.email || 'this account'}.
-                    </div>
-                    <div style={{ marginTop: 4, color: 'var(--kline-text-light)', fontSize: '0.78rem' }}>
-                      {customerScopedProperties.length === 0
-                        ? 'Add a property to this customer before creating a task.'
-                        : customerScopedProperties.length === 1
-                          ? 'The property will auto-select for this task.'
-                          : 'This is allowed. Pick the exact property below before selecting the service.'}
-                    </div>
-                  </div>
-                )}
               </div>
 
               <div>
@@ -836,42 +814,56 @@ export default function NewTaskPage() {
                   <div
                     style={{
                       marginBottom: 10,
-                      padding: '12px 14px',
-                      borderRadius: 12,
-                      background: '#fff8f1',
-                      border: '1px solid rgba(253, 126, 20, 0.22)',
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      alignItems: 'center',
+                      gap: 8,
                     }}
                   >
-                    <div style={{ fontWeight: 800, color: 'var(--kline-text)', fontSize: '0.84rem' }}>
-                      Select the property for this task
-                    </div>
-                    <div style={{ marginTop: 4, color: 'var(--kline-text-light)', fontSize: '0.78rem' }}>
-                      Multiple properties are tied to the same customer/email. The task will be created only for the property you choose here.
-                    </div>
-                    <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                      {customerScopedProperties.slice(0, 6).map((property) => {
-                        const isSelected = property.id === propertyId
-                        return (
-                          <button
-                            key={property.id}
-                            type="button"
-                            onClick={() => handleSelectProperty(property.id)}
-                            style={{
-                              border: isSelected ? '1px solid var(--kline-red)' : '1px solid var(--kline-gray)',
-                              background: isSelected ? 'rgba(227, 6, 19, 0.08)' : '#fff',
-                              color: 'var(--kline-text)',
-                              borderRadius: 999,
-                              padding: '7px 11px',
-                              fontSize: '0.76rem',
-                              fontWeight: 700,
-                              cursor: 'pointer',
-                            }}
-                          >
-                            {property.address}
-                          </button>
-                        )
-                      })}
-                    </div>
+                    <span
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        borderRadius: 999,
+                        padding: '4px 10px',
+                        fontSize: '0.74rem',
+                        fontWeight: 800,
+                        color: '#b35a00',
+                        background: 'rgba(253, 126, 20, 0.08)',
+                        border: '1px solid rgba(253, 126, 20, 0.2)',
+                      }}
+                    >
+                      {customerScopedProperties.length} properties
+                    </span>
+                    <span style={{ color: 'var(--kline-text-light)', fontSize: '0.78rem' }}>
+                      {selectedCustomer?.email || 'This customer'} has multiple properties. Select the exact one for this task.
+                    </span>
+                  </div>
+                )}
+                {customerId && customerScopedProperties.length > 1 && (
+                  <div style={{ marginBottom: 10, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    {customerScopedProperties.slice(0, 6).map((property) => {
+                      const isSelected = property.id === propertyId
+                      return (
+                        <button
+                          key={property.id}
+                          type="button"
+                          onClick={() => handleSelectProperty(property.id)}
+                          style={{
+                            border: isSelected ? '1px solid var(--kline-red)' : '1px solid var(--kline-gray)',
+                            background: isSelected ? 'rgba(227, 6, 19, 0.08)' : '#fff',
+                            color: 'var(--kline-text)',
+                            borderRadius: 999,
+                            padding: '7px 11px',
+                            fontSize: '0.76rem',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {property.address}
+                        </button>
+                      )
+                    })}
                   </div>
                 )}
                 <div style={{ position: 'relative' }}>
