@@ -49,6 +49,7 @@ interface TaskHistoryItem {
   }
   service: {
     id: string
+    name: string
     isSequential?: boolean
     workflowGroup?: string | null
     stepOrder?: number | null
@@ -61,6 +62,35 @@ function normalizeWorkflowKey(value?: string | null) {
 
 function isCompletedStatusName(statusName?: string | null) {
   return (statusName || '').trim().toLowerCase() === 'completed'
+}
+
+function inferLegacyPermitStep(serviceName?: string | null) {
+  const normalized = normalizeWorkflowKey(serviceName)
+  if (!normalized) return null
+  if (normalized.includes('submitted')) return 2
+  if (normalized.includes('received')) return 3
+  if (normalized.includes('in progress')) return 1
+  return null
+}
+
+function getServiceWorkflowGroup(service: Pick<ServiceItem, 'name' | 'workflowGroup'>) {
+  const configuredGroup = normalizeWorkflowKey(service.workflowGroup)
+  if (configuredGroup) return configuredGroup
+  return inferLegacyPermitStep(service.name) ? 'permits' : ''
+}
+
+function getServiceWorkflowLabel(service: Pick<ServiceItem, 'name' | 'workflowGroup'>) {
+  const configuredLabel = (service.workflowGroup || '').trim()
+  if (configuredLabel) return configuredLabel
+  return inferLegacyPermitStep(service.name) ? 'Permits' : ''
+}
+
+function getServiceStepOrder(service: Pick<ServiceItem, 'name' | 'stepOrder'>) {
+  return service.stepOrder ?? inferLegacyPermitStep(service.name)
+}
+
+function isWorkflowService(service: Pick<ServiceItem, 'name' | 'isSequential'>) {
+  return Boolean(service.isSequential) || inferLegacyPermitStep(service.name) !== null
 }
 
 function getNextWorkflowStep(
@@ -294,14 +324,14 @@ export default function NewTaskPage() {
     tasksHistory.forEach((task) => {
       if (task.customer?.id !== customerId) return
       if (task.property?.id !== propertyId) return
-      if (!task.service?.isSequential || !task.service?.stepOrder) return
+      if (!isWorkflowService(task.service) || !getServiceStepOrder(task.service)) return
 
-      const groupKey = normalizeWorkflowKey(task.service.workflowGroup)
+      const groupKey = getServiceWorkflowGroup(task.service)
       if (!groupKey) return
 
       const list = history.get(groupKey) || []
       list.push({
-        step: task.service.stepOrder,
+        step: getServiceStepOrder(task.service) as number,
         createdAt: task.createdAt,
         isCompleted: isCompletedStatusName(task.status?.name),
       })
@@ -315,8 +345,9 @@ export default function NewTaskPage() {
     const grouped = new Map<string, WorkflowDefinition>()
 
     services.forEach((service) => {
-      if (!service.isSequential || !service.stepOrder) return
-      const groupKey = normalizeWorkflowKey(service.workflowGroup)
+      const stepOrder = getServiceStepOrder(service)
+      const groupKey = getServiceWorkflowGroup(service)
+      if (!isWorkflowService(service) || !stepOrder) return
       if (!groupKey) return
 
       const existing = grouped.get(groupKey)
@@ -324,14 +355,14 @@ export default function NewTaskPage() {
         existing.services.push(service)
       } else {
         grouped.set(groupKey, {
-          label: (service.workflowGroup || '').trim() || groupKey,
+          label: getServiceWorkflowLabel(service) || groupKey,
           services: [service],
         })
       }
     })
 
     grouped.forEach((definition) => {
-      definition.services.sort((a, b) => (a.stepOrder || 0) - (b.stepOrder || 0))
+      definition.services.sort((a, b) => (getServiceStepOrder(a) || 0) - (getServiceStepOrder(b) || 0))
     })
 
     return grouped
@@ -342,7 +373,7 @@ export default function NewTaskPage() {
 
     workflowDefinitions.forEach((definition, workflowKey) => {
       const definedSteps = definition.services
-        .map((service) => service.stepOrder || 0)
+        .map((service) => getServiceStepOrder(service) || 0)
         .filter((step) => step > 0)
 
       const historySteps = workflowHistoryByKey.get(workflowKey) || []
@@ -354,16 +385,16 @@ export default function NewTaskPage() {
 
   const filteredServices = useMemo(() => {
     return services.filter((service) => {
-      if (!service.isSequential) return true
-      if (!service.stepOrder) return false
+      if (!isWorkflowService(service)) return true
+      if (!getServiceStepOrder(service)) return false
       if (!propertyId) return false
 
-      const groupKey = normalizeWorkflowKey(service.workflowGroup)
+      const groupKey = getServiceWorkflowGroup(service)
       if (!groupKey) return false
 
       const nextStep = nextStepByWorkflow.get(groupKey)
       if (nextStep === null || nextStep === undefined) return false
-      return service.stepOrder === nextStep
+      return getServiceStepOrder(service) === nextStep
     })
   }, [services, propertyId, nextStepByWorkflow])
 
@@ -373,8 +404,8 @@ export default function NewTaskPage() {
   )
 
   const selectedWorkflowHint = useMemo(() => {
-    if (!selectedService?.isSequential) return null
-    const workflowKey = normalizeWorkflowKey(selectedService.workflowGroup)
+    if (!selectedService || !isWorkflowService(selectedService)) return null
+    const workflowKey = getServiceWorkflowGroup(selectedService)
     if (!workflowKey) return null
 
     const definition = workflowDefinitions.get(workflowKey)
@@ -382,7 +413,7 @@ export default function NewTaskPage() {
 
     const nextStep = nextStepByWorkflow.get(workflowKey) || null
     const nextService =
-      nextStep === null ? null : definition.services.find((service) => service.stepOrder === nextStep)
+      nextStep === null ? null : definition.services.find((service) => getServiceStepOrder(service) === nextStep)
 
     return {
       group: definition.label || workflowKey,
@@ -727,9 +758,9 @@ export default function NewTaskPage() {
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-                columnGap: 22,
-                rowGap: 26,
+                gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))',
+                columnGap: 24,
+                rowGap: 24,
                 alignItems: 'start',
               }}
             >
@@ -994,6 +1025,38 @@ export default function NewTaskPage() {
                 )}
               </div>
 
+              <div>
+                <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '8px', fontWeight: 700 }}>
+                  Additional Notification Emails
+                </label>
+                <textarea
+                  className="kline-input"
+                  value={notificationEmails}
+                  onChange={(e) => setNotificationEmails(e.target.value)}
+                  rows={3}
+                  placeholder="Add extra emails separated by comma or line"
+                />
+                <div style={{ marginTop: 8, color: 'var(--kline-text-light)', fontSize: '0.78rem', maxWidth: 430, lineHeight: 1.45 }}>
+                  Sent in addition to the customer email for this task.
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '8px', fontWeight: 700 }}>
+                  Additional Notification Phones
+                </label>
+                <textarea
+                  className="kline-input"
+                  value={notificationPhones}
+                  onChange={(e) => setNotificationPhones(e.target.value)}
+                  rows={3}
+                  placeholder="Add extra phone numbers separated by comma or line"
+                />
+                <div style={{ marginTop: 8, color: 'var(--kline-text-light)', fontSize: '0.78rem', maxWidth: 430, lineHeight: 1.45 }}>
+                  Sent by SMS in addition to the customer phone when the status notifies.
+                </div>
+              </div>
+
               <div style={{ minWidth: 0 }}>
                 <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '8px', fontWeight: 700 }}>Service</label>
                 <select
@@ -1006,7 +1069,9 @@ export default function NewTaskPage() {
                   {filteredServices.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.name}
-                      {s.isSequential && s.workflowGroup && s.stepOrder ? ` (${s.workflowGroup} #${s.stepOrder})` : ''}
+                      {isWorkflowService(s) && getServiceWorkflowLabel(s) && getServiceStepOrder(s)
+                        ? ` (${getServiceWorkflowLabel(s)} #${getServiceStepOrder(s)})`
+                        : ''}
                     </option>
                   ))}
                 </select>
@@ -1049,7 +1114,7 @@ export default function NewTaskPage() {
                   ))}
                 </select>
                 <div style={{ marginTop: 8, color: 'var(--kline-text-light)', fontSize: '0.8rem', maxWidth: 360, lineHeight: 1.45 }}>
-                  {selectedService?.isSequential
+                  {(selectedService ? isWorkflowService(selectedService) : false)
                     ? 'For sequential workflows, step 1 starts as In Progress automatically.'
                     : 'For independent services, selected status is applied directly.'}
                 </div>
@@ -1073,10 +1138,10 @@ export default function NewTaskPage() {
             <div style={{ marginTop: 28, paddingTop: 24, borderTop: '1px solid var(--kline-gray)' }}>
               <div style={{ marginBottom: 18 }}>
                 <div style={{ fontSize: '0.75rem', fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--kline-text-light)' }}>
-                  Scheduling & Files
+                  Attachments & Notes
                 </div>
                 <div style={{ marginTop: 6, color: 'var(--kline-text-light)', fontSize: '0.92rem' }}>
-                  Add timing, photos, and internal notes if needed.
+                  Add photos and internal notes if needed.
                 </div>
               </div>
 
@@ -1114,34 +1179,6 @@ export default function NewTaskPage() {
                   )}
                   <div style={{ marginTop: 8, color: 'var(--kline-text-light)', fontSize: '0.78rem', maxWidth: 430, lineHeight: 1.45 }}>
                     Images are auto-optimized before upload. No total batch cap. Max per processed image: {formatBytes(MAX_UPLOAD_FILE_BYTES)}.
-                  </div>
-                </div>
-
-                <div>
-                  <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '8px', fontWeight: 700 }}>Extra Notification Emails</label>
-                  <textarea
-                    className="kline-input"
-                    value={notificationEmails}
-                    onChange={(e) => setNotificationEmails(e.target.value)}
-                    rows={3}
-                    placeholder="Add extra emails separated by comma or line"
-                  />
-                  <div style={{ marginTop: 8, color: 'var(--kline-text-light)', fontSize: '0.78rem', maxWidth: 430, lineHeight: 1.45 }}>
-                    These recipients will be notified in addition to the customer email.
-                  </div>
-                </div>
-
-                <div>
-                  <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '8px', fontWeight: 700 }}>Extra Notification Phones</label>
-                  <textarea
-                    className="kline-input"
-                    value={notificationPhones}
-                    onChange={(e) => setNotificationPhones(e.target.value)}
-                    rows={3}
-                    placeholder="Add extra phone numbers separated by comma or line"
-                  />
-                  <div style={{ marginTop: 8, color: 'var(--kline-text-light)', fontSize: '0.78rem', maxWidth: 430, lineHeight: 1.45 }}>
-                    These numbers will receive SMS in addition to the customer phone, when the status sends notifications.
                   </div>
                 </div>
               </div>

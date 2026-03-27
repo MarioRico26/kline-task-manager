@@ -139,6 +139,35 @@ function isPermitsWorkflowLabel(value?: string | null) {
   return normalizeWorkflow(value).includes('permit')
 }
 
+function inferLegacyPermitStep(serviceName?: string | null) {
+  const normalized = normalizeWorkflow(serviceName)
+  if (!normalized) return null
+  if (normalized.includes('submitted')) return 2
+  if (normalized.includes('received')) return 3
+  if (normalized.includes('in progress')) return 1
+  return null
+}
+
+function getTaskWorkflowGroup(service: TaskItem['service'] | ServiceStep) {
+  const configuredGroup = normalizeWorkflow(service.workflowGroup)
+  if (configuredGroup) return configuredGroup
+  return inferLegacyPermitStep(service.name) ? 'permits' : ''
+}
+
+function getTaskWorkflowLabel(service: TaskItem['service'] | ServiceStep) {
+  const configuredLabel = (service.workflowGroup || '').trim()
+  if (configuredLabel) return configuredLabel
+  return inferLegacyPermitStep(service.name) ? 'Permits' : ''
+}
+
+function getTaskStepOrder(service: TaskItem['service'] | ServiceStep) {
+  return service.stepOrder ?? inferLegacyPermitStep(service.name)
+}
+
+function isWorkflowService(service: TaskItem['service'] | ServiceStep) {
+  return Boolean(service.isSequential) || inferLegacyPermitStep(service.name) !== null
+}
+
 function fmtDate(value: string | null) {
   if (!value) return 'Not scheduled'
   const d = new Date(value)
@@ -396,15 +425,16 @@ export default function TasksPage() {
     const catalog = new Map<string, Array<{ id: string; name: string; stepOrder: number }>>()
 
     services.forEach((service) => {
-      if (!service.isSequential || service.stepOrder === null) return
-      const workflowKey = normalizeWorkflow(service.workflowGroup)
+      const stepOrder = getTaskStepOrder(service)
+      const workflowKey = getTaskWorkflowGroup(service)
+      if (!isWorkflowService(service) || stepOrder === null) return
       if (!workflowKey) return
 
       if (!catalog.has(workflowKey)) catalog.set(workflowKey, [])
       catalog.get(workflowKey)?.push({
         id: service.id,
         name: service.name,
-        stepOrder: service.stepOrder,
+        stepOrder,
       })
     })
 
@@ -417,12 +447,12 @@ export default function TasksPage() {
 
   const caseItems = useMemo<CaseItem[]>(() => {
     const sequentialTasks = searchFilteredTasks.filter(
-      (task) => task.service?.isSequential && task.service?.stepOrder !== null && normalizeWorkflow(task.service?.workflowGroup) !== ''
+      (task) => isWorkflowService(task.service) && getTaskStepOrder(task.service) !== null && getTaskWorkflowGroup(task.service) !== ''
     )
 
     const caseMap = new Map<string, TaskItem[]>()
     sequentialTasks.forEach((task) => {
-      const workflowKey = normalizeWorkflow(task.service.workflowGroup)
+      const workflowKey = getTaskWorkflowGroup(task.service)
       const key = `${task.customer?.id || 'unknown-customer'}::${task.property?.id || 'unknown-property'}::${workflowKey}`
       if (!caseMap.has(key)) caseMap.set(key, [])
       caseMap.get(key)?.push(task)
@@ -434,13 +464,13 @@ export default function TasksPage() {
       if (caseTasks.length === 0) return
 
       const firstTask = caseTasks[0]
-      const workflowKey = normalizeWorkflow(firstTask.service.workflowGroup)
+      const workflowKey = getTaskWorkflowGroup(firstTask.service)
       const fallbackSteps = caseTasks
-        .filter((task) => task.service.stepOrder !== null)
+        .filter((task) => getTaskStepOrder(task.service) !== null)
         .map((task) => ({
           id: task.service.id,
           name: task.service.name,
-          stepOrder: task.service.stepOrder as number,
+          stepOrder: getTaskStepOrder(task.service) as number,
         }))
         .sort((a, b) => a.stepOrder - b.stepOrder)
 
@@ -506,7 +536,7 @@ export default function TasksPage() {
 
       cases.push({
         key: caseKey,
-        workflow: formatWorkflowLabel(firstTask.service.workflowGroup || ''),
+        workflow: formatWorkflowLabel(getTaskWorkflowLabel(firstTask.service) || ''),
         customerName: firstTask.customer?.fullName || 'Unknown customer',
         customerContact: firstTask.customer?.email || firstTask.customer?.phone || 'No contact info',
         propertyLabel: firstTask.property
@@ -526,15 +556,14 @@ export default function TasksPage() {
 
   const permitWorkflowCases = useMemo<PermitWorkflowCase[]>(() => {
     const permitSteps = services
-      .filter((service) => service.isSequential && service.stepOrder !== null && isPermitsWorkflowLabel(service.workflowGroup || service.name))
-      .sort((a, b) => (a.stepOrder || 0) - (b.stepOrder || 0))
+      .filter((service) => getTaskStepOrder(service) !== null && isPermitsWorkflowLabel(getTaskWorkflowLabel(service) || service.name))
+      .sort((a, b) => (getTaskStepOrder(a) || 0) - (getTaskStepOrder(b) || 0))
     if (permitSteps.length === 0) return []
 
     const permitTasks = searchFilteredTasks.filter(
       (task) =>
-        task.service?.isSequential &&
-        task.service?.stepOrder !== null &&
-        isPermitsWorkflowLabel(task.service.workflowGroup || task.service.name) &&
+        getTaskStepOrder(task.service) !== null &&
+        isPermitsWorkflowLabel(getTaskWorkflowLabel(task.service) || task.service.name) &&
         (scheduleFilter !== 'SCHEDULED' || Boolean(task.scheduledFor)) &&
         (scheduleFilter !== 'UNSCHEDULED' || !task.scheduledFor)
     )
@@ -565,7 +594,7 @@ export default function TasksPage() {
         if (taskForStep) {
           status = isCompletedStatusName(taskForStep.status.name) ? 'COMPLETED' : 'IN_PROGRESS'
         }
-        statusesByStepOrder.set(permitStep.stepOrder as number, status)
+        statusesByStepOrder.set(getTaskStepOrder(permitStep) as number, status)
       })
 
       const completedSteps = Array.from(statusesByStepOrder.values()).filter((value) => value === 'COMPLETED').length
@@ -573,8 +602,8 @@ export default function TasksPage() {
       const progressPercent = Math.round((completedSteps / totalSteps) * 100)
 
       const currentStage =
-        permitSteps.find((permitStep) => statusesByStepOrder.get(permitStep.stepOrder as number) === 'IN_PROGRESS') ||
-        permitSteps.find((permitStep) => statusesByStepOrder.get(permitStep.stepOrder as number) === 'NOT_STARTED') ||
+        permitSteps.find((permitStep) => statusesByStepOrder.get(getTaskStepOrder(permitStep) as number) === 'IN_PROGRESS') ||
+        permitSteps.find((permitStep) => statusesByStepOrder.get(getTaskStepOrder(permitStep) as number) === 'NOT_STARTED') ||
         permitSteps[permitSteps.length - 1]
 
       mappedCases.push({
@@ -585,11 +614,11 @@ export default function TasksPage() {
         propertyLabel: firstTask.property
           ? `${firstTask.property.address} · ${firstTask.property.city}, ${firstTask.property.state}`
           : 'No property assigned',
-        currentStepOrder: currentStage.stepOrder as number,
+        currentStepOrder: getTaskStepOrder(currentStage) as number,
         currentStepName: currentStage.name,
         currentStepServiceId: currentStage.id,
         currentStepTaskId: latestTaskByServiceId.get(currentStage.id)?.id || null,
-        currentStepStatus: statusesByStepOrder.get(currentStage.stepOrder as number) || 'NOT_STARTED',
+        currentStepStatus: statusesByStepOrder.get(getTaskStepOrder(currentStage) as number) || 'NOT_STARTED',
         completedSteps,
         totalSteps,
         progressPercent,
@@ -602,16 +631,17 @@ export default function TasksPage() {
   const permitStageSummaries = useMemo<PermitStageSummary[]>(() => {
     const stageColors = ['#4c6fbf', '#d98645', '#a5a5a5', '#5aa469', '#8b6ccf', '#2f7da7']
     const permitSteps = services
-      .filter((service) => service.isSequential && service.stepOrder !== null && isPermitsWorkflowLabel(service.workflowGroup || service.name))
-      .sort((a, b) => (a.stepOrder || 0) - (b.stepOrder || 0))
+      .filter((service) => getTaskStepOrder(service) !== null && isPermitsWorkflowLabel(getTaskWorkflowLabel(service) || service.name))
+      .sort((a, b) => (getTaskStepOrder(a) || 0) - (getTaskStepOrder(b) || 0))
     if (permitSteps.length === 0) return []
 
     return permitSteps.map((step) => {
-      const stageCases = permitWorkflowCases.filter((item) => item.currentStepOrder === step.stepOrder)
+      const stepOrder = getTaskStepOrder(step) as number
+      const stageCases = permitWorkflowCases.filter((item) => item.currentStepOrder === stepOrder)
       return {
-        stepOrder: step.stepOrder as number,
+        stepOrder,
         stepName: step.name,
-        color: stageColors[(step.stepOrder as number - 1) % stageColors.length],
+        color: stageColors[(stepOrder - 1) % stageColors.length],
         totalCases: permitWorkflowCases.length,
         activeCasesCount: stageCases.length,
         cases: stageCases,
@@ -655,12 +685,13 @@ export default function TasksPage() {
     const totals = new Map<string, number>()
 
     services.forEach((service) => {
-      if (!service.isSequential || service.stepOrder === null) return
-      const groupKey = normalizeWorkflow(service.workflowGroup)
+      const stepOrder = getTaskStepOrder(service)
+      const groupKey = getTaskWorkflowGroup(service)
+      if (!isWorkflowService(service) || stepOrder === null) return
       if (!groupKey) return
 
       const currentMax = totals.get(groupKey) || 0
-      if (service.stepOrder > currentMax) totals.set(groupKey, service.stepOrder)
+      if (stepOrder > currentMax) totals.set(groupKey, stepOrder)
     })
 
     return totals
@@ -1517,10 +1548,10 @@ export default function TasksPage() {
                                     {t.service.description}
                                   </div>
                                 ) : null}
-                                {t.service?.isSequential && t.service.stepOrder ? (
+                                {isWorkflowService(t.service) && getTaskStepOrder(t.service) ? (
                                   <WorkflowProgress
-                                    stepOrder={t.service.stepOrder}
-                                    workflowGroup={t.service.workflowGroup || ''}
+                                    stepOrder={getTaskStepOrder(t.service) as number}
+                                    workflowGroup={getTaskWorkflowLabel(t.service) || ''}
                                     workflowStepTotals={workflowStepTotals}
                                   />
                                 ) : null}
@@ -1602,10 +1633,10 @@ export default function TasksPage() {
                               {t.service.description}
                             </div>
                           ) : null}
-                          {t.service?.isSequential && t.service.stepOrder ? (
+                          {isWorkflowService(t.service) && getTaskStepOrder(t.service) ? (
                             <WorkflowProgress
-                              stepOrder={t.service.stepOrder}
-                              workflowGroup={t.service.workflowGroup || ''}
+                              stepOrder={getTaskStepOrder(t.service) as number}
+                              workflowGroup={getTaskWorkflowLabel(t.service) || ''}
                               workflowStepTotals={workflowStepTotals}
                             />
                           ) : null}
