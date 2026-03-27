@@ -182,6 +182,8 @@ export default function NewTaskPage() {
   const [serviceId, setServiceId] = useState('')
   const [statusId, setStatusId] = useState('')
   const [scheduledFor, setScheduledFor] = useState('')
+  const [notificationEmails, setNotificationEmails] = useState('')
+  const [notificationPhones, setNotificationPhones] = useState('')
   const [notes, setNotes] = useState('')
   const [files, setFiles] = useState<FileList | null>(null)
   const [customerSearch, setCustomerSearch] = useState('')
@@ -497,8 +499,8 @@ export default function NewTaskPage() {
     setAttachmentError(null)
     setUploadProgress(null)
 
-    if (!customerId || !propertyId || !serviceId) {
-      setSubmitError('Customer, property, and service are required')
+    if (!customerId || !propertyId || !serviceId || !scheduledFor) {
+      setSubmitError('Customer, property, service, and schedule date are required')
       return
     }
 
@@ -516,7 +518,9 @@ export default function NewTaskPage() {
       formData.set('serviceId', serviceId)
       if (statusId) formData.set('statusId', statusId)
       if (notes) formData.set('notes', notes)
-      if (scheduledFor) formData.set('scheduledFor', scheduledFor)
+      formData.set('scheduledFor', scheduledFor)
+      if (notificationEmails.trim()) formData.set('notificationEmails', notificationEmails)
+      if (notificationPhones.trim()) formData.set('notificationPhones', notificationPhones)
       uploadedImageUrls.forEach((url) => formData.append('uploadedImageUrls', url))
 
       const res = await fetch('/api/tasks', {
@@ -1058,7 +1062,11 @@ export default function NewTaskPage() {
                   className="kline-input"
                   value={scheduledFor}
                   onChange={(e) => setScheduledFor(e.target.value)}
+                  required
                 />
+                <div style={{ marginTop: 8, color: 'var(--kline-text-light)', fontSize: '0.78rem', maxWidth: 360, lineHeight: 1.45 }}>
+                  Required for every task.
+                </div>
               </div>
             </div>
 
@@ -1106,6 +1114,34 @@ export default function NewTaskPage() {
                   )}
                   <div style={{ marginTop: 8, color: 'var(--kline-text-light)', fontSize: '0.78rem', maxWidth: 430, lineHeight: 1.45 }}>
                     Images are auto-optimized before upload. No total batch cap. Max per processed image: {formatBytes(MAX_UPLOAD_FILE_BYTES)}.
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '8px', fontWeight: 700 }}>Extra Notification Emails</label>
+                  <textarea
+                    className="kline-input"
+                    value={notificationEmails}
+                    onChange={(e) => setNotificationEmails(e.target.value)}
+                    rows={3}
+                    placeholder="Add extra emails separated by comma or line"
+                  />
+                  <div style={{ marginTop: 8, color: 'var(--kline-text-light)', fontSize: '0.78rem', maxWidth: 430, lineHeight: 1.45 }}>
+                    These recipients will be notified in addition to the customer email.
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '8px', fontWeight: 700 }}>Extra Notification Phones</label>
+                  <textarea
+                    className="kline-input"
+                    value={notificationPhones}
+                    onChange={(e) => setNotificationPhones(e.target.value)}
+                    rows={3}
+                    placeholder="Add extra phone numbers separated by comma or line"
+                  />
+                  <div style={{ marginTop: 8, color: 'var(--kline-text-light)', fontSize: '0.78rem', maxWidth: 430, lineHeight: 1.45 }}>
+                    These numbers will receive SMS in addition to the customer phone, when the status sends notifications.
                   </div>
                 </div>
               </div>

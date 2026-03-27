@@ -8,6 +8,8 @@ interface TaskItem {
   scheduledFor: string | null
   createdAt: string
   notes?: string | null
+  notificationEmails: string[]
+  notificationPhones: string[]
   customer: {
     id: string
     fullName: string
@@ -150,6 +152,24 @@ function fmtDateTime(value: string) {
   return d.toLocaleString()
 }
 
+function toDatetimeLocalValue(value: string | null) {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  const offset = date.getTimezoneOffset()
+  const localDate = new Date(date.getTime() - offset * 60 * 1000)
+  return localDate.toISOString().slice(0, 16)
+}
+
+function contactListToText(values: string[] | null | undefined) {
+  return (values || []).join('\n')
+}
+
+function getDefaultScheduledForValue(value: string | null) {
+  if (value) return value
+  return new Date().toISOString()
+}
+
 export default function TasksPage() {
   const router = useRouter()
   const [tasks, setTasks] = useState<TaskItem[]>([])
@@ -169,8 +189,11 @@ export default function TasksPage() {
   const [selectedPermitStage, setSelectedPermitStage] = useState<number | null>(null)
   const [detailTaskId, setDetailTaskId] = useState<string | null>(null)
   const [detailNotes, setDetailNotes] = useState('')
-  const [detailNotesDirty, setDetailNotesDirty] = useState(false)
+  const [detailScheduledFor, setDetailScheduledFor] = useState('')
+  const [detailNotificationEmails, setDetailNotificationEmails] = useState('')
+  const [detailNotificationPhones, setDetailNotificationPhones] = useState('')
   const [savingDetailTaskId, setSavingDetailTaskId] = useState<string | null>(null)
+  const [resendingTaskId, setResendingTaskId] = useState<string | null>(null)
 
   const loadTasks = async () => {
     try {
@@ -301,12 +324,26 @@ export default function TasksPage() {
   useEffect(() => {
     if (!detailTask) {
       setDetailNotes('')
-      setDetailNotesDirty(false)
+      setDetailScheduledFor('')
+      setDetailNotificationEmails('')
+      setDetailNotificationPhones('')
       return
     }
     setDetailNotes(detailTask.notes || '')
-    setDetailNotesDirty(false)
+    setDetailScheduledFor(toDatetimeLocalValue(detailTask.scheduledFor))
+    setDetailNotificationEmails(contactListToText(detailTask.notificationEmails))
+    setDetailNotificationPhones(contactListToText(detailTask.notificationPhones))
   }, [detailTask])
+
+  const detailTaskDirty = useMemo(() => {
+    if (!detailTask) return false
+    return (
+      detailNotes !== (detailTask.notes || '') ||
+      detailScheduledFor !== toDatetimeLocalValue(detailTask.scheduledFor) ||
+      detailNotificationEmails !== contactListToText(detailTask.notificationEmails) ||
+      detailNotificationPhones !== contactListToText(detailTask.notificationPhones)
+    )
+  }, [detailTask, detailNotes, detailScheduledFor, detailNotificationEmails, detailNotificationPhones])
 
   const groupedTasks = useMemo<TaskGroup[]>(() => {
     if (groupBy === 'NONE') return []
@@ -640,7 +677,7 @@ export default function TasksPage() {
       formData.set('serviceId', task.service.id)
       formData.set('statusId', completedStatusId)
       if (task.notes) formData.set('notes', task.notes)
-      if (task.scheduledFor) formData.set('scheduledFor', task.scheduledFor)
+      formData.set('scheduledFor', getDefaultScheduledForValue(task.scheduledFor))
 
       const response = await fetch(`/api/tasks/${task.id}`, {
         method: 'PUT',
@@ -675,6 +712,7 @@ export default function TasksPage() {
       formData.set('propertyId', item.propertyId)
       formData.set('serviceId', item.currentStepServiceId)
       formData.set('statusId', inProgressStatusId)
+      formData.set('scheduledFor', new Date().toISOString())
 
       const response = await fetch('/api/tasks', {
         method: 'POST',
@@ -732,8 +770,12 @@ export default function TasksPage() {
     setDetailTaskId(null)
   }
 
-  const handleSaveDetailNotes = async () => {
-    if (!detailTask || !detailNotesDirty) return
+  const handleSaveTaskDetails = async () => {
+    if (!detailTask || !detailTaskDirty) return
+    if (!detailScheduledFor) {
+      setErrorMsg('Schedule date is required')
+      return
+    }
 
     try {
       setSavingDetailTaskId(detailTask.id)
@@ -743,7 +785,9 @@ export default function TasksPage() {
       formData.set('serviceId', detailTask.service.id)
       formData.set('statusId', detailTask.status.id)
       formData.set('notes', detailNotes)
-      if (detailTask.scheduledFor) formData.set('scheduledFor', detailTask.scheduledFor)
+      formData.set('scheduledFor', detailScheduledFor)
+      formData.set('notificationEmails', detailNotificationEmails)
+      formData.set('notificationPhones', detailNotificationPhones)
 
       const response = await fetch(`/api/tasks/${detailTask.id}`, {
         method: 'PUT',
@@ -756,13 +800,34 @@ export default function TasksPage() {
       }
 
       await loadTasks()
-      setDetailNotesDirty(false)
     } catch (error: unknown) {
       console.error('❌ Error saving task notes:', error)
       const message = error instanceof Error ? error.message : 'Failed to save notes'
       setErrorMsg(message)
     } finally {
       setSavingDetailTaskId(null)
+    }
+  }
+
+  const handleResendTaskNotification = async () => {
+    if (!detailTask) return
+
+    try {
+      setResendingTaskId(detailTask.id)
+      const response = await fetch(`/api/tasks/${detailTask.id}/resend`, {
+        method: 'POST',
+      })
+
+      if (!response.ok) {
+        const data = (await response.json().catch(() => ({}))) as { error?: string }
+        throw new Error(data.error || 'Failed to resend notification')
+      }
+    } catch (error: unknown) {
+      console.error('❌ Error resending task notification:', error)
+      const message = error instanceof Error ? error.message : 'Failed to resend notification'
+      setErrorMsg(message)
+    } finally {
+      setResendingTaskId(null)
     }
   }
 
@@ -1599,13 +1664,18 @@ export default function TasksPage() {
           <TaskDetailsModal
             task={detailTask}
             notesDraft={detailNotes}
-            notesDirty={detailNotesDirty}
+            scheduledForDraft={detailScheduledFor}
+            notificationEmailsDraft={detailNotificationEmails}
+            notificationPhonesDraft={detailNotificationPhones}
+            dirty={detailTaskDirty}
             saving={savingDetailTaskId === detailTask.id}
-            onChangeNotes={(value) => {
-              setDetailNotes(value)
-              setDetailNotesDirty(value !== (detailTask.notes || ''))
-            }}
-            onSaveNotes={handleSaveDetailNotes}
+            resending={resendingTaskId === detailTask.id}
+            onChangeNotes={setDetailNotes}
+            onChangeScheduledFor={setDetailScheduledFor}
+            onChangeNotificationEmails={setDetailNotificationEmails}
+            onChangeNotificationPhones={setDetailNotificationPhones}
+            onSave={handleSaveTaskDetails}
+            onResend={handleResendTaskNotification}
             onClose={closeTaskDetails}
           />
         )}
@@ -1980,21 +2050,37 @@ function KanbanStageColumn({
 function TaskDetailsModal({
   task,
   notesDraft,
-  notesDirty,
+  scheduledForDraft,
+  notificationEmailsDraft,
+  notificationPhonesDraft,
+  dirty,
   saving,
+  resending,
   onChangeNotes,
-  onSaveNotes,
+  onChangeScheduledFor,
+  onChangeNotificationEmails,
+  onChangeNotificationPhones,
+  onSave,
+  onResend,
   onClose,
 }: {
   task: TaskItem
   notesDraft: string
-  notesDirty: boolean
+  scheduledForDraft: string
+  notificationEmailsDraft: string
+  notificationPhonesDraft: string
+  dirty: boolean
   saving: boolean
+  resending: boolean
   onChangeNotes: (value: string) => void
-  onSaveNotes: () => Promise<void>
+  onChangeScheduledFor: (value: string) => void
+  onChangeNotificationEmails: (value: string) => void
+  onChangeNotificationPhones: (value: string) => void
+  onSave: () => Promise<void>
+  onResend: () => Promise<void>
   onClose: () => void
 }) {
-  const canSave = notesDirty && !saving
+  const canSave = dirty && !saving && Boolean(scheduledForDraft)
 
   return (
     <div
@@ -2068,8 +2154,42 @@ function TaskDetailsModal({
             </div>
           </div>
 
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
+            <div>
+              <div style={{ fontWeight: 900, color: 'var(--kline-text)', marginBottom: 8 }}>Schedule Date</div>
+              <input
+                type="datetime-local"
+                className="kline-input"
+                value={scheduledForDraft}
+                onChange={(event) => onChangeScheduledFor(event.target.value)}
+              />
+            </div>
+
+            <div>
+              <div style={{ fontWeight: 900, color: 'var(--kline-text)', marginBottom: 8 }}>Extra Notification Emails</div>
+              <textarea
+                value={notificationEmailsDraft}
+                onChange={(event) => onChangeNotificationEmails(event.target.value)}
+                rows={4}
+                className="kline-input"
+                placeholder="Add one email per line or separate with commas."
+              />
+            </div>
+
+            <div>
+              <div style={{ fontWeight: 900, color: 'var(--kline-text)', marginBottom: 8 }}>Extra Notification Phones</div>
+              <textarea
+                value={notificationPhonesDraft}
+                onChange={(event) => onChangeNotificationPhones(event.target.value)}
+                rows={4}
+                className="kline-input"
+                placeholder="Add one phone per line or separate with commas."
+              />
+            </div>
+          </div>
+
           <div>
-            <div style={{ fontWeight: 900, color: 'var(--kline-text)', marginBottom: 8 }}>Notes</div>
+            <div style={{ fontWeight: 900, color: 'var(--kline-text)', marginBottom: 8 }}>Internal Notes</div>
             <textarea
               value={notesDraft}
               onChange={(event) => onChangeNotes(event.target.value)}
@@ -2080,7 +2200,24 @@ function TaskDetailsModal({
             <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
               <button
                 type="button"
-                onClick={onSaveNotes}
+                onClick={onResend}
+                disabled={resending || saving || dirty}
+                style={{
+                  border: '1px solid var(--kline-gray)',
+                  background: '#fff',
+                  color: 'var(--kline-text)',
+                  borderRadius: 8,
+                  padding: '8px 12px',
+                  fontWeight: 800,
+                  cursor: resending || saving || dirty ? 'not-allowed' : 'pointer',
+                  opacity: resending || saving || dirty ? 0.6 : 1,
+                }}
+              >
+                {resending ? 'Resending...' : dirty ? 'Save Before Resend' : 'Resend Notification'}
+              </button>
+              <button
+                type="button"
+                onClick={onSave}
                 disabled={!canSave}
                 style={{
                   border: 'none',
@@ -2093,7 +2230,7 @@ function TaskDetailsModal({
                   opacity: canSave ? 1 : 0.6,
                 }}
               >
-                {saving ? 'Saving...' : 'Save Notes'}
+                {saving ? 'Saving...' : 'Save Task Changes'}
               </button>
             </div>
           </div>

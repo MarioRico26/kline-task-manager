@@ -13,6 +13,31 @@ function normalizeWorkflowGroup(value: string) {
   return value.trim().toLowerCase()
 }
 
+function parseContactList(value: string) {
+  return Array.from(
+    new Set(
+      value
+        .split(/[,\n;]/)
+        .map((item) => item.trim())
+        .filter(Boolean)
+    )
+  )
+}
+
+function getEmailRecipients(primaryEmail: string | null | undefined, extraEmails: string[]) {
+  const recipients = [primaryEmail || '', ...extraEmails]
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean)
+  return Array.from(new Set(recipients))
+}
+
+function getPhoneRecipients(primaryPhone: string | null | undefined, extraPhones: string[]) {
+  const recipients = [primaryPhone || '', ...extraPhones]
+    .map((phone) => formatPhone(phone))
+    .filter(Boolean) as string[]
+  return Array.from(new Set(recipients))
+}
+
 const permitsTaskFilter = {
   service: {
     OR: [
@@ -172,6 +197,8 @@ export async function POST(request: Request) {
     const hasCustomStatus = Boolean(statusIdFromForm)
     const notes = (formData.get('notes') as string) || ''
     const scheduledFor = (formData.get('scheduledFor') as string) || ''
+    const notificationEmails = parseContactList((formData.get('notificationEmails') as string) || '')
+    const notificationPhones = parseContactList((formData.get('notificationPhones') as string) || '')
     const files = formData.getAll('files') as File[]
     const uploadedImageUrls = Array.from(
       new Set(
@@ -183,9 +210,9 @@ export async function POST(request: Request) {
     )
 
     // ✅ requeridos reales
-    if (!customerId || !propertyId || !serviceId) {
+    if (!customerId || !propertyId || !serviceId || !scheduledFor) {
       return NextResponse.json(
-        { error: 'Missing required fields: customerId, propertyId, serviceId' },
+        { error: 'Missing required fields: customerId, propertyId, serviceId, scheduledFor' },
         { status: 400 }
       )
     }
@@ -308,7 +335,9 @@ export async function POST(request: Request) {
         statusId: finalStatusId,
         completedAt: isCompletedStatusName(status.name) ? new Date() : null,
         notes: notes || null,
-        scheduledFor: scheduledFor ? new Date(scheduledFor) : null,
+        scheduledFor: new Date(scheduledFor),
+        notificationEmails,
+        notificationPhones,
       },
       include: {
         customer: true,
@@ -354,7 +383,8 @@ export async function POST(request: Request) {
 
     // ✅ Notificaciones (solo si el status notifica)
     if (status.notifyClient) {
-      const phone = formatPhone(customer.phone)
+      const emailRecipients = getEmailRecipients(customer.email, notificationEmails)
+      const phoneRecipients = getPhoneRecipients(customer.phone, notificationPhones)
 
       // ✅ SMS “bonito” (igual que update)
       const smsText = buildTaskSMS(
@@ -368,10 +398,10 @@ export async function POST(request: Request) {
       const notificationPromises: Promise<unknown>[] = []
 
       // ✅ Email
-      if (customer.email) {
+      for (const email of emailRecipients) {
         notificationPromises.push(
           sendTaskUpdateEmail({
-            to: customer.email,
+            to: email,
             subject: `Service Update: ${service.name}`,
             customerName: customer.fullName,
             service: {
@@ -389,13 +419,13 @@ export async function POST(request: Request) {
       }
 
       // ✅ SMS
-      if (phone) {
+      for (const phone of phoneRecipients) {
         notificationPromises.push(
           sendSMS(phone, smsText)
             .then(() => console.log('✅ SMS sent successfully'))
             .catch((err) => console.error('❌ SMS failed:', err))
         )
-      }
+      } 
 
       if (notificationPromises.length > 0) {
         await Promise.allSettled(notificationPromises)

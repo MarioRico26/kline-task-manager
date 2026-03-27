@@ -89,6 +89,8 @@ model Task {
   propertyId   String
   notes        String?
   scheduledFor DateTime?
+  notificationEmails String[] @default([])
+  notificationPhones String[] @default([])
   completedAt  DateTime?
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt

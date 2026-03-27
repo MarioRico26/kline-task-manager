@@ -16,6 +16,31 @@ function normalizeWorkflowGroup(value: string | null) {
   return (value || '').trim().toLowerCase()
 }
 
+function parseContactList(value: string) {
+  return Array.from(
+    new Set(
+      value
+        .split(/[,\n;]/)
+        .map((item) => item.trim())
+        .filter(Boolean)
+    )
+  )
+}
+
+function getEmailRecipients(primaryEmail: string | null | undefined, extraEmails: string[]) {
+  const recipients = [primaryEmail || '', ...extraEmails]
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean)
+  return Array.from(new Set(recipients))
+}
+
+function getPhoneRecipients(primaryPhone: string | null | undefined, extraPhones: string[]) {
+  const recipients = [primaryPhone || '', ...extraPhones]
+    .map((phone) => formatPhone(phone))
+    .filter(Boolean) as string[]
+  return Array.from(new Set(recipients))
+}
+
 function isCompletedStatusName(statusName: string | null | undefined) {
   return (statusName || '').trim().toLowerCase() === 'completed'
 }
@@ -149,6 +174,8 @@ export async function PUT(request: NextRequest) {
     const statusId = formData.get("statusId") as string
     const notes = formData.get("notes") as string
     const scheduledFor = formData.get("scheduledFor") as string
+    const notificationEmails = parseContactList((formData.get("notificationEmails") as string) || '')
+    const notificationPhones = parseContactList((formData.get("notificationPhones") as string) || '')
     const files = formData.getAll("files") as File[]
 
     const existingTask = await prisma.task.findUnique({
@@ -202,6 +229,10 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "Status not found" }, { status: 400 })
     }
 
+    if (!scheduledFor) {
+      return NextResponse.json({ error: "Schedule date is required" }, { status: 400 })
+    }
+
     const sequenceError = await validateSequentialServiceTransition(
       {
         id: existingTask.service.id,
@@ -229,7 +260,9 @@ export async function PUT(request: NextRequest) {
         statusId,
         completedAt: isNowCompleted ? existingTask.completedAt || new Date() : null,
         notes: notes || null,
-        scheduledFor: scheduledFor ? new Date(scheduledFor) : null,
+        scheduledFor: new Date(scheduledFor),
+        notificationEmails,
+        notificationPhones,
       },
       include: {
         customer: true,
@@ -268,7 +301,9 @@ export async function PUT(request: NextRequest) {
                 serviceId: nextService.id,
                 statusId: inProgressStatus.id,
                 notes: null,
-                scheduledFor: null,
+                scheduledFor: task.scheduledFor || new Date(),
+                notificationEmails: task.notificationEmails,
+                notificationPhones: task.notificationPhones,
                 completedAt: null,
               },
               select: { id: true },
@@ -281,10 +316,10 @@ export async function PUT(request: NextRequest) {
 
             if (inProgressStatus.notifyClient) {
               const notificationPromises: Promise<unknown>[] = []
-              const customerEmail = task.customer?.email
-              const customerPhone = formatPhone(task.customer?.phone)
+              const emailRecipients = getEmailRecipients(task.customer?.email, task.notificationEmails || [])
+              const phoneRecipients = getPhoneRecipients(task.customer?.phone, task.notificationPhones || [])
 
-              if (customerEmail) {
+              for (const customerEmail of emailRecipients) {
                 notificationPromises.push(
                   sendTaskUpdateEmail({
                     to: customerEmail,
@@ -302,7 +337,7 @@ export async function PUT(request: NextRequest) {
                 )
               }
 
-              if (customerPhone) {
+              for (const customerPhone of phoneRecipients) {
                 const smsText = buildTaskSMS(
                   task.customer.fullName,
                   nextService.name,
@@ -345,12 +380,14 @@ export async function PUT(request: NextRequest) {
     // Notifications
     if (newStatus?.notifyClient) {
       const notificationPromises: Promise<unknown>[] = []
+      const emailRecipients = getEmailRecipients(existingTask.customer.email, task.notificationEmails || [])
+      const phoneRecipients = getPhoneRecipients(existingTask.customer.phone, task.notificationPhones || [])
 
       // EMAIL
-      if (existingTask.customer.email) {
+      for (const email of emailRecipients) {
         notificationPromises.push(
           sendTaskUpdateEmail({
-            to: existingTask.customer.email,
+            to: email,
             subject: `Service Update: ${task.service.name}`,
             customerName: existingTask.customer.fullName,
             service: {
@@ -366,7 +403,7 @@ export async function PUT(request: NextRequest) {
       }
 
       // SMS (MISMO NIVEL DE DETALLE QUE CREACIÓN)
-      if (existingTask.customer.phone) {
+      for (const phone of phoneRecipients) {
         const smsText = buildTaskSMS(
           existingTask.customer.fullName,
           task.service.name,
@@ -375,7 +412,7 @@ export async function PUT(request: NextRequest) {
           task.notes
         )
 
-        notificationPromises.push(sendSMS(existingTask.customer.phone, smsText))
+        notificationPromises.push(sendSMS(phone, smsText))
       }
 
       if (notificationPromises.length > 0) {
