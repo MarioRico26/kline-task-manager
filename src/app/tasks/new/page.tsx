@@ -93,6 +93,10 @@ function isWorkflowService(service: Pick<ServiceItem, 'name' | 'isSequential'>) 
   return Boolean(service.isSequential) || inferLegacyPermitStep(service.name) !== null
 }
 
+function isStrictSequentialService(service: Pick<ServiceItem, 'isSequential'>) {
+  return Boolean(service.isSequential)
+}
+
 function getNextWorkflowStep(
   definedSteps: number[],
   historySteps: Array<{ step: number; createdAt: string; isCompleted: boolean }>
@@ -385,7 +389,7 @@ export default function NewTaskPage() {
 
   const filteredServices = useMemo(() => {
     return services.filter((service) => {
-      if (!isWorkflowService(service)) return true
+      if (!isStrictSequentialService(service)) return true
       if (!getServiceStepOrder(service)) return false
       if (!propertyId) return false
 
@@ -404,7 +408,7 @@ export default function NewTaskPage() {
   )
 
   const selectedWorkflowHint = useMemo(() => {
-    if (!selectedService || !isWorkflowService(selectedService)) return null
+    if (!selectedService || !isStrictSequentialService(selectedService)) return null
     const workflowKey = getServiceWorkflowGroup(selectedService)
     if (!workflowKey) return null
 
@@ -1076,7 +1080,7 @@ export default function NewTaskPage() {
                   ))}
                 </select>
                 <div style={{ marginTop: 8, color: 'var(--kline-text-light)', fontSize: '0.8rem', maxWidth: 420, lineHeight: 1.45 }}>
-                  Independent services can be created anytime. Sequential services are locked by customer + property and advance when previous step is Completed (after final step, cycle restarts at step 1).
+                  Independent services can be created anytime. Only configured sequential workflows are locked by customer + property and advance when the previous step is Completed.
                 </div>
                 {customerId && propertyId && selectedWorkflowHint && (
                   <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
@@ -1114,7 +1118,7 @@ export default function NewTaskPage() {
                   ))}
                 </select>
                 <div style={{ marginTop: 8, color: 'var(--kline-text-light)', fontSize: '0.8rem', maxWidth: 360, lineHeight: 1.45 }}>
-                  {(selectedService ? isWorkflowService(selectedService) : false)
+                  {(selectedService ? isStrictSequentialService(selectedService) : false)
                     ? 'For sequential workflows, step 1 starts as In Progress automatically.'
                     : 'For independent services, selected status is applied directly.'}
                 </div>
