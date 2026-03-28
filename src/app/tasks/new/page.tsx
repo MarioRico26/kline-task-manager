@@ -312,11 +312,6 @@ export default function NewTaskPage() {
     return properties.filter((property) => property.customerId === customerId)
   }, [customerId, properties])
 
-  const selectedCustomer = useMemo(
-    () => (customerId ? customerById.get(customerId) || null : null),
-    [customerById, customerId]
-  )
-
   const availableProperties = useMemo(() => {
     return customerId ? customerScopedProperties : properties
   }, [customerId, customerScopedProperties, properties])
@@ -755,19 +750,20 @@ export default function NewTaskPage() {
                 Task Setup
               </div>
               <div style={{ marginTop: 6, color: 'var(--kline-text-light)', fontSize: '0.92rem' }}>
-                Select the customer, property, service, and status first.
+                Choose who, where, what service, and when.
               </div>
             </div>
 
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))',
-                columnGap: 24,
-                rowGap: 24,
-                alignItems: 'start',
-              }}
-            >
+            <div style={{ display: 'grid', gap: 28 }}>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))',
+                  columnGap: 24,
+                  rowGap: 24,
+                  alignItems: 'start',
+                }}
+              >
               <div>
                 <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '8px', fontWeight: 700 }}>Customer</label>
                 <div style={{ position: 'relative' }}>
@@ -869,7 +865,7 @@ export default function NewTaskPage() {
                 {customerId && customerScopedProperties.length > 1 && (
                   <div
                     style={{
-                      marginBottom: 12,
+                      marginBottom: 10,
                       display: 'flex',
                       flexWrap: 'wrap',
                       alignItems: 'center',
@@ -885,19 +881,19 @@ export default function NewTaskPage() {
                         fontSize: '0.74rem',
                         fontWeight: 800,
                         color: '#b35a00',
-                        background: 'rgba(253, 126, 20, 0.08)',
+                        background: 'rgba(253, 126, 20, 0.06)',
                         border: '1px solid rgba(253, 126, 20, 0.2)',
                       }}
                     >
                       {customerScopedProperties.length} properties
                     </span>
                     <span style={{ color: 'var(--kline-text-light)', fontSize: '0.78rem' }}>
-                      {selectedCustomer?.email || 'This customer'} has multiple properties. Select the exact one for this task.
+                      Select the exact property for this task.
                     </span>
                   </div>
                 )}
                 {customerId && customerScopedProperties.length > 1 && (
-                  <div style={{ marginBottom: 12, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  <div style={{ marginBottom: 10, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                     {customerScopedProperties.slice(0, 6).map((property) => {
                       const isSelected = property.id === propertyId
                       return (
@@ -993,7 +989,7 @@ export default function NewTaskPage() {
                 {propertyId && (
                   <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                     <span style={{ color: 'var(--kline-text-light)', fontSize: '0.8rem' }}>
-                      Customer auto-selected from chosen property.
+                      Linked to the selected property.
                     </span>
                     <button
                       type="button"
@@ -1028,113 +1024,150 @@ export default function NewTaskPage() {
                   </div>
                 )}
               </div>
-
-              <div>
-                <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '8px', fontWeight: 700 }}>
-                  Additional Notification Emails
-                </label>
-                <textarea
-                  className="kline-input"
-                  value={notificationEmails}
-                  onChange={(e) => setNotificationEmails(e.target.value)}
-                  rows={3}
-                  placeholder="Add extra emails separated by comma or line"
-                />
-                <div style={{ marginTop: 8, color: 'var(--kline-text-light)', fontSize: '0.78rem', maxWidth: 430, lineHeight: 1.45 }}>
-                  Sent in addition to the customer email for this task.
-                </div>
               </div>
 
-              <div>
-                <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '8px', fontWeight: 700 }}>
-                  Additional Notification Phones
-                </label>
-                <textarea
-                  className="kline-input"
-                  value={notificationPhones}
-                  onChange={(e) => setNotificationPhones(e.target.value)}
-                  rows={3}
-                  placeholder="Add extra phone numbers separated by comma or line"
-                />
-                <div style={{ marginTop: 8, color: 'var(--kline-text-light)', fontSize: '0.78rem', maxWidth: 430, lineHeight: 1.45 }}>
-                  Sent by SMS in addition to the customer phone when the status notifies.
-                </div>
-              </div>
-
-              <div style={{ minWidth: 0 }}>
-                <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '8px', fontWeight: 700 }}>Service</label>
-                <select
-                  className="kline-input"
-                  value={serviceId}
-                  onChange={(e) => setServiceId(e.target.value)}
-                  required
-                >
-                  <option value="">Select service</option>
-                  {filteredServices.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                      {isWorkflowService(s) && getServiceWorkflowLabel(s) && getServiceStepOrder(s)
-                        ? ` (${getServiceWorkflowLabel(s)} #${getServiceStepOrder(s)})`
-                        : ''}
-                    </option>
-                  ))}
-                </select>
-                <div style={{ marginTop: 8, color: 'var(--kline-text-light)', fontSize: '0.8rem', maxWidth: 420, lineHeight: 1.45 }}>
-                  Independent services can be created anytime. Only configured sequential workflows are locked by customer + property and advance when the previous step is Completed.
-                </div>
-                {customerId && propertyId && selectedWorkflowHint && (
-                  <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                    <span
-                      style={{
-                        fontSize: '0.78rem',
-                        fontWeight: 700,
-                        color: selectedWorkflowHint.isComplete ? '#1f7a43' : 'var(--kline-text-light)',
-                        background: selectedWorkflowHint.isComplete ? 'rgba(25, 135, 84, 0.12)' : 'var(--kline-gray-light)',
-                        border: `1px solid ${selectedWorkflowHint.isComplete ? 'rgba(25, 135, 84, 0.25)' : 'var(--kline-gray)'}`,
-                        borderRadius: 999,
-                        padding: '6px 10px',
-                      }}
-                    >
-                      {selectedWorkflowHint.isComplete
-                        ? `${selectedWorkflowHint.group}: completed`
-                        : `${selectedWorkflowHint.group}: next ${selectedWorkflowHint.nextServiceName || `step ${selectedWorkflowHint.expectedStep ?? ''}`}`}
-                    </span>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+                  columnGap: 24,
+                  rowGap: 22,
+                  alignItems: 'start',
+                }}
+              >
+                <div style={{ minWidth: 0 }}>
+                  <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '8px', fontWeight: 700 }}>Service</label>
+                  <select
+                    className="kline-input"
+                    value={serviceId}
+                    onChange={(e) => setServiceId(e.target.value)}
+                    required
+                  >
+                    <option value="">Select service</option>
+                    {filteredServices.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                        {isWorkflowService(s) && getServiceWorkflowLabel(s) && getServiceStepOrder(s)
+                          ? ` (${getServiceWorkflowLabel(s)} #${getServiceStepOrder(s)})`
+                          : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <div style={{ marginTop: 8, color: 'var(--kline-text-light)', fontSize: '0.8rem', maxWidth: 560, lineHeight: 1.45 }}>
+                    Independent services can be created anytime. Only configured sequential workflows are locked by customer + property.
                   </div>
-                )}
-              </div>
+                  {customerId && propertyId && selectedWorkflowHint && (
+                    <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                      <span
+                        style={{
+                          fontSize: '0.78rem',
+                          fontWeight: 700,
+                          color: selectedWorkflowHint.isComplete ? '#1f7a43' : 'var(--kline-text-light)',
+                          background: selectedWorkflowHint.isComplete ? 'rgba(25, 135, 84, 0.12)' : 'var(--kline-gray-light)',
+                          border: `1px solid ${selectedWorkflowHint.isComplete ? 'rgba(25, 135, 84, 0.25)' : 'var(--kline-gray)'}`,
+                          borderRadius: 999,
+                          padding: '6px 10px',
+                        }}
+                      >
+                        {selectedWorkflowHint.isComplete
+                          ? `${selectedWorkflowHint.group}: completed`
+                          : `${selectedWorkflowHint.group}: next ${selectedWorkflowHint.nextServiceName || `step ${selectedWorkflowHint.expectedStep ?? ''}`}`}
+                      </span>
+                    </div>
+                  )}
+                </div>
 
-              <div>
-                <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '8px', fontWeight: 700 }}>Status (optional)</label>
-                <select
-                  className="kline-input"
-                  value={statusId}
-                  onChange={(e) => setStatusId(e.target.value)}
-                >
-                  <option value="">Default (Completed)</option>
-                  {statuses.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-                <div style={{ marginTop: 8, color: 'var(--kline-text-light)', fontSize: '0.8rem', maxWidth: 360, lineHeight: 1.45 }}>
-                  {(selectedService ? isStrictSequentialService(selectedService) : false)
-                    ? 'For sequential workflows, step 1 starts as In Progress automatically.'
-                    : 'For independent services, selected status is applied directly.'}
+                <div>
+                  <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '8px', fontWeight: 700 }}>Scheduled For</label>
+                  <input
+                    type="datetime-local"
+                    className="kline-input"
+                    value={scheduledFor}
+                    onChange={(e) => setScheduledFor(e.target.value)}
+                    required
+                  />
+                  <div style={{ marginTop: 8, color: 'var(--kline-text-light)', fontSize: '0.78rem', lineHeight: 1.45 }}>
+                    Required for every task.
+                  </div>
                 </div>
               </div>
 
-              <div>
-                <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '8px', fontWeight: 700 }}>Scheduled For</label>
-                <input
-                  type="datetime-local"
-                  className="kline-input"
-                  value={scheduledFor}
-                  onChange={(e) => setScheduledFor(e.target.value)}
-                  required
-                />
-                <div style={{ marginTop: 8, color: 'var(--kline-text-light)', fontSize: '0.78rem', maxWidth: 360, lineHeight: 1.45 }}>
-                  Required for every task.
+              <div
+                style={{
+                  paddingTop: 20,
+                  borderTop: '1px solid var(--kline-gray)',
+                }}
+              >
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--kline-text-light)' }}>
+                    Optional Notifications
+                  </div>
+                  <div style={{ marginTop: 6, color: 'var(--kline-text-light)', fontSize: '0.9rem' }}>
+                    Adjust task status or add extra recipients if this task needs broader notification.
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+                    columnGap: 20,
+                    rowGap: 20,
+                    alignItems: 'start',
+                  }}
+                >
+                  <div>
+                    <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '8px', fontWeight: 700 }}>Status (optional)</label>
+                    <select
+                      className="kline-input"
+                      value={statusId}
+                      onChange={(e) => setStatusId(e.target.value)}
+                    >
+                      <option value="">Default (Completed)</option>
+                      {statuses.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name}
+                        </option>
+                      ))}
+                    </select>
+                    <div style={{ marginTop: 8, color: 'var(--kline-text-light)', fontSize: '0.78rem', lineHeight: 1.45 }}>
+                      {(selectedService ? isStrictSequentialService(selectedService) : false)
+                        ? 'Sequential workflows start step 1 as In Progress automatically.'
+                        : 'For independent services, the selected status is applied directly.'}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '8px', fontWeight: 700 }}>
+                      Additional Emails
+                    </label>
+                    <textarea
+                      className="kline-input"
+                      value={notificationEmails}
+                      onChange={(e) => setNotificationEmails(e.target.value)}
+                      rows={2}
+                      placeholder="Comma or line separated emails"
+                    />
+                    <div style={{ marginTop: 8, color: 'var(--kline-text-light)', fontSize: '0.78rem', lineHeight: 1.45 }}>
+                      Added to the customer email for this task.
+                    </div>
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '8px', fontWeight: 700 }}>
+                      Additional Phones
+                    </label>
+                    <textarea
+                      className="kline-input"
+                      value={notificationPhones}
+                      onChange={(e) => setNotificationPhones(e.target.value)}
+                      rows={2}
+                      placeholder="Comma or line separated phone numbers"
+                    />
+                    <div style={{ marginTop: 8, color: 'var(--kline-text-light)', fontSize: '0.78rem', lineHeight: 1.45 }}>
+                      Added to customer SMS when the status notifies.
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
