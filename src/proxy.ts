@@ -24,9 +24,23 @@ export function proxy(req: NextRequest) {
 
   const accessScope = req.cookies.get('access-scope')?.value
   const isPermitsOnly = accessScope === 'PERMITS_ONLY'
+  const canAccessPlanner = req.cookies.get('planner-access')?.value === 'true'
+  const canAccessSeasonalPrograms = req.cookies.get('seasonal-programs-access')?.value === 'true'
+
+  if (pathname.startsWith('/planner') && !canAccessPlanner) {
+    const dashboardUrl = req.nextUrl.clone()
+    dashboardUrl.pathname = isPermitsOnly ? '/tasks' : '/dashboard'
+    return NextResponse.redirect(dashboardUrl)
+  }
+
+  if (pathname.startsWith('/seasonal-programs') && !canAccessSeasonalPrograms) {
+    const dashboardUrl = req.nextUrl.clone()
+    dashboardUrl.pathname = isPermitsOnly ? '/tasks' : '/dashboard'
+    return NextResponse.redirect(dashboardUrl)
+  }
 
   if (isPermitsOnly) {
-    const allowedUiPaths = ['/tasks', '/customers', '/properties']
+    const allowedUiPaths = ['/tasks', '/customers', '/properties', ...(canAccessPlanner ? ['/planner'] : [])]
     const allowedApiPaths = [
       '/api/auth',
       '/api/tasks',

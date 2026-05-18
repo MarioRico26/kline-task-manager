@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { PrismaClient } from '@prisma/client'
 import * as bcrypt from 'bcryptjs'
-import { getUserAccessScopeById } from '@/lib/userScope'
+import { getUserAccessScopeById, getUserPlannerAccessById, getUserSeasonalProgramsAccessById } from '@/lib/userScope'
 
 const prisma = new PrismaClient()
 
@@ -23,11 +23,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 })
     }
     
-    const accessScope = await getUserAccessScopeById(prisma, user.id)
+    const [accessScope, plannerAccess, seasonalProgramsAccess] = await Promise.all([
+      getUserAccessScopeById(prisma, user.id),
+      getUserPlannerAccessById(prisma, user.id),
+      getUserSeasonalProgramsAccessById(prisma, user.id),
+    ])
 
     const response = NextResponse.json({
       message: 'Login successful',
-      user: { id: user.id, email: user.email, role: user.role, accessScope }
+      user: {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        accessScope,
+        canAccessPlanner: plannerAccess.canAccessPlanner,
+        canAccessSeasonalPrograms: seasonalProgramsAccess.canAccessSeasonalPrograms,
+      }
     })
     
     // ✅ Cookie sólida solo desde servidor. Chrome-friendly ✅
@@ -40,6 +51,22 @@ export async function POST(request: Request) {
     })
 
     response.cookies.set('access-scope', accessScope, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 60 * 60 * 24, // 24h
+    })
+
+    response.cookies.set('planner-access', plannerAccess.canAccessPlanner ? 'true' : 'false', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 60 * 60 * 24, // 24h
+    })
+
+    response.cookies.set('seasonal-programs-access', seasonalProgramsAccess.canAccessSeasonalPrograms ? 'true' : 'false', {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',

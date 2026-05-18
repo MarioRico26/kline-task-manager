@@ -1,6 +1,12 @@
 import { Prisma, PrismaClient } from '@prisma/client'
 
 export type UserAccessScope = 'ALL' | 'PERMITS_ONLY'
+export type UserPlannerAccess = {
+  canAccessPlanner: boolean
+}
+export type UserSeasonalProgramsAccess = {
+  canAccessSeasonalPrograms: boolean
+}
 
 const VALID_SCOPES: UserAccessScope[] = ['ALL', 'PERMITS_ONLY']
 
@@ -12,6 +18,18 @@ function scopeFromJson(details: Prisma.JsonValue | null): UserAccessScope | null
   if (!details || typeof details !== 'object' || Array.isArray(details)) return null
   const scope = (details as Record<string, unknown>).scope
   return VALID_SCOPES.includes(scope as UserAccessScope) ? (scope as UserAccessScope) : null
+}
+
+function plannerAccessFromJson(details: Prisma.JsonValue | null): UserPlannerAccess | null {
+  if (!details || typeof details !== 'object' || Array.isArray(details)) return null
+  const raw = details as Record<string, unknown>
+  return { canAccessPlanner: raw.canAccessPlanner === true }
+}
+
+function seasonalProgramsAccessFromJson(details: Prisma.JsonValue | null): UserSeasonalProgramsAccess | null {
+  if (!details || typeof details !== 'object' || Array.isArray(details)) return null
+  const raw = details as Record<string, unknown>
+  return { canAccessSeasonalPrograms: raw.canAccessSeasonalPrograms === true }
 }
 
 export function normalizeWorkflowText(value: string | null | undefined) {
@@ -39,6 +57,43 @@ export async function getUserAccessScopeById(prisma: PrismaClient, userId: strin
   })
 
   return scopeFromJson(latestScopeLog?.details ?? null) ?? 'ALL'
+}
+
+export async function getUserPlannerAccessById(prisma: PrismaClient, userId: string): Promise<UserPlannerAccess> {
+  const latestPlannerLog = await prisma.auditLog.findFirst({
+    where: {
+      entity: 'USER_PLANNER_ACCESS',
+      entityId: userId,
+    },
+    orderBy: {
+      timestamp: 'desc',
+    },
+    select: {
+      details: true,
+    },
+  })
+
+  return plannerAccessFromJson(latestPlannerLog?.details ?? null) ?? { canAccessPlanner: false }
+}
+
+export async function getUserSeasonalProgramsAccessById(
+  prisma: PrismaClient,
+  userId: string
+): Promise<UserSeasonalProgramsAccess> {
+  const latestSeasonalLog = await prisma.auditLog.findFirst({
+    where: {
+      entity: 'USER_SEASONAL_PROGRAMS_ACCESS',
+      entityId: userId,
+    },
+    orderBy: {
+      timestamp: 'desc',
+    },
+    select: {
+      details: true,
+    },
+  })
+
+  return seasonalProgramsAccessFromJson(latestSeasonalLog?.details ?? null) ?? { canAccessSeasonalPrograms: false }
 }
 
 export async function getUserAccessScopeMap(prisma: PrismaClient, userIds: string[]) {
@@ -73,6 +128,70 @@ export async function getUserAccessScopeMap(prisma: PrismaClient, userIds: strin
   return map
 }
 
+export async function getUserPlannerAccessMap(prisma: PrismaClient, userIds: string[]) {
+  const scopedIds = Array.from(new Set(userIds.filter(Boolean)))
+  const map = new Map<string, UserPlannerAccess>()
+  const seen = new Set<string>()
+  if (scopedIds.length === 0) return map
+
+  const logs = await prisma.auditLog.findMany({
+    where: {
+      entity: 'USER_PLANNER_ACCESS',
+      entityId: { in: scopedIds },
+    },
+    orderBy: {
+      timestamp: 'desc',
+    },
+    select: {
+      entityId: true,
+      details: true,
+    },
+  })
+
+  for (const id of scopedIds) map.set(id, { canAccessPlanner: false })
+
+  for (const log of logs) {
+    if (seen.has(log.entityId)) continue
+    seen.add(log.entityId)
+    const parsed = plannerAccessFromJson(log.details)
+    map.set(log.entityId, parsed ?? { canAccessPlanner: false })
+  }
+
+  return map
+}
+
+export async function getUserSeasonalProgramsAccessMap(prisma: PrismaClient, userIds: string[]) {
+  const scopedIds = Array.from(new Set(userIds.filter(Boolean)))
+  const map = new Map<string, UserSeasonalProgramsAccess>()
+  const seen = new Set<string>()
+  if (scopedIds.length === 0) return map
+
+  const logs = await prisma.auditLog.findMany({
+    where: {
+      entity: 'USER_SEASONAL_PROGRAMS_ACCESS',
+      entityId: { in: scopedIds },
+    },
+    orderBy: {
+      timestamp: 'desc',
+    },
+    select: {
+      entityId: true,
+      details: true,
+    },
+  })
+
+  for (const id of scopedIds) map.set(id, { canAccessSeasonalPrograms: false })
+
+  for (const log of logs) {
+    if (seen.has(log.entityId)) continue
+    seen.add(log.entityId)
+    const parsed = seasonalProgramsAccessFromJson(log.details)
+    map.set(log.entityId, parsed ?? { canAccessSeasonalPrograms: false })
+  }
+
+  return map
+}
+
 export async function setUserAccessScope(
   prisma: PrismaClient,
   targetUserId: string,
@@ -87,6 +206,40 @@ export async function setUserAccessScope(
       entity: 'USER_SCOPE',
       entityId: targetUserId,
       details: { scope: normalized },
+    },
+  })
+}
+
+export async function setUserPlannerAccess(
+  prisma: PrismaClient,
+  targetUserId: string,
+  canAccessPlanner: boolean,
+  actorUserId?: string
+) {
+  return prisma.auditLog.create({
+    data: {
+      userId: actorUserId || targetUserId,
+      action: 'SET_PLANNER_ACCESS',
+      entity: 'USER_PLANNER_ACCESS',
+      entityId: targetUserId,
+      details: { canAccessPlanner },
+    },
+  })
+}
+
+export async function setUserSeasonalProgramsAccess(
+  prisma: PrismaClient,
+  targetUserId: string,
+  canAccessSeasonalPrograms: boolean,
+  actorUserId?: string
+) {
+  return prisma.auditLog.create({
+    data: {
+      userId: actorUserId || targetUserId,
+      action: 'SET_SEASONAL_PROGRAMS_ACCESS',
+      entity: 'USER_SEASONAL_PROGRAMS_ACCESS',
+      entityId: targetUserId,
+      details: { canAccessSeasonalPrograms },
     },
   })
 }

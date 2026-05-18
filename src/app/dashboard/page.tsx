@@ -82,6 +82,8 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [canAccessPlanner, setCanAccessPlanner] = useState(false)
+  const [canAccessSeasonalPrograms, setCanAccessSeasonalPrograms] = useState(false)
 
   useEffect(() => {
     let canceled = false
@@ -91,14 +93,26 @@ export default function DashboardPage() {
         setLoading(true)
         setErrorMsg(null)
 
-        const response = await fetch('/api/dashboard/stats', { cache: 'no-store' })
+        const [response, authResponse] = await Promise.all([
+          fetch('/api/dashboard/stats', { cache: 'no-store' }),
+          fetch('/api/auth/check', { cache: 'no-store' }),
+        ])
         if (!response.ok) {
           const message = await response.text().catch(() => '')
           throw new Error(`Dashboard request failed (${response.status}): ${message}`)
         }
 
         const data = (await response.json()) as DashboardStats
-        if (!canceled) setStats(data)
+        const authData = authResponse.ok
+          ? ((await authResponse.json().catch(() => null)) as {
+              user?: { canAccessPlanner?: boolean; canAccessSeasonalPrograms?: boolean }
+            } | null)
+          : null
+        if (!canceled) {
+          setStats(data)
+          setCanAccessPlanner(authData?.user?.canAccessPlanner === true)
+          setCanAccessSeasonalPrograms(authData?.user?.canAccessSeasonalPrograms === true)
+        }
       } catch (error: unknown) {
         console.error('Error fetching dashboard data:', error)
         if (!canceled) {
@@ -123,51 +137,78 @@ export default function DashboardPage() {
   }
 
   const moduleCards = useMemo<ModuleCard[]>(
-    () => [
-      {
+    () => {
+      const cards: ModuleCard[] = [
+        {
         title: 'Customer Portal',
         description: 'Profiles, contacts and account history',
         route: '/customers',
         color: '#198754',
         count: stats?.totalCustomers ?? 0,
-      },
-      {
+        },
+        {
         title: 'Property Management',
         description: 'Service addresses and locations',
         route: '/properties',
         color: '#fd7e14',
         count: stats?.totalProperties ?? 0,
-      },
-      {
+        },
+        {
         title: 'Task Management',
         description: 'Track and update active jobs',
         route: '/tasks',
         color: '#0d6efd',
         count: stats?.totalTasks ?? 0,
-      },
-      {
+        },
+      ]
+
+      if (canAccessPlanner) {
+        cards.push({
+          title: 'Planner',
+          description: 'Weekly schedule and workload board',
+          route: '/planner',
+          color: '#0f766e',
+          count: stats?.pendingTasks ?? 0,
+        })
+      }
+
+      if (canAccessSeasonalPrograms) {
+        cards.push({
+          title: 'Seasonal Programs',
+          description: 'Recurring operations for irrigation, maintenance and pools',
+          route: '/seasonal-programs',
+          color: '#14532d',
+          count: 3,
+        })
+      }
+
+      cards.push(
+        {
         title: 'Service Catalog',
         description: 'Service types and descriptions',
         route: '/services',
         color: '#6f42c1',
         count: stats?.totalServices ?? 0,
-      },
-      {
+        },
+        {
         title: 'Workflow Status',
         description: 'Statuses and notification behavior',
         route: '/statuses',
         color: '#20c997',
         count: stats?.totalStatuses ?? 0,
-      },
-      {
+        },
+        {
         title: 'User Administration',
         description: 'System users and permissions',
         route: '/users',
         color: '#dc3545',
         count: stats?.totalUsers ?? 0,
-      },
-    ],
-    [stats]
+        },
+      )
+
+      return cards
+    },
+    [stats, canAccessPlanner, canAccessSeasonalPrograms]
   )
 
   const maxServiceCount = Math.max(1, ...(stats?.tasksByService.map((item) => item.count) ?? [1]))

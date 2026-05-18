@@ -2,7 +2,15 @@ import { NextResponse } from 'next/server'
 import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcryptjs'
 import { getSessionUser } from '@/lib/sessionUser'
-import { UserAccessScope, getUserAccessScopeMap, setUserAccessScope } from '@/lib/userScope'
+import {
+  UserAccessScope,
+  getUserAccessScopeMap,
+  getUserPlannerAccessMap,
+  getUserSeasonalProgramsAccessMap,
+  setUserAccessScope,
+  setUserPlannerAccess,
+  setUserSeasonalProgramsAccess,
+} from '@/lib/userScope'
 
 const prisma = new PrismaClient()
 
@@ -28,14 +36,18 @@ export async function GET() {
       }
     })
 
-    const scopeMap = await getUserAccessScopeMap(
-      prisma,
-      users.map((user) => user.id)
-    )
+    const userIds = users.map((user) => user.id)
+    const [scopeMap, plannerAccessMap, seasonalProgramsAccessMap] = await Promise.all([
+      getUserAccessScopeMap(prisma, userIds),
+      getUserPlannerAccessMap(prisma, userIds),
+      getUserSeasonalProgramsAccessMap(prisma, userIds),
+    ])
 
     const usersWithScope = users.map((user) => ({
       ...user,
       accessScope: scopeMap.get(user.id) || 'ALL',
+      canAccessPlanner: plannerAccessMap.get(user.id)?.canAccessPlanner || false,
+      canAccessSeasonalPrograms: seasonalProgramsAccessMap.get(user.id)?.canAccessSeasonalPrograms || false,
     }))
 
     return NextResponse.json(usersWithScope)
@@ -58,8 +70,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    const { email, password, role, accessScope } = await request.json()
+    const { email, password, role, accessScope, canAccessPlanner, canAccessSeasonalPrograms } = await request.json()
     const selectedScope: UserAccessScope = accessScope === 'PERMITS_ONLY' ? 'PERMITS_ONLY' : 'ALL'
+    const selectedPlannerAccess = canAccessPlanner === true
+    const selectedSeasonalProgramsAccess = canAccessSeasonalPrograms === true
 
     // Verificar si el usuario ya existe
     const existingUser = await prisma.user.findUnique({
@@ -91,11 +105,17 @@ export async function POST(request: Request) {
       }
     })
 
-    await setUserAccessScope(prisma, user.id, selectedScope, sessionUser?.id)
+    await Promise.all([
+      setUserAccessScope(prisma, user.id, selectedScope, sessionUser?.id),
+      setUserPlannerAccess(prisma, user.id, selectedPlannerAccess, sessionUser?.id),
+      setUserSeasonalProgramsAccess(prisma, user.id, selectedSeasonalProgramsAccess, sessionUser?.id),
+    ])
 
     return NextResponse.json({
       ...user,
       accessScope: selectedScope,
+      canAccessPlanner: selectedPlannerAccess,
+      canAccessSeasonalPrograms: selectedSeasonalProgramsAccess,
     })
   } catch (error) {
     console.error('Error creating user:', error)

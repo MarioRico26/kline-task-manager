@@ -1,12 +1,19 @@
 import { PrismaClient, Role } from '@prisma/client'
 import { cookies } from 'next/headers'
-import { UserAccessScope, getUserAccessScopeById } from './userScope'
+import {
+  UserAccessScope,
+  getUserAccessScopeById,
+  getUserPlannerAccessById,
+  getUserSeasonalProgramsAccessById,
+} from './userScope'
 
 export type SessionUser = {
   id: string
   email: string
   role: Role
   accessScope: UserAccessScope
+  canAccessPlanner: boolean
+  canAccessSeasonalPrograms: boolean
 }
 
 export async function getSessionUser(prisma: PrismaClient): Promise<SessionUser | null> {
@@ -25,10 +32,16 @@ export async function getSessionUser(prisma: PrismaClient): Promise<SessionUser 
 
   if (!user) return null
 
-  const accessScope = await getUserAccessScopeById(prisma, user.id)
+  const [accessScope, plannerAccess, seasonalProgramsAccess] = await Promise.all([
+    getUserAccessScopeById(prisma, user.id),
+    getUserPlannerAccessById(prisma, user.id),
+    getUserSeasonalProgramsAccessById(prisma, user.id),
+  ])
+
   return {
     ...user,
     accessScope,
+    canAccessPlanner: plannerAccess.canAccessPlanner,
+    canAccessSeasonalPrograms: seasonalProgramsAccess.canAccessSeasonalPrograms,
   }
 }
-

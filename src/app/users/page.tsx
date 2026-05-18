@@ -8,6 +8,8 @@ interface User {
   email: string
   role: 'ADMIN' | 'VIEWER'
   accessScope: 'ALL' | 'PERMITS_ONLY'
+  canAccessPlanner: boolean
+  canAccessSeasonalPrograms: boolean
   createdAt: string
 }
 
@@ -54,7 +56,7 @@ export default function UsersPage() {
           setIsAuthenticated(false)
           router.push('/auth/login')
         }
-      } catch (error) {
+      } catch {
         setIsAuthenticated(false)
         router.push('/auth/login')
       }
@@ -169,7 +171,7 @@ if (isAuthenticated === true && loading) {
       } else {
         alert('Error deleting user')
       }
-    } catch (error) {
+    } catch {
       alert('Network error')
     }
   }
@@ -313,7 +315,7 @@ if (isAuthenticated === true && loading) {
             <>
               <div style={{ 
                 display: 'grid', 
-                gridTemplateColumns: '1fr auto auto auto', 
+                gridTemplateColumns: '1fr auto auto auto auto', 
                 padding: '1.2rem 1.5rem',
                 background: 'var(--kline-gray-light)',
                 borderBottom: '2px solid var(--kline-gray)',
@@ -324,6 +326,8 @@ if (isAuthenticated === true && loading) {
                 <div>Email</div>
                 <div>Role</div>
                 <div>Scope</div>
+                <div>Planner</div>
+                <div>Seasonal</div>
                 <div>Actions</div>
               </div>
 
@@ -332,7 +336,7 @@ if (isAuthenticated === true && loading) {
                   key={user.id}
                   style={{ 
                     display: 'grid', 
-                    gridTemplateColumns: '1fr auto auto auto', 
+                    gridTemplateColumns: '1fr auto auto auto auto auto', 
                     padding: '1.2rem 1.5rem',
                     borderBottom: '1px solid var(--kline-gray)',
                     alignItems: 'center',
@@ -366,6 +370,34 @@ if (isAuthenticated === true && loading) {
                       }}
                     >
                       {user.accessScope === 'PERMITS_ONLY' ? 'Permits Only' : 'All'}
+                    </span>
+                  </div>
+                  <div>
+                    <span
+                      style={{
+                        padding: '0.4rem 1rem',
+                        borderRadius: '20px',
+                        fontSize: '0.78rem',
+                        fontWeight: '700',
+                        background: user.canAccessPlanner ? 'rgba(13, 110, 253, 0.14)' : 'rgba(108, 117, 125, 0.12)',
+                        color: user.canAccessPlanner ? '#0d6efd' : '#495057',
+                      }}
+                    >
+                      {user.canAccessPlanner ? 'Enabled' : 'Off'}
+                    </span>
+                  </div>
+                  <div>
+                    <span
+                      style={{
+                        padding: '0.4rem 1rem',
+                        borderRadius: '20px',
+                        fontSize: '0.78rem',
+                        fontWeight: '700',
+                        background: user.canAccessSeasonalPrograms ? 'rgba(20, 83, 45, 0.14)' : 'rgba(108, 117, 125, 0.12)',
+                        color: user.canAccessSeasonalPrograms ? '#14532d' : '#495057',
+                      }}
+                    >
+                      {user.canAccessSeasonalPrograms ? 'Enabled' : 'Off'}
                     </span>
                   </div>
                   <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -456,6 +488,12 @@ if (isAuthenticated === true && loading) {
             </div>
             <div style={{ color: 'var(--kline-text-light)', fontSize: '0.9rem' }}>Permits-only Users</div>
           </div>
+          <div className="kline-card" style={{ padding: '1.5rem', textAlign: 'center' }}>
+            <div style={{ fontSize: '2rem', fontWeight: '700', color: '#0d6efd' }}>
+              {users.filter(u => u.canAccessPlanner).length}
+            </div>
+            <div style={{ color: 'var(--kline-text-light)', fontSize: '0.9rem' }}>Planner Users</div>
+          </div>
         </div>
       </main>
 
@@ -496,6 +534,8 @@ function CreateUserModal({ isOpen, onClose, onUserCreated }: { isOpen: boolean, 
     password: '',
     role: 'VIEWER' as 'ADMIN' | 'VIEWER',
     accessScope: 'ALL' as 'ALL' | 'PERMITS_ONLY',
+    canAccessPlanner: false,
+    canAccessSeasonalPrograms: false,
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -515,12 +555,19 @@ function CreateUserModal({ isOpen, onClose, onUserCreated }: { isOpen: boolean, 
       if (response.ok) {
         onUserCreated()
         onClose()
-        setFormData({ email: '', password: '', role: 'VIEWER', accessScope: 'ALL' })
+        setFormData({
+          email: '',
+          password: '',
+          role: 'VIEWER',
+          accessScope: 'ALL',
+          canAccessPlanner: false,
+          canAccessSeasonalPrograms: false,
+        })
       } else {
         const data = await response.json()
         setError(data.error || 'Error creating user')
       }
-    } catch (error) {
+    } catch {
       setError('Network error')
     } finally {
       setLoading(false)
@@ -639,6 +686,36 @@ function CreateUserModal({ isOpen, onClose, onUserCreated }: { isOpen: boolean, 
             </select>
           </div>
 
+          <label style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start', color: 'var(--kline-text)', fontWeight: '600' }}>
+            <input
+              type="checkbox"
+              checked={formData.canAccessPlanner}
+              onChange={(e) => setFormData({ ...formData, canAccessPlanner: e.target.checked })}
+              style={{ marginTop: 4 }}
+            />
+            <span>
+              Planner Access
+              <span style={{ display: 'block', color: 'var(--kline-text-light)', fontSize: '0.82rem', fontWeight: 500, marginTop: 3 }}>
+                Allows this user to open the planning board.
+              </span>
+            </span>
+          </label>
+
+          <label style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start', color: 'var(--kline-text)', fontWeight: '600' }}>
+            <input
+              type="checkbox"
+              checked={formData.canAccessSeasonalPrograms}
+              onChange={(e) => setFormData({ ...formData, canAccessSeasonalPrograms: e.target.checked })}
+              style={{ marginTop: 4 }}
+            />
+            <span>
+              Seasonal Programs Access
+              <span style={{ display: 'block', color: 'var(--kline-text-light)', fontSize: '0.82rem', fontWeight: 500, marginTop: 3 }}>
+                Allows this user to open the Irrigation, Maintenance and Pool operations module.
+              </span>
+            </span>
+          </label>
+
           <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end', marginTop: '1rem' }}>
             <button
               type="button"
@@ -677,6 +754,8 @@ function EditUserModal({ user, onClose, onUserUpdated }: { user: User | null, on
     email: '',
     role: 'VIEWER' as 'ADMIN' | 'VIEWER',
     accessScope: 'ALL' as 'ALL' | 'PERMITS_ONLY',
+    canAccessPlanner: false,
+    canAccessSeasonalPrograms: false,
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -687,6 +766,8 @@ function EditUserModal({ user, onClose, onUserUpdated }: { user: User | null, on
         email: user.email,
         role: user.role,
         accessScope: user.accessScope || 'ALL',
+        canAccessPlanner: user.canAccessPlanner || false,
+        canAccessSeasonalPrograms: user.canAccessSeasonalPrograms || false,
       })
     }
   }, [user])
@@ -712,7 +793,7 @@ function EditUserModal({ user, onClose, onUserUpdated }: { user: User | null, on
         const data = await response.json()
         setError(data.error || 'Error updating user')
       }
-    } catch (error) {
+    } catch {
       setError('Network error')
     } finally {
       setLoading(false)
@@ -814,6 +895,36 @@ function EditUserModal({ user, onClose, onUserUpdated }: { user: User | null, on
               <option value="PERMITS_ONLY">Permits tasks only</option>
             </select>
           </div>
+
+          <label style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start', color: 'var(--kline-text)', fontWeight: '600' }}>
+            <input
+              type="checkbox"
+              checked={formData.canAccessPlanner}
+              onChange={(e) => setFormData({ ...formData, canAccessPlanner: e.target.checked })}
+              style={{ marginTop: 4 }}
+            />
+            <span>
+              Planner Access
+              <span style={{ display: 'block', color: 'var(--kline-text-light)', fontSize: '0.82rem', fontWeight: 500, marginTop: 3 }}>
+                Allows this user to open the planning board.
+              </span>
+            </span>
+          </label>
+
+          <label style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start', color: 'var(--kline-text)', fontWeight: '600' }}>
+            <input
+              type="checkbox"
+              checked={formData.canAccessSeasonalPrograms}
+              onChange={(e) => setFormData({ ...formData, canAccessSeasonalPrograms: e.target.checked })}
+              style={{ marginTop: 4 }}
+            />
+            <span>
+              Seasonal Programs Access
+              <span style={{ display: 'block', color: 'var(--kline-text-light)', fontSize: '0.82rem', fontWeight: 500, marginTop: 3 }}>
+                Allows this user to open the Irrigation, Maintenance and Pool operations module.
+              </span>
+            </span>
+          </label>
 
           <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end', marginTop: '1rem' }}>
             <button

@@ -25,6 +25,8 @@ This project uses [`next/font`](https://nextjs.org/docs/app/building-your-applic
 - [Architecture Flows](docs/architecture-flows.md)
 - [DevOps Blueprint](docs/devops-blueprint.md)
 - [Executive Brief](docs/executive-brief.md)
+- [Seasonal Programs Blueprint](docs/seasonal-programs-blueprint.md)
+- [Seasonal Programs Implementation Plan](docs/seasonal-programs-implementation-plan.md)
 - [Visual Diagrams](docs/visual-diagrams.md)
 
 ## Learn More
