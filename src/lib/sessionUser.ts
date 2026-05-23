@@ -3,6 +3,7 @@ import { cookies } from 'next/headers'
 import {
   UserAccessScope,
   getUserAccessScopeById,
+  getUserCallsInboxAccessById,
   getUserPlannerAccessById,
   getUserSeasonalProgramsAccessById,
 } from './userScope'
@@ -14,6 +15,7 @@ export type SessionUser = {
   accessScope: UserAccessScope
   canAccessPlanner: boolean
   canAccessSeasonalPrograms: boolean
+  canAccessCallsInbox: boolean
 }
 
 export async function getSessionUser(prisma: PrismaClient): Promise<SessionUser | null> {
@@ -32,10 +34,11 @@ export async function getSessionUser(prisma: PrismaClient): Promise<SessionUser 
 
   if (!user) return null
 
-  const [accessScope, plannerAccess, seasonalProgramsAccess] = await Promise.all([
+  const [accessScope, plannerAccess, seasonalProgramsAccess, callsInboxAccess] = await Promise.all([
     getUserAccessScopeById(prisma, user.id),
     getUserPlannerAccessById(prisma, user.id),
     getUserSeasonalProgramsAccessById(prisma, user.id),
+    getUserCallsInboxAccessById(prisma, user.id),
   ])
 
   return {
@@ -43,5 +46,6 @@ export async function getSessionUser(prisma: PrismaClient): Promise<SessionUser 
     accessScope,
     canAccessPlanner: plannerAccess.canAccessPlanner,
     canAccessSeasonalPrograms: seasonalProgramsAccess.canAccessSeasonalPrograms,
+    canAccessCallsInbox: callsInboxAccess.canAccessCallsInbox,
   }
 }

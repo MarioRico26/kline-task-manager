@@ -7,6 +7,9 @@ export type UserPlannerAccess = {
 export type UserSeasonalProgramsAccess = {
   canAccessSeasonalPrograms: boolean
 }
+export type UserCallsInboxAccess = {
+  canAccessCallsInbox: boolean
+}
 
 const VALID_SCOPES: UserAccessScope[] = ['ALL', 'PERMITS_ONLY']
 
@@ -30,6 +33,12 @@ function seasonalProgramsAccessFromJson(details: Prisma.JsonValue | null): UserS
   if (!details || typeof details !== 'object' || Array.isArray(details)) return null
   const raw = details as Record<string, unknown>
   return { canAccessSeasonalPrograms: raw.canAccessSeasonalPrograms === true }
+}
+
+function callsInboxAccessFromJson(details: Prisma.JsonValue | null): UserCallsInboxAccess | null {
+  if (!details || typeof details !== 'object' || Array.isArray(details)) return null
+  const raw = details as Record<string, unknown>
+  return { canAccessCallsInbox: raw.canAccessCallsInbox === true }
 }
 
 export function normalizeWorkflowText(value: string | null | undefined) {
@@ -94,6 +103,26 @@ export async function getUserSeasonalProgramsAccessById(
   })
 
   return seasonalProgramsAccessFromJson(latestSeasonalLog?.details ?? null) ?? { canAccessSeasonalPrograms: false }
+}
+
+export async function getUserCallsInboxAccessById(
+  prisma: PrismaClient,
+  userId: string
+): Promise<UserCallsInboxAccess> {
+  const latestCallsLog = await prisma.auditLog.findFirst({
+    where: {
+      entity: 'USER_CALLS_INBOX_ACCESS',
+      entityId: userId,
+    },
+    orderBy: {
+      timestamp: 'desc',
+    },
+    select: {
+      details: true,
+    },
+  })
+
+  return callsInboxAccessFromJson(latestCallsLog?.details ?? null) ?? { canAccessCallsInbox: false }
 }
 
 export async function getUserAccessScopeMap(prisma: PrismaClient, userIds: string[]) {
@@ -192,6 +221,38 @@ export async function getUserSeasonalProgramsAccessMap(prisma: PrismaClient, use
   return map
 }
 
+export async function getUserCallsInboxAccessMap(prisma: PrismaClient, userIds: string[]) {
+  const scopedIds = Array.from(new Set(userIds.filter(Boolean)))
+  const map = new Map<string, UserCallsInboxAccess>()
+  const seen = new Set<string>()
+  if (scopedIds.length === 0) return map
+
+  const logs = await prisma.auditLog.findMany({
+    where: {
+      entity: 'USER_CALLS_INBOX_ACCESS',
+      entityId: { in: scopedIds },
+    },
+    orderBy: {
+      timestamp: 'desc',
+    },
+    select: {
+      entityId: true,
+      details: true,
+    },
+  })
+
+  for (const id of scopedIds) map.set(id, { canAccessCallsInbox: false })
+
+  for (const log of logs) {
+    if (seen.has(log.entityId)) continue
+    seen.add(log.entityId)
+    const parsed = callsInboxAccessFromJson(log.details)
+    map.set(log.entityId, parsed ?? { canAccessCallsInbox: false })
+  }
+
+  return map
+}
+
 export async function setUserAccessScope(
   prisma: PrismaClient,
   targetUserId: string,
@@ -240,6 +301,23 @@ export async function setUserSeasonalProgramsAccess(
       entity: 'USER_SEASONAL_PROGRAMS_ACCESS',
       entityId: targetUserId,
       details: { canAccessSeasonalPrograms },
+    },
+  })
+}
+
+export async function setUserCallsInboxAccess(
+  prisma: PrismaClient,
+  targetUserId: string,
+  canAccessCallsInbox: boolean,
+  actorUserId?: string
+) {
+  return prisma.auditLog.create({
+    data: {
+      userId: actorUserId || targetUserId,
+      action: 'SET_CALLS_INBOX_ACCESS',
+      entity: 'USER_CALLS_INBOX_ACCESS',
+      entityId: targetUserId,
+      details: { canAccessCallsInbox },
     },
   })
 }

@@ -5,9 +5,11 @@ import { getSessionUser } from '@/lib/sessionUser'
 import {
   UserAccessScope,
   getUserAccessScopeMap,
+  getUserCallsInboxAccessMap,
   getUserPlannerAccessMap,
   getUserSeasonalProgramsAccessMap,
   setUserAccessScope,
+  setUserCallsInboxAccess,
   setUserPlannerAccess,
   setUserSeasonalProgramsAccess,
 } from '@/lib/userScope'
@@ -37,10 +39,11 @@ export async function GET() {
     })
 
     const userIds = users.map((user) => user.id)
-    const [scopeMap, plannerAccessMap, seasonalProgramsAccessMap] = await Promise.all([
+    const [scopeMap, plannerAccessMap, seasonalProgramsAccessMap, callsInboxAccessMap] = await Promise.all([
       getUserAccessScopeMap(prisma, userIds),
       getUserPlannerAccessMap(prisma, userIds),
       getUserSeasonalProgramsAccessMap(prisma, userIds),
+      getUserCallsInboxAccessMap(prisma, userIds),
     ])
 
     const usersWithScope = users.map((user) => ({
@@ -48,6 +51,7 @@ export async function GET() {
       accessScope: scopeMap.get(user.id) || 'ALL',
       canAccessPlanner: plannerAccessMap.get(user.id)?.canAccessPlanner || false,
       canAccessSeasonalPrograms: seasonalProgramsAccessMap.get(user.id)?.canAccessSeasonalPrograms || false,
+      canAccessCallsInbox: callsInboxAccessMap.get(user.id)?.canAccessCallsInbox || false,
     }))
 
     return NextResponse.json(usersWithScope)
@@ -70,10 +74,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    const { email, password, role, accessScope, canAccessPlanner, canAccessSeasonalPrograms } = await request.json()
+    const { email, password, role, accessScope, canAccessPlanner, canAccessSeasonalPrograms, canAccessCallsInbox } = await request.json()
     const selectedScope: UserAccessScope = accessScope === 'PERMITS_ONLY' ? 'PERMITS_ONLY' : 'ALL'
     const selectedPlannerAccess = canAccessPlanner === true
     const selectedSeasonalProgramsAccess = canAccessSeasonalPrograms === true
+    const selectedCallsInboxAccess = canAccessCallsInbox === true
 
     // Verificar si el usuario ya existe
     const existingUser = await prisma.user.findUnique({
@@ -109,6 +114,7 @@ export async function POST(request: Request) {
       setUserAccessScope(prisma, user.id, selectedScope, sessionUser?.id),
       setUserPlannerAccess(prisma, user.id, selectedPlannerAccess, sessionUser?.id),
       setUserSeasonalProgramsAccess(prisma, user.id, selectedSeasonalProgramsAccess, sessionUser?.id),
+      setUserCallsInboxAccess(prisma, user.id, selectedCallsInboxAccess, sessionUser?.id),
     ])
 
     return NextResponse.json({
@@ -116,6 +122,7 @@ export async function POST(request: Request) {
       accessScope: selectedScope,
       canAccessPlanner: selectedPlannerAccess,
       canAccessSeasonalPrograms: selectedSeasonalProgramsAccess,
+      canAccessCallsInbox: selectedCallsInboxAccess,
     })
   } catch (error) {
     console.error('Error creating user:', error)

@@ -4,9 +4,11 @@ import { getSessionUser } from '@/lib/sessionUser'
 import {
   UserAccessScope,
   getUserAccessScopeById,
+  getUserCallsInboxAccessById,
   getUserPlannerAccessById,
   getUserSeasonalProgramsAccessById,
   setUserAccessScope,
+  setUserCallsInboxAccess,
   setUserPlannerAccess,
   setUserSeasonalProgramsAccess,
 } from '@/lib/userScope'
@@ -32,11 +34,12 @@ export async function PUT(
     const access = await ensureUserAdminAccess()
     if ('error' in access) return access.error
 
-    const { email, role, accessScope, canAccessPlanner, canAccessSeasonalPrograms } = await request.json()
+    const { email, role, accessScope, canAccessPlanner, canAccessSeasonalPrograms, canAccessCallsInbox } = await request.json()
     const { id } = await params
     const selectedScope: UserAccessScope = accessScope === 'PERMITS_ONLY' ? 'PERMITS_ONLY' : 'ALL'
     const selectedPlannerAccess = canAccessPlanner === true
     const selectedSeasonalProgramsAccess = canAccessSeasonalPrograms === true
+    const selectedCallsInboxAccess = canAccessCallsInbox === true
 
     const user = await prisma.user.update({
       where: { id },
@@ -53,6 +56,7 @@ export async function PUT(
       setUserAccessScope(prisma, id, selectedScope, access.sessionUser.id),
       setUserPlannerAccess(prisma, id, selectedPlannerAccess, access.sessionUser.id),
       setUserSeasonalProgramsAccess(prisma, id, selectedSeasonalProgramsAccess, access.sessionUser.id),
+      setUserCallsInboxAccess(prisma, id, selectedCallsInboxAccess, access.sessionUser.id),
     ])
 
     return NextResponse.json({
@@ -60,6 +64,7 @@ export async function PUT(
       accessScope: selectedScope,
       canAccessPlanner: selectedPlannerAccess,
       canAccessSeasonalPrograms: selectedSeasonalProgramsAccess,
+      canAccessCallsInbox: selectedCallsInboxAccess,
     })
   } catch (error) {
     console.error('Error updating user:', error)
@@ -117,10 +122,11 @@ export async function GET(
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    const [accessScope, plannerAccess, seasonalProgramsAccess] = await Promise.all([
+    const [accessScope, plannerAccess, seasonalProgramsAccess, callsInboxAccess] = await Promise.all([
       getUserAccessScopeById(prisma, id),
       getUserPlannerAccessById(prisma, id),
       getUserSeasonalProgramsAccessById(prisma, id),
+      getUserCallsInboxAccessById(prisma, id),
     ])
 
     return NextResponse.json({
@@ -128,6 +134,7 @@ export async function GET(
       accessScope,
       canAccessPlanner: plannerAccess.canAccessPlanner,
       canAccessSeasonalPrograms: seasonalProgramsAccess.canAccessSeasonalPrograms,
+      canAccessCallsInbox: callsInboxAccess.canAccessCallsInbox,
     })
   } catch (error) {
     console.error('Error fetching user:', error)

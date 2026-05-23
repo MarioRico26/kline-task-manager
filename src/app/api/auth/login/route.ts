@@ -1,7 +1,12 @@
 import { NextResponse } from 'next/server'
 import { PrismaClient } from '@prisma/client'
 import * as bcrypt from 'bcryptjs'
-import { getUserAccessScopeById, getUserPlannerAccessById, getUserSeasonalProgramsAccessById } from '@/lib/userScope'
+import {
+  getUserAccessScopeById,
+  getUserCallsInboxAccessById,
+  getUserPlannerAccessById,
+  getUserSeasonalProgramsAccessById,
+} from '@/lib/userScope'
 
 const prisma = new PrismaClient()
 
@@ -23,10 +28,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 })
     }
     
-    const [accessScope, plannerAccess, seasonalProgramsAccess] = await Promise.all([
+    const [accessScope, plannerAccess, seasonalProgramsAccess, callsInboxAccess] = await Promise.all([
       getUserAccessScopeById(prisma, user.id),
       getUserPlannerAccessById(prisma, user.id),
       getUserSeasonalProgramsAccessById(prisma, user.id),
+      getUserCallsInboxAccessById(prisma, user.id),
     ])
 
     const response = NextResponse.json({
@@ -38,6 +44,7 @@ export async function POST(request: Request) {
         accessScope,
         canAccessPlanner: plannerAccess.canAccessPlanner,
         canAccessSeasonalPrograms: seasonalProgramsAccess.canAccessSeasonalPrograms,
+        canAccessCallsInbox: callsInboxAccess.canAccessCallsInbox,
       }
     })
     
@@ -67,6 +74,14 @@ export async function POST(request: Request) {
     })
 
     response.cookies.set('seasonal-programs-access', seasonalProgramsAccess.canAccessSeasonalPrograms ? 'true' : 'false', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 60 * 60 * 24, // 24h
+    })
+
+    response.cookies.set('calls-inbox-access', callsInboxAccess.canAccessCallsInbox ? 'true' : 'false', {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',

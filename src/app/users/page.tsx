@@ -10,6 +10,7 @@ interface User {
   accessScope: 'ALL' | 'PERMITS_ONLY'
   canAccessPlanner: boolean
   canAccessSeasonalPrograms: boolean
+  canAccessCallsInbox: boolean
   createdAt: string
 }
 
@@ -328,6 +329,7 @@ if (isAuthenticated === true && loading) {
                 <div>Scope</div>
                 <div>Planner</div>
                 <div>Seasonal</div>
+                <div>Calls</div>
                 <div>Actions</div>
               </div>
 
@@ -336,7 +338,7 @@ if (isAuthenticated === true && loading) {
                   key={user.id}
                   style={{ 
                     display: 'grid', 
-                    gridTemplateColumns: '1fr auto auto auto auto auto', 
+                    gridTemplateColumns: '1fr auto auto auto auto auto auto', 
                     padding: '1.2rem 1.5rem',
                     borderBottom: '1px solid var(--kline-gray)',
                     alignItems: 'center',
@@ -398,6 +400,20 @@ if (isAuthenticated === true && loading) {
                       }}
                     >
                       {user.canAccessSeasonalPrograms ? 'Enabled' : 'Off'}
+                    </span>
+                  </div>
+                  <div>
+                    <span
+                      style={{
+                        padding: '0.4rem 1rem',
+                        borderRadius: '20px',
+                        fontSize: '0.78rem',
+                        fontWeight: '700',
+                        background: user.canAccessCallsInbox ? 'rgba(124, 58, 237, 0.14)' : 'rgba(108, 117, 125, 0.12)',
+                        color: user.canAccessCallsInbox ? '#7c3aed' : '#495057',
+                      }}
+                    >
+                      {user.canAccessCallsInbox ? 'Enabled' : 'Off'}
                     </span>
                   </div>
                   <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -494,6 +510,12 @@ if (isAuthenticated === true && loading) {
             </div>
             <div style={{ color: 'var(--kline-text-light)', fontSize: '0.9rem' }}>Planner Users</div>
           </div>
+          <div className="kline-card" style={{ padding: '1.5rem', textAlign: 'center' }}>
+            <div style={{ fontSize: '2rem', fontWeight: '700', color: '#7c3aed' }}>
+              {users.filter(u => u.canAccessCallsInbox).length}
+            </div>
+            <div style={{ color: 'var(--kline-text-light)', fontSize: '0.9rem' }}>Calls Inbox Users</div>
+          </div>
         </div>
       </main>
 
@@ -536,6 +558,7 @@ function CreateUserModal({ isOpen, onClose, onUserCreated }: { isOpen: boolean, 
     accessScope: 'ALL' as 'ALL' | 'PERMITS_ONLY',
     canAccessPlanner: false,
     canAccessSeasonalPrograms: false,
+    canAccessCallsInbox: false,
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -562,6 +585,7 @@ function CreateUserModal({ isOpen, onClose, onUserCreated }: { isOpen: boolean, 
           accessScope: 'ALL',
           canAccessPlanner: false,
           canAccessSeasonalPrograms: false,
+          canAccessCallsInbox: false,
         })
       } else {
         const data = await response.json()
@@ -704,6 +728,21 @@ function CreateUserModal({ isOpen, onClose, onUserCreated }: { isOpen: boolean, 
           <label style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start', color: 'var(--kline-text)', fontWeight: '600' }}>
             <input
               type="checkbox"
+              checked={formData.canAccessCallsInbox}
+              onChange={(e) => setFormData({ ...formData, canAccessCallsInbox: e.target.checked })}
+              style={{ marginTop: 4 }}
+            />
+            <span>
+              Calls Inbox Access
+              <span style={{ display: 'block', color: 'var(--kline-text-light)', fontSize: '0.82rem', fontWeight: 500, marginTop: 3 }}>
+                Allows this user to access the calls, voicemail and callback workflow module.
+              </span>
+            </span>
+          </label>
+
+          <label style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start', color: 'var(--kline-text)', fontWeight: '600' }}>
+            <input
+              type="checkbox"
               checked={formData.canAccessSeasonalPrograms}
               onChange={(e) => setFormData({ ...formData, canAccessSeasonalPrograms: e.target.checked })}
               style={{ marginTop: 4 }}
@@ -756,6 +795,7 @@ function EditUserModal({ user, onClose, onUserUpdated }: { user: User | null, on
     accessScope: 'ALL' as 'ALL' | 'PERMITS_ONLY',
     canAccessPlanner: false,
     canAccessSeasonalPrograms: false,
+    canAccessCallsInbox: false,
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -768,6 +808,7 @@ function EditUserModal({ user, onClose, onUserUpdated }: { user: User | null, on
         accessScope: user.accessScope || 'ALL',
         canAccessPlanner: user.canAccessPlanner || false,
         canAccessSeasonalPrograms: user.canAccessSeasonalPrograms || false,
+        canAccessCallsInbox: user.canAccessCallsInbox || false,
       })
     }
   }, [user])
@@ -907,6 +948,21 @@ function EditUserModal({ user, onClose, onUserUpdated }: { user: User | null, on
               Planner Access
               <span style={{ display: 'block', color: 'var(--kline-text-light)', fontSize: '0.82rem', fontWeight: 500, marginTop: 3 }}>
                 Allows this user to open the planning board.
+              </span>
+            </span>
+          </label>
+
+          <label style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start', color: 'var(--kline-text)', fontWeight: '600' }}>
+            <input
+              type="checkbox"
+              checked={formData.canAccessCallsInbox}
+              onChange={(e) => setFormData({ ...formData, canAccessCallsInbox: e.target.checked })}
+              style={{ marginTop: 4 }}
+            />
+            <span>
+              Calls Inbox Access
+              <span style={{ display: 'block', color: 'var(--kline-text-light)', fontSize: '0.82rem', fontWeight: 500, marginTop: 3 }}>
+                Allows this user to access the calls, voicemail and callback workflow module.
               </span>
             </span>
           </label>

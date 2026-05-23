@@ -84,6 +84,7 @@ export default function DashboardPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [canAccessPlanner, setCanAccessPlanner] = useState(false)
   const [canAccessSeasonalPrograms, setCanAccessSeasonalPrograms] = useState(false)
+  const [canAccessCallsInbox, setCanAccessCallsInbox] = useState(false)
 
   useEffect(() => {
     let canceled = false
@@ -105,13 +106,14 @@ export default function DashboardPage() {
         const data = (await response.json()) as DashboardStats
         const authData = authResponse.ok
           ? ((await authResponse.json().catch(() => null)) as {
-              user?: { canAccessPlanner?: boolean; canAccessSeasonalPrograms?: boolean }
+              user?: { canAccessPlanner?: boolean; canAccessSeasonalPrograms?: boolean; canAccessCallsInbox?: boolean }
             } | null)
           : null
         if (!canceled) {
           setStats(data)
           setCanAccessPlanner(authData?.user?.canAccessPlanner === true)
           setCanAccessSeasonalPrograms(authData?.user?.canAccessSeasonalPrograms === true)
+          setCanAccessCallsInbox(authData?.user?.canAccessCallsInbox === true)
         }
       } catch (error: unknown) {
         console.error('Error fetching dashboard data:', error)
@@ -182,6 +184,16 @@ export default function DashboardPage() {
         })
       }
 
+      if (canAccessCallsInbox) {
+        cards.push({
+          title: 'Calls Inbox',
+          description: 'Missed calls, voicemails and callback ownership',
+          route: '/calls-inbox',
+          color: '#7c3aed',
+          count: 0,
+        })
+      }
+
       cards.push(
         {
         title: 'Service Catalog',
@@ -208,7 +220,7 @@ export default function DashboardPage() {
 
       return cards
     },
-    [stats, canAccessPlanner, canAccessSeasonalPrograms]
+    [stats, canAccessPlanner, canAccessSeasonalPrograms, canAccessCallsInbox]
   )
 
   const maxServiceCount = Math.max(1, ...(stats?.tasksByService.map((item) => item.count) ?? [1]))

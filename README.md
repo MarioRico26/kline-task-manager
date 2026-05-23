@@ -23,6 +23,8 @@ This project uses [`next/font`](https://nextjs.org/docs/app/building-your-applic
 ## Project Docs
 
 - [Architecture Flows](docs/architecture-flows.md)
+- [Calls Inbox Blueprint](docs/calls-inbox-blueprint.md)
+- [Calls Inbox Implementation Plan](docs/calls-inbox-implementation-plan.md)
 - [DevOps Blueprint](docs/devops-blueprint.md)
 - [Executive Brief](docs/executive-brief.md)
 - [Seasonal Programs Blueprint](docs/seasonal-programs-blueprint.md)
