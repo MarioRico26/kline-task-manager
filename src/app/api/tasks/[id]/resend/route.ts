@@ -27,6 +27,9 @@ function getPhoneRecipients(primaryPhone: string | null | undefined, extraPhones
 export async function POST(request: NextRequest) {
   try {
     const sessionUser = await getSessionUser(prisma)
+    if (sessionUser?.accessScope === "NONE") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
     const url = new URL(request.url)
     const pathSegments = url.pathname.split("/")
     const taskId = pathSegments[pathSegments.length - 2]

@@ -24,6 +24,7 @@ export function proxy(req: NextRequest) {
 
   const accessScope = req.cookies.get('access-scope')?.value
   const isPermitsOnly = accessScope === 'PERMITS_ONLY'
+  const hasNoTaskAccess = accessScope === 'NONE'
   const canAccessPlanner = req.cookies.get('planner-access')?.value === 'true'
   const canAccessSeasonalPrograms = req.cookies.get('seasonal-programs-access')?.value === 'true'
   const canAccessCallsInbox = req.cookies.get('calls-inbox-access')?.value === 'true'
@@ -51,6 +52,20 @@ export function proxy(req: NextRequest) {
     const dashboardUrl = req.nextUrl.clone()
     dashboardUrl.pathname = isPermitsOnly ? '/tasks' : '/dashboard'
     return NextResponse.redirect(dashboardUrl)
+  }
+
+  if (hasNoTaskAccess) {
+    const blocksTaskModule =
+      pathname.startsWith('/tasks') ||
+      pathname.startsWith('/api/tasks') ||
+      pathname.startsWith('/api/services') ||
+      pathname.startsWith('/api/statuses')
+
+    if (blocksTaskModule) {
+      const redirectUrl = req.nextUrl.clone()
+      redirectUrl.pathname = canAccessCallsInbox ? '/calls-inbox' : '/dashboard'
+      return NextResponse.redirect(redirectUrl)
+    }
   }
 
   if (isPermitsOnly) {

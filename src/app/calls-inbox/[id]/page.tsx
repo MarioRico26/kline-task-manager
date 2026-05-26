@@ -15,33 +15,8 @@ import {
 type AssignmentUser = {
   id: string
   email: string
-  accessScope?: 'ALL' | 'PERMITS_ONLY'
-}
-
-type CustomerOption = {
-  id: string
-  fullName: string
-  email?: string
-}
-
-type PropertyOption = {
-  id: string
-  customerId: string
-  address: string
-  city: string
-  state: string
-  zip?: string
-}
-
-type TaskOption = {
-  id: string
-  customerId: string
-  propertyId: string
-  scheduledFor?: string | null
-  customer?: { fullName?: string }
-  property?: { address?: string; city?: string; state?: string }
-  service?: { name?: string }
-  status?: { name?: string }
+  accessScope?: 'ALL' | 'PERMITS_ONLY' | 'NONE'
+  canAccessCallsInbox?: boolean
 }
 
 function formatDateTime(value: string | null) {
@@ -78,9 +53,6 @@ export default function CallRecordDetailPage() {
   const [authorized, setAuthorized] = useState<boolean | null>(null)
   const [record, setRecord] = useState<CallsInboxDetailRecord | null>(null)
   const [users, setUsers] = useState<AssignmentUser[]>([])
-  const [customers, setCustomers] = useState<CustomerOption[]>([])
-  const [properties, setProperties] = useState<PropertyOption[]>([])
-  const [tasks, setTasks] = useState<TaskOption[]>([])
   const [moduleReady, setModuleReady] = useState(true)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
@@ -97,9 +69,6 @@ export default function CallRecordDetailPage() {
     transcriptRaw: '',
     internalNotes: '',
     requestedAction: '',
-    customerId: '',
-    propertyId: '',
-    relatedTaskId: '',
   })
   const [callbackForm, setCallbackForm] = useState({
     outcome: 'NO_ANSWER',
@@ -130,9 +99,6 @@ export default function CallRecordDetailPage() {
         transcriptRaw: payload.record.transcriptRaw || '',
         internalNotes: payload.record.internalNotes || '',
         requestedAction: payload.record.requestedAction || '',
-        customerId: payload.record.customer?.id || '',
-        propertyId: payload.record.property?.id || '',
-        relatedTaskId: payload.record.relatedTask?.id || '',
       })
     }
   }
@@ -162,19 +128,13 @@ export default function CallRecordDetailPage() {
           return
         }
 
-        const [detailRes, usersRes, customersRes, propertiesRes, tasksRes] = await Promise.all([
+        const [detailRes, usersRes] = await Promise.all([
           fetch(`/api/calls-inbox/${params.id}`, { cache: 'no-store' }),
           fetch('/api/users', { cache: 'no-store' }),
-          fetch('/api/customers', { cache: 'no-store' }),
-          fetch('/api/properties', { cache: 'no-store' }),
-          fetch('/api/tasks', { cache: 'no-store' }),
         ])
 
         const detailData = (await detailRes.json()) as CallsInboxDetailApiResponse | { error?: string }
         const usersData = usersRes.ok ? ((await usersRes.json()) as AssignmentUser[]) : []
-        const customersData = customersRes.ok ? ((await customersRes.json()) as CustomerOption[]) : []
-        const propertiesData = propertiesRes.ok ? ((await propertiesRes.json()) as PropertyOption[]) : []
-        const tasksData = tasksRes.ok ? ((await tasksRes.json()) as TaskOption[]) : []
 
         if (cancelled) return
 
@@ -186,10 +146,7 @@ export default function CallRecordDetailPage() {
         setRecord(payload.record)
         setModuleReady(payload.moduleReady)
         setMessage(payload.message || '')
-        setUsers(usersData.filter((user) => user.accessScope !== 'PERMITS_ONLY'))
-        setCustomers(customersData)
-        setProperties(propertiesData)
-        setTasks(tasksData)
+        setUsers(usersData.filter((user) => user.canAccessCallsInbox === true))
 
         if (payload.record) {
           setForm({
@@ -201,9 +158,6 @@ export default function CallRecordDetailPage() {
             transcriptRaw: payload.record.transcriptRaw || '',
             internalNotes: payload.record.internalNotes || '',
             requestedAction: payload.record.requestedAction || '',
-            customerId: payload.record.customer?.id || '',
-            propertyId: payload.record.property?.id || '',
-            relatedTaskId: payload.record.relatedTask?.id || '',
           })
         }
       } catch (bootstrapError) {
@@ -224,29 +178,10 @@ export default function CallRecordDetailPage() {
     }
   }, [params.id, router])
 
-  const linkedSummary = useMemo(() => {
-    if (!record) return 'No linked customer or property yet.'
-    const values = [record.customer?.fullName, record.property?.address].filter(Boolean)
-    return values.length > 0 ? values.join(' · ') : 'No linked customer or property yet.'
-  }, [record])
-
   const nextFollowUpAt = useMemo(() => {
     if (!record) return null
     return record.latestNextFollowUpAt || record.callbackAttempts.find((attempt) => attempt.nextFollowUpAt)?.nextFollowUpAt || null
   }, [record])
-
-  const filteredProperties = useMemo(() => {
-    if (!form.customerId) return []
-    return properties.filter((property) => property.customerId === form.customerId)
-  }, [form.customerId, properties])
-
-  const filteredTasks = useMemo(() => {
-    return tasks.filter((task) => {
-      if (form.customerId && task.customerId !== form.customerId) return false
-      if (form.propertyId && task.propertyId !== form.propertyId) return false
-      return true
-    })
-  }, [form.customerId, form.propertyId, tasks])
 
   async function handleSave(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -415,11 +350,6 @@ export default function CallRecordDetailPage() {
                   {record.isSlaBreached ? 'Needs attention now' : record.isSlaWarning ? 'Aging toward SLA risk' : 'Within same-day response window'}
                 </div>
               </div>
-              <div className="kline-card" style={{ padding: '1.2rem', borderTop: '4px solid #198754' }}>
-                <div style={{ fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 800, color: 'var(--kline-text-light)' }}>Linked context</div>
-                <div style={{ color: 'var(--kline-text)', marginTop: 8, fontWeight: 800 }}>{linkedSummary}</div>
-                <div style={{ color: 'var(--kline-text-light)', marginTop: 6 }}>{record.detectedAddress || 'No detected address'}{record.detectedTown ? ` · ${record.detectedTown}` : ''}</div>
-              </div>
               <div className="kline-card" style={{ padding: '1.2rem', borderTop: '4px solid #0d6efd' }}>
                 <div style={{ fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 800, color: 'var(--kline-text-light)' }}>History snapshot</div>
                 <div style={{ color: 'var(--kline-text)', marginTop: 8, fontWeight: 800 }}>{record.callbackAttemptCount} callback attempts</div>
@@ -480,104 +410,6 @@ export default function CallRecordDetailPage() {
                 </div>
 
                 <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--kline-gray)' }}>
-                  <div style={{ fontWeight: 800, color: 'var(--kline-text)', marginBottom: '0.85rem' }}>Business linking</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
-                    <div>
-                      <label style={{ display: 'block', fontWeight: 700, marginBottom: '0.5rem', color: 'var(--kline-text)' }}>Customer</label>
-                      <select
-                        className="kline-input"
-                        value={form.customerId}
-                        onChange={(event) =>
-                          setForm((current) => {
-                            const nextCustomerId = event.target.value
-                            const nextPropertyStillMatches = current.propertyId
-                              ? properties.find((property) => property.id === current.propertyId)?.customerId === nextCustomerId
-                              : true
-                            const nextTaskStillMatches = current.relatedTaskId
-                              ? tasks.find((task) => task.id === current.relatedTaskId)?.customerId === nextCustomerId
-                              : true
-
-                            return {
-                              ...current,
-                              customerId: nextCustomerId,
-                              propertyId: nextPropertyStillMatches ? current.propertyId : '',
-                              relatedTaskId: nextTaskStillMatches ? current.relatedTaskId : '',
-                            }
-                          })
-                        }
-                      >
-                        <option value="">No linked customer</option>
-                        {customers.map((customer) => (
-                          <option key={customer.id} value={customer.id}>
-                            {customer.fullName} {customer.email ? `(${customer.email})` : ''}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label style={{ display: 'block', fontWeight: 700, marginBottom: '0.5rem', color: 'var(--kline-text)' }}>Property</label>
-                      <select
-                        className="kline-input"
-                        value={form.propertyId}
-                        disabled={!form.customerId}
-                        onChange={(event) =>
-                          setForm((current) => {
-                            const nextPropertyId = event.target.value
-                            const selectedProperty = properties.find((property) => property.id === nextPropertyId)
-                            const nextTaskStillMatches = current.relatedTaskId
-                              ? tasks.find((task) => task.id === current.relatedTaskId)?.propertyId === nextPropertyId
-                              : true
-
-                            return {
-                              ...current,
-                              customerId: selectedProperty?.customerId || current.customerId,
-                              propertyId: nextPropertyId,
-                              relatedTaskId: nextTaskStillMatches ? current.relatedTaskId : '',
-                            }
-                          })
-                        }
-                      >
-                        <option value="">{form.customerId ? 'No linked property' : 'Select customer first'}</option>
-                        {filteredProperties.map((property) => (
-                          <option key={property.id} value={property.id}>
-                            {property.address}, {property.city}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label style={{ display: 'block', fontWeight: 700, marginBottom: '0.5rem', color: 'var(--kline-text)' }}>Related Task</label>
-                      <select
-                        className="kline-input"
-                        value={form.relatedTaskId}
-                        disabled={!form.customerId}
-                        onChange={(event) =>
-                          setForm((current) => {
-                            const nextTaskId = event.target.value
-                            const selectedTask = tasks.find((task) => task.id === nextTaskId)
-                            return {
-                              ...current,
-                              customerId: selectedTask?.customerId || current.customerId,
-                              propertyId: selectedTask?.propertyId || current.propertyId,
-                              relatedTaskId: nextTaskId,
-                            }
-                          })
-                        }
-                      >
-                        <option value="">{form.customerId ? 'No linked task' : 'Select customer first'}</option>
-                        {filteredTasks.map((task) => (
-                          <option key={task.id} value={task.id}>
-                            {(task.service?.name || 'Task')} · {task.property?.address || 'No address'} · {task.status?.name || 'No status'}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                </div>
-
-                <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--kline-gray)' }}>
                   <div style={{ fontWeight: 800, color: 'var(--kline-text)', marginBottom: '0.85rem' }}>Call content</div>
                   <label style={{ display: 'block', fontWeight: 700, marginBottom: '0.5rem', color: 'var(--kline-text)' }}>Summary</label>
                   <textarea className="kline-input" rows={4} value={form.summary} onChange={(event) => setForm((current) => ({ ...current, summary: event.target.value }))} />
@@ -615,19 +447,6 @@ export default function CallRecordDetailPage() {
               </form>
 
               <div style={{ display: 'grid', gap: '1rem' }}>
-                <section className="kline-card" style={{ padding: '1.4rem', borderTop: '4px solid #198754' }}>
-                  <h3 style={{ marginTop: 0, color: 'var(--kline-text)' }}>Linked context</h3>
-                  <p style={{ color: 'var(--kline-text-light)', margin: '0.6rem 0 0' }}>{linkedSummary}</p>
-                  <p style={{ color: 'var(--kline-text-light)', margin: '0.75rem 0 0' }}>
-                    {record.detectedAddress || 'No detected address'}{record.detectedTown ? ` · ${record.detectedTown}` : ''}
-                  </p>
-                  {record.relatedTask && (
-                    <p style={{ color: 'var(--kline-text-light)', margin: '0.75rem 0 0' }}>
-                      Linked task: {record.relatedTask.serviceName || 'Task'} · {record.relatedTask.statusName || 'No status'}
-                    </p>
-                  )}
-                </section>
-
                 <section className="kline-card" style={{ padding: '1.4rem', borderTop: '4px solid #fd7e14' }}>
                   <h3 style={{ marginTop: 0, color: 'var(--kline-text)' }}>Log callback attempt</h3>
                   <form onSubmit={handleCallbackAttemptSubmit}>

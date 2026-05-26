@@ -63,7 +63,7 @@ type TaskGroup = {
   tasks: TaskItem[]
 }
 
-type AccessScope = 'ALL' | 'PERMITS_ONLY'
+type AccessScope = 'ALL' | 'PERMITS_ONLY' | 'NONE'
 
 type CaseStepState = 'COMPLETED' | 'IN_PROGRESS' | 'NOT_STARTED'
 
@@ -265,12 +265,14 @@ export default function TasksPage() {
     try {
       const response = await fetch('/api/auth/check', { cache: 'no-store' })
       if (!response.ok) return
-      const data = (await response.json()) as { user?: { accessScope?: AccessScope } }
+      const data = (await response.json()) as { user?: { accessScope?: AccessScope; canAccessCallsInbox?: boolean } }
       if (data.user?.accessScope) {
         setAccessScope(data.user.accessScope)
         if (data.user.accessScope === 'PERMITS_ONLY') {
           setGroupBy('CUSTOMER_PROPERTY')
           setViewMode('CASES')
+        } else if (data.user.accessScope === 'NONE') {
+          router.replace(data.user.canAccessCallsInbox ? '/calls-inbox' : '/dashboard')
         }
       }
     } catch (error) {

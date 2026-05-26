@@ -91,6 +91,7 @@ export default function DashboardPage() {
   const [canAccessPlanner, setCanAccessPlanner] = useState(false)
   const [canAccessSeasonalPrograms, setCanAccessSeasonalPrograms] = useState(false)
   const [canAccessCallsInbox, setCanAccessCallsInbox] = useState(false)
+  const [accessScope, setAccessScope] = useState<'ALL' | 'PERMITS_ONLY' | 'NONE'>('ALL')
 
   useEffect(() => {
     let canceled = false
@@ -112,7 +113,12 @@ export default function DashboardPage() {
         const data = (await response.json()) as DashboardStats
         const authData = authResponse.ok
           ? ((await authResponse.json().catch(() => null)) as {
-              user?: { canAccessPlanner?: boolean; canAccessSeasonalPrograms?: boolean; canAccessCallsInbox?: boolean }
+              user?: {
+                canAccessPlanner?: boolean
+                canAccessSeasonalPrograms?: boolean
+                canAccessCallsInbox?: boolean
+                accessScope?: 'ALL' | 'PERMITS_ONLY' | 'NONE'
+              }
             } | null)
           : null
         if (!canceled) {
@@ -120,6 +126,7 @@ export default function DashboardPage() {
           setCanAccessPlanner(authData?.user?.canAccessPlanner === true)
           setCanAccessSeasonalPrograms(authData?.user?.canAccessSeasonalPrograms === true)
           setCanAccessCallsInbox(authData?.user?.canAccessCallsInbox === true)
+          setAccessScope(authData?.user?.accessScope || 'ALL')
         }
       } catch (error: unknown) {
         console.error('Error fetching dashboard data:', error)
@@ -169,6 +176,10 @@ export default function DashboardPage() {
         count: stats?.totalTasks ?? 0,
         },
       ]
+
+      if (accessScope === 'NONE') {
+        cards.splice(2, 1)
+      }
 
       if (canAccessPlanner) {
         cards.push({
@@ -226,7 +237,7 @@ export default function DashboardPage() {
 
       return cards
     },
-    [stats, canAccessPlanner, canAccessSeasonalPrograms, canAccessCallsInbox]
+    [stats, canAccessPlanner, canAccessSeasonalPrograms, canAccessCallsInbox, accessScope]
   )
 
   const maxServiceCount = Math.max(1, ...(stats?.tasksByService.map((item) => item.count) ?? [1]))
@@ -267,9 +278,11 @@ export default function DashboardPage() {
             <button onClick={() => router.push('/properties')} className="action-btn action-orange">
               + New Property
             </button>
-            <button onClick={() => router.push('/tasks/new')} className="action-btn action-green">
-              + New Task
-            </button>
+            {accessScope !== 'NONE' && (
+              <button onClick={() => router.push('/tasks/new')} className="action-btn action-green">
+                + New Task
+              </button>
+            )}
           </div>
         </section>
 
@@ -391,6 +404,7 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
+                {accessScope !== 'NONE' && (
                 <section className="panel card-panel recent-panel">
                   <div className="panel-head row">
                     <div>
@@ -439,6 +453,7 @@ export default function DashboardPage() {
                     </div>
                   )}
                 </section>
+                )}
               </div>
 
               <div className="insight-stack">

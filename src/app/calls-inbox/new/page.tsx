@@ -7,7 +7,8 @@ import { callPriorityOptions, callSourceOptions, callStatusOptions, callTypeOpti
 type AssignmentUser = {
   id: string
   email: string
-  accessScope?: 'ALL' | 'PERMITS_ONLY'
+  accessScope?: 'ALL' | 'PERMITS_ONLY' | 'NONE'
+  canAccessCallsInbox?: boolean
 }
 
 const initialForm = {
@@ -74,7 +75,7 @@ export default function NewCallRecordPage() {
         const usersData = (await usersRes.json()) as AssignmentUser[]
         if (cancelled) return
 
-        setUsers(usersData.filter((user) => user.accessScope !== 'PERMITS_ONLY'))
+        setUsers(usersData.filter((user) => user.canAccessCallsInbox === true))
       } catch (bootstrapError) {
         if (!cancelled) {
           setAuthorized(false)

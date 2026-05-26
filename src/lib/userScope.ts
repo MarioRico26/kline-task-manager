@@ -1,6 +1,6 @@
 import { Prisma, PrismaClient } from '@prisma/client'
 
-export type UserAccessScope = 'ALL' | 'PERMITS_ONLY'
+export type UserAccessScope = 'ALL' | 'PERMITS_ONLY' | 'NONE'
 export type UserPlannerAccess = {
   canAccessPlanner: boolean
 }
@@ -17,9 +17,10 @@ export type DefaultCallsInboxOwner = {
   userId: string | null
 }
 
-const VALID_SCOPES: UserAccessScope[] = ['ALL', 'PERMITS_ONLY']
+const VALID_SCOPES: UserAccessScope[] = ['ALL', 'PERMITS_ONLY', 'NONE']
 
 function parseScope(raw: unknown): UserAccessScope {
+  if (raw === 'NONE') return 'NONE'
   return raw === 'PERMITS_ONLY' ? 'PERMITS_ONLY' : 'ALL'
 }
 

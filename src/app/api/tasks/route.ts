@@ -51,6 +51,9 @@ export async function GET() {
   try {
     console.log('🔄 Fetching tasks from database...')
     const sessionUser = await getSessionUser(prisma)
+    if (sessionUser?.accessScope === 'NONE') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
 
     const tasks = await prisma.task.findMany({
       where: sessionUser?.accessScope === 'PERMITS_ONLY' ? permitsTaskFilter : undefined,
@@ -188,6 +191,9 @@ async function getNextSequentialStep(
 export async function POST(request: Request) {
   try {
     const sessionUser = await getSessionUser(prisma)
+    if (sessionUser?.accessScope === 'NONE') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
     const formData = await request.formData()
 
     const customerId = (formData.get('customerId') as string) || ''

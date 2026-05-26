@@ -40,7 +40,8 @@ export async function PUT(
 
     const { email, role, accessScope, canAccessPlanner, canAccessSeasonalPrograms, canAccessCallsInbox, canAccessVoicemailImports, isDefaultCallsInboxOwner } = await request.json()
     const { id } = await params
-    const selectedScope: UserAccessScope = accessScope === 'PERMITS_ONLY' ? 'PERMITS_ONLY' : 'ALL'
+    const selectedScope: UserAccessScope =
+      accessScope === 'NONE' ? 'NONE' : accessScope === 'PERMITS_ONLY' ? 'PERMITS_ONLY' : 'ALL'
     const selectedPlannerAccess = canAccessPlanner === true
     const selectedSeasonalProgramsAccess = canAccessSeasonalPrograms === true
     const selectedVoicemailImportsAccess = canAccessVoicemailImports === true

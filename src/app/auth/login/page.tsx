@@ -30,6 +30,8 @@ function LoginForm() {
       if (res.ok && data.user) {
         if (data.user.accessScope === 'PERMITS_ONLY') {
           router.replace('/tasks')
+        } else if (data.user.accessScope === 'NONE' && data.user.canAccessCallsInbox === true) {
+          router.replace('/calls-inbox')
         } else {
           router.replace('/dashboard')
         }

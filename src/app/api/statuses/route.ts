@@ -65,6 +65,9 @@ export async function GET() {
     if (!sessionUser) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
     }
+    if (sessionUser.accessScope === 'NONE') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
 
     const statuses = await prisma.taskStatus.findMany({
       select: {
@@ -94,7 +97,7 @@ export async function POST(request: Request) {
     if (!sessionUser) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
     }
-    if (sessionUser.accessScope === 'PERMITS_ONLY') {
+    if (sessionUser.accessScope === 'PERMITS_ONLY' || sessionUser.accessScope === 'NONE') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 

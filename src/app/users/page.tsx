@@ -7,7 +7,7 @@ interface User {
   id: string
   email: string
   role: 'ADMIN' | 'VIEWER'
-  accessScope: 'ALL' | 'PERMITS_ONLY'
+  accessScope: 'ALL' | 'PERMITS_ONLY' | 'NONE'
   canAccessPlanner: boolean
   canAccessSeasonalPrograms: boolean
   canAccessCallsInbox: boolean
@@ -19,7 +19,7 @@ interface User {
 type UserAccessState = {
   email: string
   role: 'ADMIN' | 'VIEWER'
-  accessScope: 'ALL' | 'PERMITS_ONLY'
+  accessScope: 'ALL' | 'PERMITS_ONLY' | 'NONE'
   canAccessPlanner: boolean
   canAccessSeasonalPrograms: boolean
   canAccessCallsInbox: boolean
@@ -410,11 +410,21 @@ if (isAuthenticated === true && loading) {
                         borderRadius: '20px',
                         fontSize: '0.78rem',
                         fontWeight: '700',
-                        background: user.accessScope === 'PERMITS_ONLY' ? 'rgba(32, 201, 151, 0.16)' : 'rgba(108, 117, 125, 0.12)',
-                        color: user.accessScope === 'PERMITS_ONLY' ? '#198754' : '#495057',
+                        background:
+                          user.accessScope === 'NONE'
+                            ? 'rgba(13, 110, 253, 0.12)'
+                            : user.accessScope === 'PERMITS_ONLY'
+                              ? 'rgba(32, 201, 151, 0.16)'
+                              : 'rgba(108, 117, 125, 0.12)',
+                        color:
+                          user.accessScope === 'NONE'
+                            ? '#0d6efd'
+                            : user.accessScope === 'PERMITS_ONLY'
+                              ? '#198754'
+                              : '#495057',
                       }}
                     >
-                      {user.accessScope === 'PERMITS_ONLY' ? 'Permits Only' : 'All'}
+                      {user.accessScope === 'NONE' ? 'No Task Access' : user.accessScope === 'PERMITS_ONLY' ? 'Permits Only' : 'All'}
                     </span>
                   </div>
                   <div>
@@ -632,7 +642,7 @@ function CreateUserModal({ isOpen, onClose, onUserCreated }: { isOpen: boolean, 
     email: '',
     password: '',
     role: 'VIEWER' as 'ADMIN' | 'VIEWER',
-    accessScope: 'ALL' as 'ALL' | 'PERMITS_ONLY',
+    accessScope: 'ALL' as 'ALL' | 'PERMITS_ONLY' | 'NONE',
     canAccessPlanner: false,
     canAccessSeasonalPrograms: false,
     canAccessCallsInbox: false,
@@ -783,9 +793,10 @@ function CreateUserModal({ isOpen, onClose, onUserCreated }: { isOpen: boolean, 
             </label>
             <select
               value={formData.accessScope}
-              onChange={(e) => setFormData({ ...formData, accessScope: e.target.value as 'ALL' | 'PERMITS_ONLY' })}
+              onChange={(e) => setFormData({ ...formData, accessScope: e.target.value as 'ALL' | 'PERMITS_ONLY' | 'NONE' })}
               className="kline-input"
             >
+              <option value="NONE">No task access</option>
               <option value="ALL">All tasks</option>
               <option value="PERMITS_ONLY">Permits tasks only</option>
             </select>
@@ -903,7 +914,7 @@ function EditUserModal({ user, onClose, onUserUpdated }: { user: User | null, on
   const [formData, setFormData] = useState({
     email: '',
     role: 'VIEWER' as 'ADMIN' | 'VIEWER',
-    accessScope: 'ALL' as 'ALL' | 'PERMITS_ONLY',
+    accessScope: 'ALL' as 'ALL' | 'PERMITS_ONLY' | 'NONE',
     canAccessPlanner: false,
     canAccessSeasonalPrograms: false,
     canAccessCallsInbox: false,
@@ -1044,9 +1055,10 @@ function EditUserModal({ user, onClose, onUserUpdated }: { user: User | null, on
             </label>
             <select
               value={formData.accessScope}
-              onChange={(e) => setFormData({ ...formData, accessScope: e.target.value as 'ALL' | 'PERMITS_ONLY' })}
+              onChange={(e) => setFormData({ ...formData, accessScope: e.target.value as 'ALL' | 'PERMITS_ONLY' | 'NONE' })}
               className="kline-input"
             >
+              <option value="NONE">No task access</option>
               <option value="ALL">All tasks</option>
               <option value="PERMITS_ONLY">Permits tasks only</option>
             </select>

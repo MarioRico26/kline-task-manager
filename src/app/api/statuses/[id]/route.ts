@@ -58,7 +58,7 @@ async function ensureManageAccess() {
   if (!sessionUser) {
     return { error: NextResponse.json({ error: 'Not authenticated' }, { status: 401 }) }
   }
-  if (sessionUser.accessScope === 'PERMITS_ONLY') {
+  if (sessionUser.accessScope === 'PERMITS_ONLY' || sessionUser.accessScope === 'NONE') {
     return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) }
   }
   return { sessionUser }
