@@ -54,6 +54,26 @@ interface EmailData {
     images: string[]
 }
 
+interface CallAssignmentEmailData {
+    to: string
+    assignedByEmail: string
+    assigneeEmail: string
+    callerName: string | null
+    phoneNumber: string | null
+    summary: string
+    receivedAt: Date
+    callRecordId: string
+    isReassignment: boolean
+}
+
+function resolveAppBaseUrl() {
+    if (process.env.NEXT_PUBLIC_APP_URL) return process.env.NEXT_PUBLIC_APP_URL
+    if (process.env.APP_URL) return process.env.APP_URL
+    if (process.env.VERCEL_PROJECT_PRODUCTION_URL) return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+    if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`
+    return ''
+}
+
 export async function sendTaskUpdateEmail(emailData: EmailData) {
     try {
         const {
@@ -277,6 +297,137 @@ The Kline Team
             return { success: false, error: error.message }
         } else {
             return { success: false, error: 'Unknown error occurred' }
+        }
+    }
+}
+
+export async function sendCallAssignmentEmail(emailData: CallAssignmentEmailData) {
+    try {
+        const {
+            to,
+            assignedByEmail,
+            assigneeEmail,
+            callerName,
+            phoneNumber,
+            summary,
+            receivedAt,
+            callRecordId,
+            isReassignment,
+        } = emailData
+
+        const appBaseUrl = resolveAppBaseUrl()
+        const detailUrl = appBaseUrl ? `${appBaseUrl}/calls-inbox/${callRecordId}` : ''
+        const subject = isReassignment ? 'Call record reassigned to you' : 'New call record assigned to you'
+        const title = isReassignment ? 'A call record was reassigned to you' : 'A new call record was assigned to you'
+
+        const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              line-height: 1.6;
+              color: #333;
+              background: #f5f5f5;
+              margin: 0;
+              padding: 24px 0;
+            }
+            .container {
+              max-width: 640px;
+              margin: 0 auto;
+              background: #fff;
+              border-radius: 12px;
+              overflow: hidden;
+              box-shadow: 0 12px 36px rgba(15, 23, 42, 0.08);
+            }
+            .header {
+              background: #111827;
+              color: #fff;
+              padding: 24px 28px;
+            }
+            .content {
+              padding: 28px;
+            }
+            .card {
+              background: #f9fafb;
+              border: 1px solid #e5e7eb;
+              border-left: 4px solid #7c3aed;
+              border-radius: 10px;
+              padding: 18px 20px;
+              margin: 18px 0;
+            }
+            .cta {
+              display: inline-block;
+              margin-top: 18px;
+              background: #c81e1e;
+              color: #fff !important;
+              text-decoration: none;
+              padding: 12px 18px;
+              border-radius: 10px;
+              font-weight: bold;
+            }
+            .meta {
+              color: #6b7280;
+              font-size: 14px;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1 style="margin:0;font-size:24px;">Kline Calls Inbox</h1>
+            </div>
+            <div class="content">
+              <p>Hello <strong>${assigneeEmail}</strong>,</p>
+              <p>${title} by <strong>${assignedByEmail}</strong>.</p>
+              <div class="card">
+                <p style="margin:0 0 8px;"><strong>Caller:</strong> ${callerName || 'Unknown caller'}</p>
+                <p style="margin:0 0 8px;"><strong>Phone:</strong> ${phoneNumber || 'No phone captured'}</p>
+                <p style="margin:0 0 8px;"><strong>Received:</strong> ${receivedAt.toLocaleString()}</p>
+                <p style="margin:0;"><strong>Summary:</strong> ${summary}</p>
+              </div>
+              ${
+                detailUrl
+                    ? `<a class="cta" href="${detailUrl}">Open Call Record</a>`
+                    : ''
+              }
+              <p class="meta" style="margin-top:20px;">This is an internal operational notification from the Kline Task Manager.</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `
+
+        await transporter.sendMail({
+            from: {
+                name: 'Kline Calls Inbox',
+                address: from,
+            },
+            to,
+            subject,
+            html: htmlContent,
+            text: [
+                title,
+                '',
+                `Assigned by: ${assignedByEmail}`,
+                `Caller: ${callerName || 'Unknown caller'}`,
+                `Phone: ${phoneNumber || 'No phone captured'}`,
+                `Received: ${receivedAt.toLocaleString()}`,
+                `Summary: ${summary}`,
+                detailUrl ? `Open record: ${detailUrl}` : '',
+            ]
+                .filter(Boolean)
+                .join('\n'),
+        })
+
+        return { success: true }
+    } catch (error) {
+        console.error('❌ Failed to send call assignment email:', error)
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
         }
     }
 }

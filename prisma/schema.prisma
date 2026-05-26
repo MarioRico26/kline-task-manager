@@ -5,6 +5,7 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model Customer {
@@ -26,36 +27,40 @@ model Customer {
   createdBy      String?
   updatedBy      String?
 
-  tasks      Task[]
-  properties Property[]
+  tasks               Task[]
+  callRecords         CallRecord[]         @relation("CustomerCallRecords")
+  properties          Property[]
+  seasonalEnrollments SeasonalEnrollment[]
 }
 
 model Property {
-  id         String   @id @default(uuid())
-  customerId String
-  address    String
-  city       String
-  state      String
-  zip        String
-  customer   Customer @relation(fields: [customerId], references: [id])
-  tasks      Task[]
+  id                  String               @id @default(uuid())
+  customerId          String
+  address             String
+  city                String
+  state               String
+  zip                 String
+  customer            Customer             @relation(fields: [customerId], references: [id])
+  tasks               Task[]
+  callRecords         CallRecord[]         @relation("PropertyCallRecords")
+  seasonalEnrollments SeasonalEnrollment[]
 
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Service {
-  id          String   @id @default(uuid())
-  name        String
-  description String?
+  id            String   @id @default(uuid())
+  name          String
+  description   String?
   clientMessage String?
-  isSequential Boolean  @default(false)
+  isSequential  Boolean  @default(false)
   workflowGroup String?
   stepOrder     Int?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  createdBy   String?
-  updatedBy   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  createdBy     String?
+  updatedBy     String?
 
   tasks Task[]
 
@@ -63,18 +68,18 @@ model Service {
 }
 
 model TaskStatus {
-  id           String   @id @default(uuid())
-  name         String   @unique
-  notifyClient Boolean  @default(false)
-  color        String?
+  id            String   @id @default(uuid())
+  name          String   @unique
+  notifyClient  Boolean  @default(false)
+  color         String?
   clientMessage String?
-  isSequential Boolean  @default(false)
+  isSequential  Boolean  @default(false)
   workflowGroup String?
   stepOrder     Int?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  createdBy    String?
-  updatedBy    String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  createdBy     String?
+  updatedBy     String?
 
   tasks Task[]
 
@@ -82,26 +87,27 @@ model TaskStatus {
 }
 
 model Task {
-  id           String     @id @default(uuid())
-  customerId   String
-  serviceId    String
-  statusId     String
-  propertyId   String
-  notes        String?
-  scheduledFor DateTime?
-  notificationEmails String[] @default([])
-  notificationPhones String[] @default([])
-  completedAt  DateTime?
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
-  createdBy    String?
-  updatedBy    String?
+  id                 String    @id @default(uuid())
+  customerId         String
+  serviceId          String
+  statusId           String
+  propertyId         String
+  notes              String?
+  scheduledFor       DateTime?
+  notificationEmails String[]  @default([])
+  notificationPhones String[]  @default([])
+  completedAt        DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  createdBy          String?
+  updatedBy          String?
 
-  customer     Customer   @relation(fields: [customerId], references: [id])
-  service      Service    @relation(fields: [serviceId], references: [id])
-  status       TaskStatus @relation(fields: [statusId], references: [id])
-  property     Property   @relation(fields: [propertyId], references: [id])
-  media        TaskMedia[]
+  customer    Customer     @relation(fields: [customerId], references: [id])
+  service     Service      @relation(fields: [serviceId], references: [id])
+  status      TaskStatus   @relation(fields: [statusId], references: [id])
+  property    Property     @relation(fields: [propertyId], references: [id])
+  media       TaskMedia[]
+  callRecords CallRecord[]
 }
 
 model TaskMedia {
@@ -131,9 +137,435 @@ model User {
   role      Role     @default(VIEWER)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  createdOccurrences        SeasonalOccurrence[]   @relation("SeasonalOccurrenceCreatedBy")
+  updatedOccurrences        SeasonalOccurrence[]   @relation("SeasonalOccurrenceUpdatedBy")
+  createdIssues             SeasonalIssue[]        @relation("SeasonalIssueCreatedBy")
+  updatedIssues             SeasonalIssue[]        @relation("SeasonalIssueUpdatedBy")
+  assignedCallRecords       CallRecord[]           @relation("CallAssignedToUser")
+  assignedCallsInboxRecords CallRecord[]           @relation("CallAssignedByUser")
+  createdCallbackAttempts   CallbackAttempt[]
+  createdCallActivities     CallActivity[]
+  uploadedVoicemailBatches  VoicemailImportBatch[]
+  reviewedVoicemailItems    VoicemailImportItem[]  @relation("VoicemailReviewedByUser")
 }
 
 enum Role {
   ADMIN
   VIEWER
+}
+
+model SeasonalProgram {
+  id          String              @id @default(uuid())
+  code        SeasonalProgramCode @unique
+  name        String
+  description String?
+  isActive    Boolean             @default(true)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  seasons SeasonalProgramSeason[]
+}
+
+model SeasonalProgramSeason {
+  id        String               @id @default(uuid())
+  programId String
+  label     String
+  year      Int
+  status    SeasonalSeasonStatus @default(PLANNING)
+  startsAt  DateTime?
+  endsAt    DateTime?
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+
+  program     SeasonalProgram      @relation(fields: [programId], references: [id], onDelete: Cascade)
+  enrollments SeasonalEnrollment[]
+
+  @@unique([programId, year])
+}
+
+model SeasonalEnrollment {
+  id               String                   @id @default(uuid())
+  seasonId         String
+  customerId       String
+  propertyId       String
+  invoiceNumber    String?
+  town             String?
+  primaryPhone     String?
+  primaryEmail     String?
+  accessCode       String?
+  serviceNotes     String?
+  operationalNotes String?
+  status           SeasonalEnrollmentStatus @default(ACTIVE)
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+
+  season      SeasonalProgramSeason       @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  customer    Customer                    @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  property    Property                    @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  services    SeasonalEnrollmentService[]
+  occurrences SeasonalOccurrence[]
+  issues      SeasonalIssue[]
+
+  @@index([seasonId, status])
+  @@index([customerId])
+  @@index([propertyId])
+}
+
+model SeasonalEnrollmentService {
+  id             String                @id @default(uuid())
+  enrollmentId   String
+  serviceType    String
+  cadenceLabel   String?
+  isIncluded     Boolean               @default(true)
+  targetDate     DateTime?
+  completionDate DateTime?
+  status         SeasonalServiceStatus @default(NOT_STARTED)
+  notes          String?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  enrollment  SeasonalEnrollment   @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  occurrences SeasonalOccurrence[]
+
+  @@index([enrollmentId, status])
+}
+
+model SeasonalOccurrence {
+  id                  String                   @id @default(uuid())
+  enrollmentId        String
+  enrollmentServiceId String?
+  scheduledFor        DateTime?
+  completedAt         DateTime?
+  status              SeasonalOccurrenceStatus @default(NOT_SCHEDULED)
+  assignedTo          String?
+  notes               String?
+  createdByUserId     String?
+  updatedByUserId     String?
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+
+  enrollment        SeasonalEnrollment         @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  enrollmentService SeasonalEnrollmentService? @relation(fields: [enrollmentServiceId], references: [id], onDelete: SetNull)
+  createdByUser     User?                      @relation("SeasonalOccurrenceCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  updatedByUser     User?                      @relation("SeasonalOccurrenceUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([enrollmentId, status])
+  @@index([scheduledFor])
+}
+
+model SeasonalIssue {
+  id              String                @id @default(uuid())
+  enrollmentId    String
+  category        SeasonalIssueCategory
+  priority        SeasonalIssuePriority @default(MEDIUM)
+  description     String
+  status          SeasonalIssueStatus   @default(OPEN)
+  openedAt        DateTime              @default(now())
+  resolvedAt      DateTime?
+  notes           String?
+  createdByUserId String?
+  updatedByUserId String?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  enrollment    SeasonalEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  createdByUser User?              @relation("SeasonalIssueCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  updatedByUser User?              @relation("SeasonalIssueUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([enrollmentId, status])
+  @@index([category, priority])
+}
+
+enum SeasonalProgramCode {
+  IRRIGATION
+  MAINTENANCE
+  POOL_SERVICES
+}
+
+enum SeasonalSeasonStatus {
+  PLANNING
+  ACTIVE
+  CLOSED
+  ARCHIVED
+}
+
+enum SeasonalEnrollmentStatus {
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  CANCELLED
+}
+
+enum SeasonalServiceStatus {
+  NOT_STARTED
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum SeasonalOccurrenceStatus {
+  NOT_SCHEDULED
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum SeasonalIssueCategory {
+  ACCESS
+  REPAIR
+  WATER
+  POWER
+  CUSTOMER_REQUEST
+  BILLING
+  GENERAL
+}
+
+enum SeasonalIssuePriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum SeasonalIssueStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_ON_CUSTOMER
+  RESOLVED
+  CLOSED
+}
+
+model CallRecord {
+  id                      String               @id @default(uuid())
+  sourceType              CallSourceType
+  direction               CallDirection        @default(INBOUND)
+  receivedAt              DateTime
+  phoneNumber             String?
+  extension               String?
+  callerNameRaw           String?
+  callerCompanyRaw        String?
+  callType                CallType             @default(UNKNOWN)
+  priority                CallPriority         @default(MEDIUM)
+  status                  CallStatus           @default(NEW)
+  assignedToUserId        String?
+  assignedByUserId        String?
+  assignedAt              DateTime?
+  customerId              String?
+  propertyId              String?
+  relatedTaskId           String?
+  summary                 String
+  requestedAction         String?
+  internalNotes           String?
+  resolutionNotes         String?
+  audioUrl                String?
+  audioDurationSeconds    Int?
+  transcriptRaw           String?
+  detectedAddress         String?
+  detectedTown            String?
+  detectedContactName     String?
+  detectedAlternatePhone  String?
+  detectedServiceCategory CallServiceCategory?
+  detectedUrgencyReason   String?
+  createdAt               DateTime             @default(now())
+  updatedAt               DateTime             @updatedAt
+
+  assignedToUser      User?                @relation("CallAssignedToUser", fields: [assignedToUserId], references: [id], onDelete: SetNull)
+  assignedByUser      User?                @relation("CallAssignedByUser", fields: [assignedByUserId], references: [id], onDelete: SetNull)
+  customer            Customer?            @relation("CustomerCallRecords", fields: [customerId], references: [id], onDelete: SetNull)
+  property            Property?            @relation("PropertyCallRecords", fields: [propertyId], references: [id], onDelete: SetNull)
+  relatedTask         Task?                @relation(fields: [relatedTaskId], references: [id], onDelete: SetNull)
+  callbackAttempts    CallbackAttempt[]
+  activities          CallActivity[]
+  voicemailImportItem VoicemailImportItem? @relation("ImportedVoicemailCallRecord")
+
+  @@index([status, priority])
+  @@index([assignedToUserId, status])
+  @@index([receivedAt])
+  @@index([customerId])
+  @@index([propertyId])
+}
+
+model CallbackAttempt {
+  id                String          @id @default(uuid())
+  callRecordId      String
+  attemptedByUserId String?
+  attemptedAt       DateTime
+  outcome           CallbackOutcome
+  notes             String?
+  nextFollowUpAt    DateTime?
+  createdAt         DateTime        @default(now())
+
+  callRecord      CallRecord @relation(fields: [callRecordId], references: [id], onDelete: Cascade)
+  attemptedByUser User?      @relation(fields: [attemptedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([callRecordId, attemptedAt])
+  @@index([attemptedByUserId])
+}
+
+model CallActivity {
+  id              String           @id @default(uuid())
+  callRecordId    String
+  actionType      CallActivityType
+  fromValue       String?
+  toValue         String?
+  note            String?
+  createdByUserId String?
+  createdAt       DateTime         @default(now())
+
+  callRecord    CallRecord @relation(fields: [callRecordId], references: [id], onDelete: Cascade)
+  createdByUser User?      @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([callRecordId, createdAt])
+  @@index([actionType])
+}
+
+enum CallSourceType {
+  ANSWERED_CALL
+  VOICEMAIL
+  MISSED_CALL
+  MANUAL_ENTRY
+  CALLBACK_ATTEMPT
+}
+
+enum CallDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum CallType {
+  CUSTOMER_SERVICE
+  ESTIMATE_REQUEST
+  BILLING
+  VENDOR
+  MUNICIPAL
+  INTERNAL
+  RETAIL_QUESTION
+  UNKNOWN
+}
+
+enum CallPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum CallStatus {
+  NEW
+  TRIAGE_REQUIRED
+  ASSIGNED
+  CALLBACK_PENDING
+  CALLBACK_ATTEMPTED
+  WAITING_ON_CUSTOMER
+  RESOLVED
+  CLOSED
+  SPAM
+}
+
+enum CallServiceCategory {
+  POOL
+  IRRIGATION
+  MAINTENANCE
+  GENERAL
+}
+
+enum CallbackOutcome {
+  NO_ANSWER
+  LEFT_VOICEMAIL
+  SPOKE_TO_CALLER
+  WRONG_NUMBER
+  CALL_BACK_LATER
+}
+
+enum CallActivityType {
+  CREATED
+  STATUS_CHANGED
+  ASSIGNED
+  REASSIGNED
+  NOTE_ADDED
+  CALLBACK_LOGGED
+  LINKED_TO_CUSTOMER
+  LINKED_TO_PROPERTY
+  LINKED_TO_TASK
+  MARKED_RESOLVED
+  CLOSED
+}
+
+model VoicemailImportBatch {
+  id               String                     @id @default(uuid())
+  source           String
+  status           VoicemailImportBatchStatus @default(IMPORTED)
+  notes            String?
+  itemCount        Int                        @default(0)
+  processedCount   Int                        @default(0)
+  errorCount       Int                        @default(0)
+  uploadedByUserId String?
+  uploadedAt       DateTime                   @default(now())
+  updatedAt        DateTime                   @updatedAt
+
+  uploadedByUser User?                 @relation(fields: [uploadedByUserId], references: [id], onDelete: SetNull)
+  items          VoicemailImportItem[]
+
+  @@index([status, uploadedAt])
+}
+
+model VoicemailImportItem {
+  id                      String                    @id @default(uuid())
+  batchId                 String
+  recordedAt              DateTime?
+  phoneNumberRaw          String?
+  callerNameRaw           String?
+  transcriptRaw           String?
+  audioUrl                String?
+  audioFileName           String?
+  audioMimeType           String?
+  audioSizeBytes          Int?
+  transcriptionStatus     AudioTranscriptionStatus  @default(NOT_APPLICABLE)
+  transcriptionError      String?
+  summaryDraft            String?
+  detectedAddress         String?
+  detectedTown            String?
+  detectedServiceCategory CallServiceCategory?
+  status                  VoicemailImportItemStatus @default(IMPORTED)
+  reviewNotes             String?
+  reviewedByUserId        String?
+  reviewedAt              DateTime?
+  createdCallRecordId     String?                   @unique
+  importedAt              DateTime                  @default(now())
+  updatedAt               DateTime                  @updatedAt
+
+  batch             VoicemailImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  reviewedByUser    User?                @relation("VoicemailReviewedByUser", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+  createdCallRecord CallRecord?          @relation("ImportedVoicemailCallRecord", fields: [createdCallRecordId], references: [id], onDelete: SetNull)
+
+  @@index([batchId, status])
+  @@index([detectedServiceCategory])
+}
+
+enum VoicemailImportBatchStatus {
+  IMPORTED
+  REVIEW_IN_PROGRESS
+  READY_TO_PROMOTE
+  PARTIALLY_PROMOTED
+  COMPLETED
+}
+
+enum VoicemailImportItemStatus {
+  IMPORTED
+  REVIEW_REQUIRED
+  READY_TO_CREATE
+  CREATED_AS_CALL_RECORD
+  SKIPPED
+  DUPLICATE
+}
+
+enum AudioTranscriptionStatus {
+  NOT_APPLICABLE
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
 }

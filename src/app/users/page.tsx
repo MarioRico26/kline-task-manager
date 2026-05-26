@@ -11,7 +11,48 @@ interface User {
   canAccessPlanner: boolean
   canAccessSeasonalPrograms: boolean
   canAccessCallsInbox: boolean
+  canAccessVoicemailImports: boolean
+  isDefaultCallsInboxOwner: boolean
   createdAt: string
+}
+
+type UserAccessState = {
+  email: string
+  role: 'ADMIN' | 'VIEWER'
+  accessScope: 'ALL' | 'PERMITS_ONLY'
+  canAccessPlanner: boolean
+  canAccessSeasonalPrograms: boolean
+  canAccessCallsInbox: boolean
+  canAccessVoicemailImports: boolean
+  isDefaultCallsInboxOwner: boolean
+}
+
+function buildUserAccessState<T extends UserAccessState>(
+  updates: Partial<{
+    canAccessPlanner: boolean
+    canAccessSeasonalPrograms: boolean
+    canAccessCallsInbox: boolean
+    canAccessVoicemailImports: boolean
+    isDefaultCallsInboxOwner: boolean
+  }>,
+  current: T
+): T {
+  const next = { ...current, ...updates }
+
+  if (next.canAccessVoicemailImports) {
+    next.canAccessCallsInbox = true
+  }
+
+  if (next.isDefaultCallsInboxOwner) {
+    next.canAccessCallsInbox = true
+  }
+
+  if (!next.canAccessCallsInbox) {
+    next.canAccessVoicemailImports = false
+    next.isDefaultCallsInboxOwner = false
+  }
+
+  return next as T
 }
 
 export default function UsersPage() {
@@ -316,7 +357,7 @@ if (isAuthenticated === true && loading) {
             <>
               <div style={{ 
                 display: 'grid', 
-                gridTemplateColumns: '1fr auto auto auto auto', 
+                gridTemplateColumns: '1fr auto auto auto auto auto auto auto auto', 
                 padding: '1.2rem 1.5rem',
                 background: 'var(--kline-gray-light)',
                 borderBottom: '2px solid var(--kline-gray)',
@@ -330,6 +371,8 @@ if (isAuthenticated === true && loading) {
                 <div>Planner</div>
                 <div>Seasonal</div>
                 <div>Calls</div>
+                <div>Voicemail Imports</div>
+                <div>Calls Intake Owner</div>
                 <div>Actions</div>
               </div>
 
@@ -338,7 +381,7 @@ if (isAuthenticated === true && loading) {
                   key={user.id}
                   style={{ 
                     display: 'grid', 
-                    gridTemplateColumns: '1fr auto auto auto auto auto auto', 
+                    gridTemplateColumns: '1fr auto auto auto auto auto auto auto auto', 
                     padding: '1.2rem 1.5rem',
                     borderBottom: '1px solid var(--kline-gray)',
                     alignItems: 'center',
@@ -414,6 +457,34 @@ if (isAuthenticated === true && loading) {
                       }}
                     >
                       {user.canAccessCallsInbox ? 'Enabled' : 'Off'}
+                    </span>
+                  </div>
+                  <div>
+                    <span
+                      style={{
+                        padding: '0.4rem 1rem',
+                        borderRadius: '20px',
+                        fontSize: '0.78rem',
+                        fontWeight: '700',
+                        background: user.canAccessVoicemailImports ? 'rgba(13, 110, 253, 0.14)' : 'rgba(108, 117, 125, 0.12)',
+                        color: user.canAccessVoicemailImports ? '#0d6efd' : '#495057',
+                      }}
+                    >
+                      {user.canAccessVoicemailImports ? 'Enabled' : 'Off'}
+                    </span>
+                  </div>
+                  <div>
+                    <span
+                      style={{
+                        padding: '0.4rem 1rem',
+                        borderRadius: '20px',
+                        fontSize: '0.78rem',
+                        fontWeight: '700',
+                        background: user.isDefaultCallsInboxOwner ? 'rgba(25, 135, 84, 0.14)' : 'rgba(108, 117, 125, 0.12)',
+                        color: user.isDefaultCallsInboxOwner ? '#198754' : '#495057',
+                      }}
+                    >
+                      {user.isDefaultCallsInboxOwner ? 'Default' : '—'}
                     </span>
                   </div>
                   <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -516,6 +587,12 @@ if (isAuthenticated === true && loading) {
             </div>
             <div style={{ color: 'var(--kline-text-light)', fontSize: '0.9rem' }}>Calls Inbox Users</div>
           </div>
+          <div className="kline-card" style={{ padding: '1.5rem', textAlign: 'center' }}>
+            <div style={{ fontSize: '2rem', fontWeight: '700', color: '#0d6efd' }}>
+              {users.filter(u => u.canAccessVoicemailImports).length}
+            </div>
+            <div style={{ color: 'var(--kline-text-light)', fontSize: '0.9rem' }}>Voicemail Import Users</div>
+          </div>
         </div>
       </main>
 
@@ -559,6 +636,8 @@ function CreateUserModal({ isOpen, onClose, onUserCreated }: { isOpen: boolean, 
     canAccessPlanner: false,
     canAccessSeasonalPrograms: false,
     canAccessCallsInbox: false,
+    canAccessVoicemailImports: false,
+    isDefaultCallsInboxOwner: false,
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -586,6 +665,8 @@ function CreateUserModal({ isOpen, onClose, onUserCreated }: { isOpen: boolean, 
           canAccessPlanner: false,
           canAccessSeasonalPrograms: false,
           canAccessCallsInbox: false,
+          canAccessVoicemailImports: false,
+          isDefaultCallsInboxOwner: false,
         })
       } else {
         const data = await response.json()
@@ -729,13 +810,43 @@ function CreateUserModal({ isOpen, onClose, onUserCreated }: { isOpen: boolean, 
             <input
               type="checkbox"
               checked={formData.canAccessCallsInbox}
-              onChange={(e) => setFormData({ ...formData, canAccessCallsInbox: e.target.checked })}
+              onChange={(e) => setFormData((current) => buildUserAccessState({ canAccessCallsInbox: e.target.checked }, current))}
               style={{ marginTop: 4 }}
             />
             <span>
               Calls Inbox Access
               <span style={{ display: 'block', color: 'var(--kline-text-light)', fontSize: '0.82rem', fontWeight: 500, marginTop: 3 }}>
                 Allows this user to access the calls, voicemail and callback workflow module.
+              </span>
+            </span>
+          </label>
+
+          <label style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start', color: 'var(--kline-text)', fontWeight: '600' }}>
+            <input
+              type="checkbox"
+              checked={formData.canAccessVoicemailImports}
+              onChange={(e) => setFormData((current) => buildUserAccessState({ canAccessVoicemailImports: e.target.checked }, current))}
+              style={{ marginTop: 4 }}
+            />
+            <span>
+              Voicemail Imports Access
+              <span style={{ display: 'block', color: 'var(--kline-text-light)', fontSize: '0.82rem', fontWeight: 500, marginTop: 3 }}>
+                Allows this user to upload, review and promote voicemail batch imports.
+              </span>
+            </span>
+          </label>
+
+          <label style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start', color: 'var(--kline-text)', fontWeight: '600' }}>
+            <input
+              type="checkbox"
+              checked={formData.isDefaultCallsInboxOwner}
+              onChange={(e) => setFormData((current) => buildUserAccessState({ isDefaultCallsInboxOwner: e.target.checked }, current))}
+              style={{ marginTop: 4 }}
+            />
+            <span>
+              Default Calls Intake Owner
+              <span style={{ display: 'block', color: 'var(--kline-text-light)', fontSize: '0.82rem', fontWeight: 500, marginTop: 3 }}>
+                New voicemails or missed calls without a clear owner will route here first.
               </span>
             </span>
           </label>
@@ -796,6 +907,8 @@ function EditUserModal({ user, onClose, onUserUpdated }: { user: User | null, on
     canAccessPlanner: false,
     canAccessSeasonalPrograms: false,
     canAccessCallsInbox: false,
+    canAccessVoicemailImports: false,
+    isDefaultCallsInboxOwner: false,
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -809,6 +922,8 @@ function EditUserModal({ user, onClose, onUserUpdated }: { user: User | null, on
         canAccessPlanner: user.canAccessPlanner || false,
         canAccessSeasonalPrograms: user.canAccessSeasonalPrograms || false,
         canAccessCallsInbox: user.canAccessCallsInbox || false,
+        canAccessVoicemailImports: user.canAccessVoicemailImports || false,
+        isDefaultCallsInboxOwner: user.isDefaultCallsInboxOwner || false,
       })
     }
   }, [user])
@@ -956,13 +1071,43 @@ function EditUserModal({ user, onClose, onUserUpdated }: { user: User | null, on
             <input
               type="checkbox"
               checked={formData.canAccessCallsInbox}
-              onChange={(e) => setFormData({ ...formData, canAccessCallsInbox: e.target.checked })}
+              onChange={(e) => setFormData((current) => buildUserAccessState({ canAccessCallsInbox: e.target.checked }, current))}
               style={{ marginTop: 4 }}
             />
             <span>
               Calls Inbox Access
               <span style={{ display: 'block', color: 'var(--kline-text-light)', fontSize: '0.82rem', fontWeight: 500, marginTop: 3 }}>
                 Allows this user to access the calls, voicemail and callback workflow module.
+              </span>
+            </span>
+          </label>
+
+          <label style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start', color: 'var(--kline-text)', fontWeight: '600' }}>
+            <input
+              type="checkbox"
+              checked={formData.canAccessVoicemailImports}
+              onChange={(e) => setFormData((current) => buildUserAccessState({ canAccessVoicemailImports: e.target.checked }, current))}
+              style={{ marginTop: 4 }}
+            />
+            <span>
+              Voicemail Imports Access
+              <span style={{ display: 'block', color: 'var(--kline-text-light)', fontSize: '0.82rem', fontWeight: 500, marginTop: 3 }}>
+                Allows this user to upload, review and promote voicemail batch imports.
+              </span>
+            </span>
+          </label>
+
+          <label style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start', color: 'var(--kline-text)', fontWeight: '600' }}>
+            <input
+              type="checkbox"
+              checked={formData.isDefaultCallsInboxOwner}
+              onChange={(e) => setFormData((current) => buildUserAccessState({ isDefaultCallsInboxOwner: e.target.checked }, current))}
+              style={{ marginTop: 4 }}
+            />
+            <span>
+              Default Calls Intake Owner
+              <span style={{ display: 'block', color: 'var(--kline-text-light)', fontSize: '0.82rem', fontWeight: 500, marginTop: 3 }}>
+                Keeps one clear office owner for new voicemail or missed call intake.
               </span>
             </span>
           </label>

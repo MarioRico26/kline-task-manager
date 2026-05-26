@@ -11,6 +11,26 @@ interface Customer {
   createdAt: string
 }
 
+interface CallHistoryRecord {
+  id: string
+  sourceType: string
+  status: string
+  priority: string
+  receivedAt: string
+  callerNameRaw: string | null
+  phoneNumber: string | null
+  summary: string
+  property: { id: string; address: string; city: string; state: string } | null
+  relatedTask: { id: string; serviceName: string | null; statusName: string | null } | null
+  assignedToUser: { id: string; email: string } | null
+  latestNextFollowUpAt: string | null
+  isFollowUpOverdue: boolean
+  isFollowUpDueToday: boolean
+  ageLabel: string
+  isSlaWarning: boolean
+  isSlaBreached: boolean
+}
+
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([])
   const [loading, setLoading] = useState(true)
@@ -21,11 +41,17 @@ export default function CustomersPage() {
   const [deletingCustomer, setDeletingCustomer] = useState<Customer | null>(null)
   const [viewMode, setViewMode] = useState<'table' | 'cards'>('table')
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
+  const [canAccessCallsInbox, setCanAccessCallsInbox] = useState(false)
+  const [historyCustomer, setHistoryCustomer] = useState<Customer | null>(null)
+  const [historyRecords, setHistoryRecords] = useState<CallHistoryRecord[]>([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyError, setHistoryError] = useState('')
   const router = useRouter()
 
   // ✅ Con middleware, solo cargamos data
 useEffect(() => {
   fetchCustomers()
+  fetchAuthState()
 }, [])
 
   const fetchCustomers = async () => {
@@ -41,6 +67,39 @@ useEffect(() => {
       console.error('Error fetching customers:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchAuthState = async () => {
+    try {
+      const response = await fetch('/api/auth/check', { cache: 'no-store' })
+      if (!response.ok) return
+      const data = (await response.json()) as {
+        user?: { canAccessCallsInbox?: boolean; accessScope?: 'ALL' | 'PERMITS_ONLY' }
+      }
+      setCanAccessCallsInbox(data.user?.canAccessCallsInbox === true && data.user?.accessScope !== 'PERMITS_ONLY')
+    } catch (error) {
+      console.error('Error checking calls access:', error)
+    }
+  }
+
+  const loadCustomerCallHistory = async (customer: Customer) => {
+    setHistoryCustomer(customer)
+    setHistoryLoading(true)
+    setHistoryError('')
+    setHistoryRecords([])
+
+    try {
+      const response = await fetch(`/api/customers/${customer.id}/calls`, { cache: 'no-store' })
+      const data = (await response.json()) as { records?: CallHistoryRecord[]; error?: string }
+      if (!response.ok) {
+        throw new Error(data.error || 'Unable to load customer call history')
+      }
+      setHistoryRecords(data.records || [])
+    } catch (error) {
+      setHistoryError(error instanceof Error ? error.message : 'Unable to load customer call history')
+    } finally {
+      setHistoryLoading(false)
     }
   }
 
@@ -129,6 +188,25 @@ useEffect(() => {
       return `(${match[1]}) ${match[2]}-${match[3]}`;
     }
     return phone;
+  }
+
+  const formatEnumLabel = (value: string) =>
+    value
+      .toLowerCase()
+      .split('_')
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ')
+
+  const formatCallDate = (value: string | null) => {
+    if (!value) return '—'
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return '—'
+    return date.toLocaleString([], {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    })
   }
 
   return (
@@ -334,6 +412,23 @@ useEffect(() => {
                   {formatPhone(customer.phone)}
                 </div>
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  {canAccessCallsInbox && (
+                    <button
+                      style={{
+                        background: '#eef4ff',
+                        border: '1px solid rgba(13, 110, 253, 0.2)',
+                        color: '#0d6efd',
+                        padding: '0.5rem 1rem',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontWeight: '600',
+                        fontSize: '0.8rem',
+                      }}
+                      onClick={() => loadCustomerCallHistory(customer)}
+                    >
+                      Calls
+                    </button>
+                  )}
                   <button 
                     style={{ 
                       background: 'var(--kline-yellow)',
@@ -414,6 +509,23 @@ useEffect(() => {
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    {canAccessCallsInbox && (
+                      <button
+                        style={{
+                          background: '#eef4ff',
+                          border: '1px solid rgba(13, 110, 253, 0.2)',
+                          color: '#0d6efd',
+                          padding: '0.5rem 1rem',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          fontWeight: '600',
+                          fontSize: '0.8rem',
+                        }}
+                        onClick={() => loadCustomerCallHistory(customer)}
+                      >
+                        Calls
+                      </button>
+                    )}
                     <button 
                       style={{ 
                         background: 'var(--kline-yellow)',
@@ -500,6 +612,67 @@ useEffect(() => {
           </div>
         </div>
       </main>
+
+      {historyCustomer && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.45)', display: 'grid', placeItems: 'center', padding: '1rem', zIndex: 1200 }}>
+          <div className="kline-card" style={{ width: 'min(980px, 100%)', maxHeight: '85vh', overflow: 'auto', padding: '1.5rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'flex-start', marginBottom: '1rem' }}>
+              <div>
+                <h3 style={{ margin: 0, color: 'var(--kline-text)' }}>Call history · {historyCustomer.fullName}</h3>
+                <p style={{ margin: '0.4rem 0 0', color: 'var(--kline-text-light)' }}>Recent calls, callback status and aging tied to this customer.</p>
+              </div>
+              <button className="ghost-btn" onClick={() => setHistoryCustomer(null)}>
+                Close
+              </button>
+            </div>
+
+            {historyLoading ? (
+              <div style={{ padding: '2rem 0', color: 'var(--kline-text-light)' }}>Loading call history…</div>
+            ) : historyError ? (
+              <div style={{ padding: '1rem 1.2rem', borderLeft: '4px solid #c81e1e', background: '#fff5f5', color: '#c81e1e', borderRadius: 10 }}>{historyError}</div>
+            ) : historyRecords.length === 0 ? (
+              <div style={{ padding: '2rem 0', color: 'var(--kline-text-light)' }}>No calls linked to this customer yet.</div>
+            ) : (
+              <div style={{ display: 'grid', gap: '0.9rem' }}>
+                {historyRecords.map((record) => (
+                  <div key={record.id} style={{ border: '1px solid var(--kline-gray)', borderRadius: 14, padding: '1rem 1.1rem', background: '#fff' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
+                      <div>
+                        <div style={{ fontWeight: 800, color: 'var(--kline-text)' }}>{record.callerNameRaw || 'Unknown caller'}</div>
+                        <div style={{ color: 'var(--kline-text-light)', marginTop: 4 }}>
+                          {record.phoneNumber || 'No phone'} · {formatCallDate(record.receivedAt)}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.45rem', flexWrap: 'wrap' }}>
+                        <span style={{ padding: '0.22rem 0.55rem', borderRadius: 999, background: 'rgba(13, 110, 253, 0.10)', color: '#0d6efd', fontSize: '0.8rem', fontWeight: 800 }}>
+                          {formatEnumLabel(record.sourceType)}
+                        </span>
+                        <span style={{ padding: '0.22rem 0.55rem', borderRadius: 999, background: 'rgba(15, 23, 42, 0.06)', color: 'var(--kline-text)', fontSize: '0.8rem', fontWeight: 800 }}>
+                          {formatEnumLabel(record.status)}
+                        </span>
+                        <span style={{ padding: '0.22rem 0.55rem', borderRadius: 999, background: `${record.isSlaBreached ? 'rgba(200, 30, 30, 0.12)' : record.isSlaWarning ? 'rgba(253, 126, 20, 0.12)' : 'rgba(25, 135, 84, 0.12)'}`, color: record.isSlaBreached ? '#c81e1e' : record.isSlaWarning ? '#fd7e14' : '#198754', fontSize: '0.8rem', fontWeight: 800 }}>
+                          Age {record.ageLabel}
+                        </span>
+                      </div>
+                    </div>
+                    <div style={{ marginTop: '0.75rem', color: 'var(--kline-text)' }}>{record.summary}</div>
+                    <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.75rem', flexWrap: 'wrap', color: 'var(--kline-text-light)', fontSize: '0.9rem' }}>
+                      <span>Owner: {record.assignedToUser?.email || 'Unassigned'}</span>
+                      {record.property && <span>Property: {record.property.address}</span>}
+                      {record.relatedTask?.serviceName && <span>Task: {record.relatedTask.serviceName}</span>}
+                      {record.latestNextFollowUpAt && (
+                        <span style={{ color: record.isFollowUpOverdue ? '#c81e1e' : record.isFollowUpDueToday ? '#fd7e14' : 'var(--kline-text-light)', fontWeight: record.isFollowUpOverdue || record.isFollowUpDueToday ? 700 : 500 }}>
+                          Follow-up: {formatCallDate(record.latestNextFollowUpAt)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Create Customer Modal */}
       {isCreateModalOpen && (

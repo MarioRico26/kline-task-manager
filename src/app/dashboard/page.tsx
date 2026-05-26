@@ -13,6 +13,12 @@ interface DashboardStats {
   completedTasks: number
   pendingTasks: number
   overdueTasks: number
+  callsInboxOpenCount: number
+  callsInboxOverdueCount: number
+  callsInboxNewTodayCount: number
+  callsInboxCallbackPendingCount: number
+  callsInboxResolvedTodayCount: number
+  callsInboxVoicemailReviewCount: number
   tasksByStatus: Array<{ status: string; count: number; color: string }>
   tasksByService: Array<{ service: string; count: number }>
   recentTasks: Array<{
@@ -190,7 +196,7 @@ export default function DashboardPage() {
           description: 'Missed calls, voicemails and callback ownership',
           route: '/calls-inbox',
           color: '#7c3aed',
-          count: 0,
+          count: stats?.callsInboxOpenCount ?? 0,
         })
       }
 
@@ -312,6 +318,46 @@ export default function DashboardPage() {
                 accent="#6f42c1"
               />
             </section>
+
+            {canAccessCallsInbox && (
+              <section className="panel card-panel" style={{ marginBottom: '1.5rem' }}>
+                <div className="panel-head row">
+                  <div>
+                    <h3>Calls Snapshot</h3>
+                    <p>Fast read on callback pressure, new intake and voicemail review.</p>
+                  </div>
+                  <button className="ghost-btn" onClick={() => router.push('/calls-inbox')}>
+                    Open Calls Inbox
+                  </button>
+                </div>
+                <div className="kpi-grid" style={{ marginTop: '1rem' }}>
+                  <KpiCard
+                    label="New Today"
+                    value={stats.callsInboxNewTodayCount}
+                    detail="Calls created today"
+                    accent="#0d6efd"
+                  />
+                  <KpiCard
+                    label="Callback Queue"
+                    value={stats.callsInboxCallbackPendingCount}
+                    detail={stats.callsInboxOverdueCount > 0 ? `${stats.callsInboxOverdueCount} overdue` : 'No overdue callbacks'}
+                    accent="#fd7e14"
+                  />
+                  <KpiCard
+                    label="Resolved Today"
+                    value={stats.callsInboxResolvedTodayCount}
+                    detail="Closed or resolved today"
+                    accent="#198754"
+                  />
+                  <KpiCard
+                    label="Voicemail Review"
+                    value={stats.callsInboxVoicemailReviewCount}
+                    detail="Items still in import review"
+                    accent="#7c3aed"
+                  />
+                </div>
+              </section>
+            )}
 
             <section className="content-grid">
               <div className="left-stack">

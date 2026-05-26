@@ -6,12 +6,16 @@ import {
   UserAccessScope,
   getUserAccessScopeMap,
   getUserCallsInboxAccessMap,
+  getDefaultCallsInboxOwner,
   getUserPlannerAccessMap,
   getUserSeasonalProgramsAccessMap,
+  getUserVoicemailImportsAccessMap,
   setUserAccessScope,
+  setDefaultCallsInboxOwner,
   setUserCallsInboxAccess,
   setUserPlannerAccess,
   setUserSeasonalProgramsAccess,
+  setUserVoicemailImportsAccess,
 } from '@/lib/userScope'
 
 const prisma = new PrismaClient()
@@ -39,11 +43,13 @@ export async function GET() {
     })
 
     const userIds = users.map((user) => user.id)
-    const [scopeMap, plannerAccessMap, seasonalProgramsAccessMap, callsInboxAccessMap] = await Promise.all([
+    const [scopeMap, plannerAccessMap, seasonalProgramsAccessMap, callsInboxAccessMap, voicemailImportsAccessMap, defaultCallsInboxOwner] = await Promise.all([
       getUserAccessScopeMap(prisma, userIds),
       getUserPlannerAccessMap(prisma, userIds),
       getUserSeasonalProgramsAccessMap(prisma, userIds),
       getUserCallsInboxAccessMap(prisma, userIds),
+      getUserVoicemailImportsAccessMap(prisma, userIds),
+      getDefaultCallsInboxOwner(prisma),
     ])
 
     const usersWithScope = users.map((user) => ({
@@ -52,6 +58,8 @@ export async function GET() {
       canAccessPlanner: plannerAccessMap.get(user.id)?.canAccessPlanner || false,
       canAccessSeasonalPrograms: seasonalProgramsAccessMap.get(user.id)?.canAccessSeasonalPrograms || false,
       canAccessCallsInbox: callsInboxAccessMap.get(user.id)?.canAccessCallsInbox || false,
+      canAccessVoicemailImports: voicemailImportsAccessMap.get(user.id)?.canAccessVoicemailImports || false,
+      isDefaultCallsInboxOwner: defaultCallsInboxOwner.userId === user.id,
     }))
 
     return NextResponse.json(usersWithScope)
@@ -74,11 +82,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    const { email, password, role, accessScope, canAccessPlanner, canAccessSeasonalPrograms, canAccessCallsInbox } = await request.json()
+    const { email, password, role, accessScope, canAccessPlanner, canAccessSeasonalPrograms, canAccessCallsInbox, canAccessVoicemailImports, isDefaultCallsInboxOwner } = await request.json()
     const selectedScope: UserAccessScope = accessScope === 'PERMITS_ONLY' ? 'PERMITS_ONLY' : 'ALL'
     const selectedPlannerAccess = canAccessPlanner === true
     const selectedSeasonalProgramsAccess = canAccessSeasonalPrograms === true
-    const selectedCallsInboxAccess = canAccessCallsInbox === true
+    const selectedVoicemailImportsAccess = canAccessVoicemailImports === true
+    const selectedCallsInboxAccess = canAccessCallsInbox === true || isDefaultCallsInboxOwner === true || selectedVoicemailImportsAccess
 
     // Verificar si el usuario ya existe
     const existingUser = await prisma.user.findUnique({
@@ -115,7 +124,12 @@ export async function POST(request: Request) {
       setUserPlannerAccess(prisma, user.id, selectedPlannerAccess, sessionUser?.id),
       setUserSeasonalProgramsAccess(prisma, user.id, selectedSeasonalProgramsAccess, sessionUser?.id),
       setUserCallsInboxAccess(prisma, user.id, selectedCallsInboxAccess, sessionUser?.id),
+      setUserVoicemailImportsAccess(prisma, user.id, selectedVoicemailImportsAccess, sessionUser?.id),
     ])
+
+    if (isDefaultCallsInboxOwner === true) {
+      await setDefaultCallsInboxOwner(prisma, user.id, sessionUser.id)
+    }
 
     return NextResponse.json({
       ...user,
@@ -123,6 +137,8 @@ export async function POST(request: Request) {
       canAccessPlanner: selectedPlannerAccess,
       canAccessSeasonalPrograms: selectedSeasonalProgramsAccess,
       canAccessCallsInbox: selectedCallsInboxAccess,
+      canAccessVoicemailImports: selectedVoicemailImportsAccess,
+      isDefaultCallsInboxOwner: isDefaultCallsInboxOwner === true,
     })
   } catch (error) {
     console.error('Error creating user:', error)

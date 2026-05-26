@@ -10,6 +10,12 @@ export type UserSeasonalProgramsAccess = {
 export type UserCallsInboxAccess = {
   canAccessCallsInbox: boolean
 }
+export type UserVoicemailImportsAccess = {
+  canAccessVoicemailImports: boolean
+}
+export type DefaultCallsInboxOwner = {
+  userId: string | null
+}
 
 const VALID_SCOPES: UserAccessScope[] = ['ALL', 'PERMITS_ONLY']
 
@@ -39,6 +45,20 @@ function callsInboxAccessFromJson(details: Prisma.JsonValue | null): UserCallsIn
   if (!details || typeof details !== 'object' || Array.isArray(details)) return null
   const raw = details as Record<string, unknown>
   return { canAccessCallsInbox: raw.canAccessCallsInbox === true }
+}
+
+function voicemailImportsAccessFromJson(details: Prisma.JsonValue | null): UserVoicemailImportsAccess | null {
+  if (!details || typeof details !== 'object' || Array.isArray(details)) return null
+  const raw = details as Record<string, unknown>
+  return { canAccessVoicemailImports: raw.canAccessVoicemailImports === true }
+}
+
+function defaultCallsInboxOwnerFromJson(details: Prisma.JsonValue | null): DefaultCallsInboxOwner | null {
+  if (!details || typeof details !== 'object' || Array.isArray(details)) return null
+  const raw = details as Record<string, unknown>
+  return {
+    userId: typeof raw.userId === 'string' && raw.userId.trim() ? raw.userId : null,
+  }
 }
 
 export function normalizeWorkflowText(value: string | null | undefined) {
@@ -123,6 +143,43 @@ export async function getUserCallsInboxAccessById(
   })
 
   return callsInboxAccessFromJson(latestCallsLog?.details ?? null) ?? { canAccessCallsInbox: false }
+}
+
+export async function getUserVoicemailImportsAccessById(
+  prisma: PrismaClient,
+  userId: string
+): Promise<UserVoicemailImportsAccess> {
+  const latestImportsLog = await prisma.auditLog.findFirst({
+    where: {
+      entity: 'USER_VOICEMAIL_IMPORTS_ACCESS',
+      entityId: userId,
+    },
+    orderBy: {
+      timestamp: 'desc',
+    },
+    select: {
+      details: true,
+    },
+  })
+
+  return voicemailImportsAccessFromJson(latestImportsLog?.details ?? null) ?? { canAccessVoicemailImports: false }
+}
+
+export async function getDefaultCallsInboxOwner(prisma: PrismaClient): Promise<DefaultCallsInboxOwner> {
+  const latestOwnerLog = await prisma.auditLog.findFirst({
+    where: {
+      entity: 'SYSTEM_CALLS_INBOX_DEFAULT_OWNER',
+      entityId: 'GLOBAL',
+    },
+    orderBy: {
+      timestamp: 'desc',
+    },
+    select: {
+      details: true,
+    },
+  })
+
+  return defaultCallsInboxOwnerFromJson(latestOwnerLog?.details ?? null) ?? { userId: null }
 }
 
 export async function getUserAccessScopeMap(prisma: PrismaClient, userIds: string[]) {
@@ -253,6 +310,38 @@ export async function getUserCallsInboxAccessMap(prisma: PrismaClient, userIds: 
   return map
 }
 
+export async function getUserVoicemailImportsAccessMap(prisma: PrismaClient, userIds: string[]) {
+  const scopedIds = Array.from(new Set(userIds.filter(Boolean)))
+  const map = new Map<string, UserVoicemailImportsAccess>()
+  const seen = new Set<string>()
+  if (scopedIds.length === 0) return map
+
+  const logs = await prisma.auditLog.findMany({
+    where: {
+      entity: 'USER_VOICEMAIL_IMPORTS_ACCESS',
+      entityId: { in: scopedIds },
+    },
+    orderBy: {
+      timestamp: 'desc',
+    },
+    select: {
+      entityId: true,
+      details: true,
+    },
+  })
+
+  for (const id of scopedIds) map.set(id, { canAccessVoicemailImports: false })
+
+  for (const log of logs) {
+    if (seen.has(log.entityId)) continue
+    seen.add(log.entityId)
+    const parsed = voicemailImportsAccessFromJson(log.details)
+    map.set(log.entityId, parsed ?? { canAccessVoicemailImports: false })
+  }
+
+  return map
+}
+
 export async function setUserAccessScope(
   prisma: PrismaClient,
   targetUserId: string,
@@ -318,6 +407,39 @@ export async function setUserCallsInboxAccess(
       entity: 'USER_CALLS_INBOX_ACCESS',
       entityId: targetUserId,
       details: { canAccessCallsInbox },
+    },
+  })
+}
+
+export async function setUserVoicemailImportsAccess(
+  prisma: PrismaClient,
+  targetUserId: string,
+  canAccessVoicemailImports: boolean,
+  actorUserId?: string
+) {
+  return prisma.auditLog.create({
+    data: {
+      userId: actorUserId || targetUserId,
+      action: 'SET_VOICEMAIL_IMPORTS_ACCESS',
+      entity: 'USER_VOICEMAIL_IMPORTS_ACCESS',
+      entityId: targetUserId,
+      details: { canAccessVoicemailImports },
+    },
+  })
+}
+
+export async function setDefaultCallsInboxOwner(
+  prisma: PrismaClient,
+  targetUserId: string | null,
+  actorUserId: string
+) {
+  return prisma.auditLog.create({
+    data: {
+      userId: actorUserId,
+      action: 'SET_DEFAULT_CALLS_INBOX_OWNER',
+      entity: 'SYSTEM_CALLS_INBOX_DEFAULT_OWNER',
+      entityId: 'GLOBAL',
+      details: { userId: targetUserId },
     },
   })
 }

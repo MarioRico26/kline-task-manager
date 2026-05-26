@@ -50,5 +50,13 @@ export async function GET() {
     maxAge: 60 * 60 * 24,
   })
 
+  response.cookies.set('voicemail-imports-access', sessionUser.canAccessVoicemailImports ? 'true' : 'false', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 60 * 60 * 24,
+  })
+
   return response
 }

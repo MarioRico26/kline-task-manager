@@ -1,6 +1,6 @@
 //src/app/api/dashboard/stats/route.ts
 import { NextResponse } from 'next/server'
-import { PrismaClient } from '@prisma/client'
+import { Prisma, PrismaClient } from '@prisma/client'
 import { getSessionUser } from '@/lib/sessionUser'
 
 declare global {
@@ -41,6 +41,10 @@ function getCurrentWorkflowStep(definedSteps: number[], historySteps: number[]) 
   }
 
   return currentStep
+}
+
+function isMissingCallsInboxTable(error: unknown) {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2021'
 }
 
 export async function GET() {
@@ -103,6 +107,84 @@ export async function GET() {
         take: 2000,
       }),
     ])
+
+    let callsInboxOpenCount = 0
+    let callsInboxOverdueCount = 0
+    let callsInboxNewTodayCount = 0
+    let callsInboxCallbackPendingCount = 0
+    let callsInboxResolvedTodayCount = 0
+    let callsInboxVoicemailReviewCount = 0
+
+    try {
+      const now = new Date()
+      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+      const [openCount, overdueCount, newTodayCount, callbackPendingCount, resolvedTodayCount, voicemailReviewCount] = await Promise.all([
+        prisma.callRecord.count({
+          where: {
+            status: {
+              notIn: ['RESOLVED', 'CLOSED', 'SPAM'],
+            },
+          },
+        }),
+        prisma.callRecord.count({
+          where: {
+            status: {
+              notIn: ['RESOLVED', 'CLOSED', 'SPAM'],
+            },
+            callbackAttempts: {
+              some: {
+                nextFollowUpAt: {
+                  lt: now,
+                },
+              },
+            },
+          },
+        }),
+        prisma.callRecord.count({
+          where: {
+            receivedAt: {
+              gte: startOfToday,
+            },
+          },
+        }),
+        prisma.callRecord.count({
+          where: {
+            status: {
+              in: ['CALLBACK_PENDING', 'CALLBACK_ATTEMPTED', 'WAITING_ON_CUSTOMER'],
+            },
+          },
+        }),
+        prisma.callRecord.count({
+          where: {
+            status: {
+              in: ['RESOLVED', 'CLOSED'],
+            },
+            updatedAt: {
+              gte: startOfToday,
+            },
+          },
+        }),
+        prisma.voicemailImportItem.count({
+          where: {
+            createdCallRecordId: null,
+            status: {
+              in: ['IMPORTED', 'REVIEW_REQUIRED', 'READY_TO_CREATE'],
+            },
+          },
+        }),
+      ])
+
+      callsInboxOpenCount = openCount
+      callsInboxOverdueCount = overdueCount
+      callsInboxNewTodayCount = newTodayCount
+      callsInboxCallbackPendingCount = callbackPendingCount
+      callsInboxResolvedTodayCount = resolvedTodayCount
+      callsInboxVoicemailReviewCount = voicemailReviewCount
+    } catch (error) {
+      if (!isMissingCallsInboxTable(error)) {
+        throw error
+      }
+    }
 
     const permitsCustomers = new Set(tasks.map((task) => task.customer.id)).size
     const permitsProperties = new Set(tasks.map((task) => task.property.id)).size
@@ -275,6 +357,12 @@ export async function GET() {
       completedTasks,
       pendingTasks,
       overdueTasks,
+      callsInboxOpenCount,
+      callsInboxOverdueCount,
+      callsInboxNewTodayCount,
+      callsInboxCallbackPendingCount,
+      callsInboxResolvedTodayCount,
+      callsInboxVoicemailReviewCount,
       tasksByStatus,
       tasksByService,
       recentTasks,

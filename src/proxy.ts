@@ -27,6 +27,7 @@ export function proxy(req: NextRequest) {
   const canAccessPlanner = req.cookies.get('planner-access')?.value === 'true'
   const canAccessSeasonalPrograms = req.cookies.get('seasonal-programs-access')?.value === 'true'
   const canAccessCallsInbox = req.cookies.get('calls-inbox-access')?.value === 'true'
+  const canAccessVoicemailImports = req.cookies.get('voicemail-imports-access')?.value === 'true'
 
   if (pathname.startsWith('/planner') && !canAccessPlanner) {
     const dashboardUrl = req.nextUrl.clone()
@@ -37,6 +38,12 @@ export function proxy(req: NextRequest) {
   if (pathname.startsWith('/seasonal-programs') && !canAccessSeasonalPrograms) {
     const dashboardUrl = req.nextUrl.clone()
     dashboardUrl.pathname = isPermitsOnly ? '/tasks' : '/dashboard'
+    return NextResponse.redirect(dashboardUrl)
+  }
+
+  if (pathname.startsWith('/calls-inbox/imports') && (!canAccessCallsInbox || !canAccessVoicemailImports)) {
+    const dashboardUrl = req.nextUrl.clone()
+    dashboardUrl.pathname = isPermitsOnly ? '/tasks' : canAccessCallsInbox ? '/calls-inbox' : '/dashboard'
     return NextResponse.redirect(dashboardUrl)
   }
 
