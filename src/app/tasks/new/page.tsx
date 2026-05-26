@@ -132,9 +132,11 @@ function getPropertyDisplay(property: PropertyItem, customerName?: string) {
   return customerName ? `${base} • ${customerName}` : base
 }
 
-const MAX_UPLOAD_FILE_BYTES = 3.5 * 1024 * 1024
-const TARGET_COMPRESSED_FILE_BYTES = 2.2 * 1024 * 1024
+const MAX_ORIGINAL_FILE_BYTES = 35 * 1024 * 1024
+const MAX_UPLOAD_FILE_BYTES = 2.8 * 1024 * 1024
+const TARGET_COMPRESSED_FILE_BYTES = 1.8 * 1024 * 1024
 const MAX_IMAGE_DIMENSION = 1920
+const MIN_IMAGE_DIMENSION = 900
 
 function formatBytes(value: number) {
   if (value >= 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(1)} MB`
@@ -158,42 +160,96 @@ function canvasToBlob(canvas: HTMLCanvasElement, quality: number) {
   })
 }
 
-async function compressImageForUpload(file: File) {
-  if (!file.type.startsWith('image/')) return file
-  if (typeof createImageBitmap !== 'function') return file
-  if (file.size <= TARGET_COMPRESSED_FILE_BYTES) return file
+function loadImageElement(file: File) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const imageUrl = URL.createObjectURL(file)
+    const image = new Image()
+    image.onload = () => {
+      URL.revokeObjectURL(imageUrl)
+      resolve(image)
+    }
+    image.onerror = () => {
+      URL.revokeObjectURL(imageUrl)
+      reject(new Error('Unable to read image'))
+    }
+    image.src = imageUrl
+  })
+}
 
-  const image = await createImageBitmap(file)
-  const scale = Math.min(1, MAX_IMAGE_DIMENSION / Math.max(image.width, image.height))
-  const width = Math.max(1, Math.round(image.width * scale))
-  const height = Math.max(1, Math.round(image.height * scale))
+async function createDrawableImage(file: File) {
+  if (typeof createImageBitmap === 'function') {
+    try {
+      return await createImageBitmap(file)
+    } catch {
+      // Some mobile formats fail createImageBitmap but still work through Image.
+    }
+  }
+
+  return loadImageElement(file)
+}
+
+function closeDrawableImage(image: ImageBitmap | HTMLImageElement) {
+  if ('close' in image && typeof image.close === 'function') {
+    image.close()
+  }
+}
+
+async function renderCompressedImage(image: ImageBitmap | HTMLImageElement, maxDimension: number, quality: number) {
+  const sourceWidth = image.width
+  const sourceHeight = image.height
+  const scale = Math.min(1, maxDimension / Math.max(sourceWidth, sourceHeight))
+  const width = Math.max(1, Math.round(sourceWidth * scale))
+  const height = Math.max(1, Math.round(sourceHeight * scale))
 
   const canvas = document.createElement('canvas')
   canvas.width = width
   canvas.height = height
   const context = canvas.getContext('2d')
-  if (!context) {
-    image.close()
-    return file
-  }
+  if (!context) throw new Error('Unable to process image')
 
   context.drawImage(image, 0, 0, width, height)
-  image.close()
+  return canvasToBlob(canvas, quality)
+}
 
-  let quality = 0.84
-  let blob = await canvasToBlob(canvas, quality)
-  while (blob.size > TARGET_COMPRESSED_FILE_BYTES && quality > 0.45) {
-    quality -= 0.08
-    blob = await canvasToBlob(canvas, quality)
+async function compressImageForUpload(file: File) {
+  if (!file.type.startsWith('image/')) return file
+  if (file.size <= TARGET_COMPRESSED_FILE_BYTES) return file
+
+  const image = await createDrawableImage(file)
+
+  try {
+    let maxDimension = MAX_IMAGE_DIMENSION
+    let bestBlob: Blob | null = null
+
+    while (maxDimension >= MIN_IMAGE_DIMENSION) {
+      let quality = 0.84
+      let blob = await renderCompressedImage(image, maxDimension, quality)
+      bestBlob = blob
+
+      while (blob.size > TARGET_COMPRESSED_FILE_BYTES && quality > 0.42) {
+        quality -= 0.08
+        blob = await renderCompressedImage(image, maxDimension, quality)
+        bestBlob = blob
+      }
+
+      if (blob.size <= TARGET_COMPRESSED_FILE_BYTES) {
+        bestBlob = blob
+        break
+      }
+
+      maxDimension = Math.floor(maxDimension * 0.82)
+    }
+
+    if (!bestBlob || bestBlob.size >= file.size) return file
+
+    const normalizedName = file.name.replace(/\.[^.]+$/, '')
+    return new File([bestBlob], `${normalizedName}.jpg`, {
+      type: 'image/jpeg',
+      lastModified: Date.now(),
+    })
+  } finally {
+    closeDrawableImage(image)
   }
-
-  if (blob.size >= file.size) return file
-
-  const normalizedName = file.name.replace(/\.[^.]+$/, '')
-  return new File([blob], `${normalizedName}.jpg`, {
-    type: 'image/jpeg',
-    lastModified: Date.now(),
-  })
 }
 
 export default function NewTaskPage() {
@@ -490,11 +546,18 @@ export default function NewTaskPage() {
     for (let index = 0; index < totalFiles; index += 1) {
       const originalFile = selectedFiles[index]
       setUploadProgress(`Processing attachment ${index + 1} of ${totalFiles}...`)
-      const processedFile = await compressImageForUpload(originalFile)
+      let processedFile: File
+      try {
+        processedFile = await compressImageForUpload(originalFile)
+      } catch {
+        throw new Error(
+          `Could not optimize "${originalFile.name}". Please send it as JPG/PNG or choose a smaller photo.`
+        )
+      }
 
       if (processedFile.size > MAX_UPLOAD_FILE_BYTES) {
         throw new Error(
-          `"${originalFile.name}" is still too large after optimization (${formatBytes(processedFile.size)}). Keep each file under ${formatBytes(MAX_UPLOAD_FILE_BYTES)}.`
+          `"${originalFile.name}" is still too large after optimization (${formatBytes(processedFile.size)}). Try sending a smaller photo or screenshot.`
         )
       }
 
@@ -603,11 +666,11 @@ export default function NewTaskPage() {
       return
     }
 
-    const oversizedFile = Array.from(list).find((file) => file.size > 10 * 1024 * 1024)
+    const oversizedFile = Array.from(list).find((file) => file.size > MAX_ORIGINAL_FILE_BYTES)
     if (oversizedFile) {
       setFiles(null)
       setAttachmentError(
-        `"${oversizedFile.name}" is ${formatBytes(oversizedFile.size)}. Please keep each original file under 10 MB before upload.`
+        `"${oversizedFile.name}" is ${formatBytes(oversizedFile.size)}. Please keep each original file under ${formatBytes(MAX_ORIGINAL_FILE_BYTES)} before upload.`
       )
       if (clearInput) clearInput()
       return

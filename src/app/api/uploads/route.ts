@@ -5,7 +5,7 @@ import { getSessionUser } from '@/lib/sessionUser'
 
 const prisma = new PrismaClient()
 
-const MAX_SINGLE_FILE_BYTES = 3.5 * 1024 * 1024
+const MAX_SINGLE_FILE_BYTES = 2.8 * 1024 * 1024
 
 function normalizeFolder(value: string) {
   return value

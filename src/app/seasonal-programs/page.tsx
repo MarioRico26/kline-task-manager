@@ -2,34 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-
-type SeasonalCategory = {
-  title: string
-  subtitle: string
-  accent: string
-  bullets: string[]
-}
-
-const categories: SeasonalCategory[] = [
-  {
-    title: 'Irrigation',
-    subtitle: 'Turn on, turn off, service calls and repair coordination',
-    accent: '#0d6efd',
-    bullets: ['2026 roster import', 'Turn on / turn off workflow', 'Repair and access issue tracking'],
-  },
-  {
-    title: 'Maintenance',
-    subtitle: 'Seasonal cleanups, monthly work and recurring grounds service',
-    accent: '#198754',
-    bullets: ['2026 cleanup matrix', 'Recurring visit structure', 'Program-level notes and service package view'],
-  },
-  {
-    title: 'Pool Services',
-    subtitle: 'Open, close, weekly service and pool issue management',
-    accent: '#fd7e14',
-    bullets: ['2026 main list onboarding', 'Open / weekly / close model', 'Problems and repairs'],
-  },
-]
+import { seasonalProgramConfigs } from '@/lib/seasonalPrograms'
 
 export default function SeasonalProgramsPage() {
   const router = useRouter()
@@ -158,15 +131,31 @@ export default function SeasonalProgramsPage() {
         </section>
 
         <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
-          {categories.map((category) => (
+          {seasonalProgramConfigs.map((category) => (
             <article key={category.title} className="kline-card" style={{ padding: '1.4rem', borderTop: `4px solid ${category.accent}` }}>
               <div style={{ fontSize: '1.35rem', fontWeight: 900, color: 'var(--kline-text)' }}>{category.title}</div>
               <p style={{ color: 'var(--kline-text-light)', margin: '0.45rem 0 1rem', lineHeight: 1.6 }}>{category.subtitle}</p>
               <ul style={{ margin: 0, paddingLeft: '1.15rem', color: 'var(--kline-text)', lineHeight: 1.8 }}>
-                {category.bullets.map((bullet) => (
+                {category.focusAreas.map((bullet) => (
                   <li key={bullet}>{bullet}</li>
                 ))}
               </ul>
+              <button
+                type="button"
+                onClick={() => router.push(`/seasonal-programs/${category.key}`)}
+                style={{
+                  marginTop: '1rem',
+                  background: 'transparent',
+                  border: `2px solid ${category.accent}`,
+                  color: category.accent,
+                  borderRadius: '999px',
+                  padding: '0.65rem 1rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                Open {category.title}
+              </button>
             </article>
           ))}
         </section>
@@ -174,7 +163,7 @@ export default function SeasonalProgramsPage() {
         <section className="kline-card" style={{ padding: '1.6rem' }}>
           <h3 style={{ marginTop: 0, color: 'var(--kline-text)' }}>Recommended next build order</h3>
           <ol style={{ margin: '0.75rem 0 0', paddingLeft: '1.2rem', color: 'var(--kline-text)', lineHeight: 1.85 }}>
-            <li>Add Prisma schema for programs, seasons, enrollments, services and issues.</li>
+            <li>Schema base for programs, seasons, enrollments, services and issues.</li>
             <li>Build the roster UI for one category first, likely Irrigation.</li>
             <li>Create the 2026 Excel import preview flow before final writes.</li>
           </ol>
