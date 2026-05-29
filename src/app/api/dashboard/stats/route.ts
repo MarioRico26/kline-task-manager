@@ -109,21 +109,31 @@ export async function GET() {
     ])
 
     let callsInboxOpenCount = 0
+    let callsInboxUnassignedCount = 0
     let callsInboxOverdueCount = 0
     let callsInboxNewTodayCount = 0
     let callsInboxCallbackPendingCount = 0
     let callsInboxResolvedTodayCount = 0
     let callsInboxVoicemailReviewCount = 0
+    let callsInboxVoicemailReadyCount = 0
 
     try {
       const now = new Date()
       const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-      const [openCount, overdueCount, newTodayCount, callbackPendingCount, resolvedTodayCount, voicemailReviewCount] = await Promise.all([
+      const [openCount, unassignedCount, overdueCount, newTodayCount, callbackPendingCount, resolvedTodayCount, voicemailReviewCount, voicemailReadyCount] = await Promise.all([
         prisma.callRecord.count({
           where: {
             status: {
               notIn: ['RESOLVED', 'CLOSED', 'SPAM'],
             },
+          },
+        }),
+        prisma.callRecord.count({
+          where: {
+            status: {
+              notIn: ['RESOLVED', 'CLOSED', 'SPAM'],
+            },
+            assignedToUserId: null,
           },
         }),
         prisma.callRecord.count({
@@ -168,18 +178,28 @@ export async function GET() {
           where: {
             createdCallRecordId: null,
             status: {
-              in: ['IMPORTED', 'REVIEW_REQUIRED', 'READY_TO_CREATE'],
+              in: ['IMPORTED', 'REVIEW_REQUIRED'],
+            },
+          },
+        }),
+        prisma.voicemailImportItem.count({
+          where: {
+            createdCallRecordId: null,
+            status: {
+              in: ['READY_TO_CREATE'],
             },
           },
         }),
       ])
 
       callsInboxOpenCount = openCount
+      callsInboxUnassignedCount = unassignedCount
       callsInboxOverdueCount = overdueCount
       callsInboxNewTodayCount = newTodayCount
       callsInboxCallbackPendingCount = callbackPendingCount
       callsInboxResolvedTodayCount = resolvedTodayCount
       callsInboxVoicemailReviewCount = voicemailReviewCount
+      callsInboxVoicemailReadyCount = voicemailReadyCount
     } catch (error) {
       if (!isMissingCallsInboxTable(error)) {
         throw error
@@ -358,11 +378,13 @@ export async function GET() {
       pendingTasks,
       overdueTasks,
       callsInboxOpenCount,
+      callsInboxUnassignedCount,
       callsInboxOverdueCount,
       callsInboxNewTodayCount,
       callsInboxCallbackPendingCount,
       callsInboxResolvedTodayCount,
       callsInboxVoicemailReviewCount,
+      callsInboxVoicemailReadyCount,
       tasksByStatus,
       tasksByService,
       recentTasks,

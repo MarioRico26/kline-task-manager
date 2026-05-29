@@ -109,9 +109,11 @@ export default function VoicemailImportsPage() {
   const summary = useMemo(
     () => ({
       batches: batches.length,
+      readyBatches: batches.filter((batch) => batch.counts.readyToCreate > 0).length,
       review: batches.reduce((sum, batch) => sum + batch.counts.reviewRequired, 0),
       ready: batches.reduce((sum, batch) => sum + batch.counts.readyToCreate, 0),
       created: batches.reduce((sum, batch) => sum + batch.counts.created, 0),
+      duplicate: batches.reduce((sum, batch) => sum + batch.counts.duplicate, 0),
     }),
     [batches]
   )
@@ -140,6 +142,18 @@ export default function VoicemailImportsPage() {
       value: summary.created,
       detail: 'Voicemails already in live inbox',
       accent: '#198754',
+    },
+    {
+      label: 'Duplicates',
+      value: summary.duplicate,
+      detail: 'Items parked as duplicate or noise',
+      accent: '#fd7e14',
+    },
+    {
+      label: 'Ready Batches',
+      value: summary.readyBatches,
+      detail: 'Batch queues with promotable items',
+      accent: '#1f2937',
     },
   ]
 
@@ -214,6 +228,37 @@ export default function VoicemailImportsPage() {
               <div style={{ color: 'var(--kline-text-light)', marginTop: 6 }}>{card.detail}</div>
             </div>
           ))}
+        </section>
+
+        <section
+          className="kline-card"
+          style={{
+            padding: '1.2rem 1.35rem',
+            marginBottom: '1.25rem',
+            background: 'linear-gradient(135deg, rgba(255,255,255,0.98), rgba(245,247,255,0.98))',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
+            <div>
+              <h3 style={{ margin: 0, color: 'var(--kline-text)' }}>Import pressure</h3>
+              <p style={{ margin: '0.35rem 0 0', color: 'var(--kline-text-light)' }}>
+                {summary.ready > 0
+                  ? `${summary.ready} voicemail items are ready to promote across ${summary.readyBatches} batch${summary.readyBatches === 1 ? '' : 'es'}.`
+                  : 'No voicemail items are currently waiting on promotion.'}
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+              <span style={{ padding: '0.42rem 0.8rem', borderRadius: 999, background: 'rgba(124, 58, 237, 0.12)', color: '#7c3aed', fontWeight: 800 }}>
+                {summary.review} in review
+              </span>
+              <span style={{ padding: '0.42rem 0.8rem', borderRadius: 999, background: 'rgba(13, 110, 253, 0.12)', color: '#0d6efd', fontWeight: 800 }}>
+                {summary.ready} ready
+              </span>
+              <span style={{ padding: '0.42rem 0.8rem', borderRadius: 999, background: 'rgba(25, 135, 84, 0.12)', color: '#198754', fontWeight: 800 }}>
+                {summary.created} promoted
+              </span>
+            </div>
+          </div>
         </section>
 
         <section className="kline-card" style={{ padding: '1.4rem' }}>

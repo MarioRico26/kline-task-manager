@@ -184,31 +184,63 @@ export default function CallsInboxPage() {
         accent: '#c81e1e',
       },
       {
-        label: 'Assigned To Me',
-        value: records.filter((record) => record.assignedToUserId === currentUserId).length.toString(),
-        detail: 'Owned by the signed-in user',
-        accent: '#0d6efd',
-      },
-      {
-        label: 'Voicemails',
-        value: records.filter((record) => record.sourceType === 'VOICEMAIL').length.toString(),
-        detail: 'Current voicemail intake records',
+        label: 'Unassigned',
+        value: records.filter((record) => !['RESOLVED', 'CLOSED', 'SPAM'].includes(record.status) && !record.assignedToUserId).length.toString(),
+        detail: 'Need intake ownership',
         accent: '#7c3aed',
       },
       {
-        label: '4h+ Aging',
-        value: records.filter((record) => !['RESOLVED', 'CLOSED', 'SPAM'].includes(record.status) && record.isSlaWarning).length.toString(),
-        detail: 'Open call records older than four hours',
-        accent: '#fd7e14',
+        label: 'Due Today',
+        value: records.filter((record) => record.isFollowUpDueToday).length.toString(),
+        detail: 'Callback time lands today',
+        accent: '#0d6efd',
       },
       {
         label: 'Overdue Follow-Ups',
         value: records.filter((record) => record.isFollowUpOverdue).length.toString(),
         detail: 'Past the scheduled callback time',
+        accent: '#fd7e14',
+      },
+      {
+        label: '24h+ Aging',
+        value: records.filter((record) => !['RESOLVED', 'CLOSED', 'SPAM'].includes(record.status) && record.isSlaBreached).length.toString(),
+        detail: 'Breached the 24-hour response window',
         accent: '#c81e1e',
+      },
+      {
+        label: 'Assigned To Me',
+        value: records.filter((record) => record.assignedToUserId === currentUserId).length.toString(),
+        detail: 'Owned by the signed-in user',
+        accent: '#198754',
       },
     ],
     [currentUserId, records]
+  )
+
+  const agingCards = useMemo(
+    () => [
+      {
+        label: '0-4h',
+        value: records.filter((record) => !['RESOLVED', 'CLOSED', 'SPAM'].includes(record.status) && record.ageBucket === 'UNDER_4_HOURS').length,
+        accent: '#198754',
+      },
+      {
+        label: '4-24h',
+        value: records.filter((record) => !['RESOLVED', 'CLOSED', 'SPAM'].includes(record.status) && record.ageBucket === 'FOUR_TO_TWENTY_FOUR_HOURS').length,
+        accent: '#fd7e14',
+      },
+      {
+        label: '24-48h',
+        value: records.filter((record) => !['RESOLVED', 'CLOSED', 'SPAM'].includes(record.status) && record.ageBucket === 'ONE_TO_TWO_DAYS').length,
+        accent: '#c81e1e',
+      },
+      {
+        label: '48h+',
+        value: records.filter((record) => !['RESOLVED', 'CLOSED', 'SPAM'].includes(record.status) && record.ageBucket === 'OVER_TWO_DAYS').length,
+        accent: '#7b1e1e',
+      },
+    ],
+    [records]
   )
 
   const assigneeOptions = useMemo(() => {
@@ -335,6 +367,30 @@ export default function CallsInboxPage() {
               <div style={{ color: 'var(--kline-text-light)', marginTop: 6 }}>{card.detail}</div>
             </div>
           ))}
+        </section>
+
+        <section
+          className="kline-card"
+          style={{
+            padding: '1.15rem 1.3rem',
+            marginBottom: '1.4rem',
+            background: 'linear-gradient(135deg, rgba(255,255,255,0.96), rgba(252,247,240,0.96))',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap', alignItems: 'center', marginBottom: '0.9rem' }}>
+            <div>
+              <h3 style={{ margin: 0, color: 'var(--kline-text)' }}>Aging buckets</h3>
+              <p style={{ margin: '0.35rem 0 0', color: 'var(--kline-text-light)' }}>Fast view of open record pressure by elapsed time.</p>
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.85rem' }}>
+            {agingCards.map((card) => (
+              <div key={card.label} style={{ borderRadius: 14, border: '1px solid var(--kline-gray)', padding: '0.95rem 1rem', background: '#fff' }}>
+                <div style={{ fontSize: '0.8rem', fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--kline-text-light)' }}>{card.label}</div>
+                <div style={{ marginTop: 8, fontSize: '1.5rem', fontWeight: 900, color: card.accent }}>{card.value}</div>
+              </div>
+            ))}
+          </div>
         </section>
 
         {!moduleReady && (

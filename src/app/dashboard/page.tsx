@@ -14,11 +14,13 @@ interface DashboardStats {
   pendingTasks: number
   overdueTasks: number
   callsInboxOpenCount: number
+  callsInboxUnassignedCount: number
   callsInboxOverdueCount: number
   callsInboxNewTodayCount: number
   callsInboxCallbackPendingCount: number
   callsInboxResolvedTodayCount: number
   callsInboxVoicemailReviewCount: number
+  callsInboxVoicemailReadyCount: number
   tasksByStatus: Array<{ status: string; count: number; color: string }>
   tasksByService: Array<{ service: string; count: number }>
   recentTasks: Array<{
@@ -345,10 +347,22 @@ export default function DashboardPage() {
                 </div>
                 <div className="kpi-grid" style={{ marginTop: '1rem' }}>
                   <KpiCard
+                    label="Open Queue"
+                    value={stats.callsInboxOpenCount}
+                    detail={stats.callsInboxResolvedTodayCount > 0 ? `${stats.callsInboxResolvedTodayCount} resolved today` : 'Active follow-up still open'}
+                    accent="#7c3aed"
+                  />
+                  <KpiCard
                     label="New Today"
                     value={stats.callsInboxNewTodayCount}
                     detail="Calls created today"
                     accent="#0d6efd"
+                  />
+                  <KpiCard
+                    label="Unassigned"
+                    value={stats.callsInboxUnassignedCount}
+                    detail={stats.callsInboxUnassignedCount > 0 ? 'Needs intake ownership' : 'Every open call has an owner'}
+                    accent="#c81e1e"
                   />
                   <KpiCard
                     label="Callback Queue"
@@ -357,16 +371,16 @@ export default function DashboardPage() {
                     accent="#fd7e14"
                   />
                   <KpiCard
-                    label="Resolved Today"
-                    value={stats.callsInboxResolvedTodayCount}
-                    detail="Closed or resolved today"
-                    accent="#198754"
+                    label="Review Required"
+                    value={stats.callsInboxVoicemailReviewCount}
+                    detail="Imports still waiting on cleanup"
+                    accent="#7c3aed"
                   />
                   <KpiCard
-                    label="Voicemail Review"
-                    value={stats.callsInboxVoicemailReviewCount}
-                    detail="Items still in import review"
-                    accent="#7c3aed"
+                    label="Ready To Promote"
+                    value={stats.callsInboxVoicemailReadyCount}
+                    detail={stats.callsInboxVoicemailReadyCount > 0 ? 'Batch-ready voicemail records' : 'No import items waiting on promotion'}
+                    accent="#198754"
                   />
                 </div>
               </section>
