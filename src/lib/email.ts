@@ -66,6 +66,20 @@ interface CallAssignmentEmailData {
     isReassignment: boolean
 }
 
+interface CallAssignmentDigestEmailData {
+    to: string
+    assignedByEmail: string
+    assigneeEmail: string
+    batchLabel: string
+    records: Array<{
+        callerName: string | null
+        phoneNumber: string | null
+        summary: string
+        receivedAt: Date
+        callRecordId: string
+    }>
+}
+
 function resolveAppBaseUrl() {
     if (process.env.NEXT_PUBLIC_APP_URL) return process.env.NEXT_PUBLIC_APP_URL
     if (process.env.APP_URL) return process.env.APP_URL
@@ -425,6 +439,137 @@ export async function sendCallAssignmentEmail(emailData: CallAssignmentEmailData
         return { success: true }
     } catch (error) {
         console.error('❌ Failed to send call assignment email:', error)
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+        }
+    }
+}
+
+export async function sendCallAssignmentDigestEmail(emailData: CallAssignmentDigestEmailData) {
+    try {
+        const { to, assignedByEmail, assigneeEmail, batchLabel, records } = emailData
+        const appBaseUrl = resolveAppBaseUrl()
+        const inboxUrl = appBaseUrl ? `${appBaseUrl}/calls-inbox` : ''
+
+        const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              line-height: 1.6;
+              color: #333;
+              background: #f5f5f5;
+              margin: 0;
+              padding: 24px 0;
+            }
+            .container {
+              max-width: 700px;
+              margin: 0 auto;
+              background: #fff;
+              border-radius: 12px;
+              overflow: hidden;
+              box-shadow: 0 12px 36px rgba(15, 23, 42, 0.08);
+            }
+            .header {
+              background: #111827;
+              color: #fff;
+              padding: 24px 28px;
+            }
+            .content {
+              padding: 28px;
+            }
+            .card {
+              background: #f9fafb;
+              border: 1px solid #e5e7eb;
+              border-radius: 10px;
+              padding: 18px 20px;
+              margin: 18px 0;
+            }
+            .record {
+              border-top: 1px solid #e5e7eb;
+              padding: 14px 0;
+            }
+            .record:first-child {
+              border-top: none;
+              padding-top: 0;
+            }
+            .cta {
+              display: inline-block;
+              margin-top: 18px;
+              background: #c81e1e;
+              color: #fff !important;
+              text-decoration: none;
+              padding: 12px 18px;
+              border-radius: 10px;
+              font-weight: bold;
+            }
+            .meta {
+              color: #6b7280;
+              font-size: 14px;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1 style="margin:0;font-size:24px;">Kline Calls Inbox</h1>
+            </div>
+            <div class="content">
+              <p>Hello <strong>${assigneeEmail}</strong>,</p>
+              <p><strong>${assignedByEmail}</strong> promoted ${records.length} voicemail ${records.length === 1 ? 'message' : 'messages'} from <strong>${batchLabel}</strong> into the live inbox for you.</p>
+              <div class="card">
+                ${records
+                    .map(
+                        (record) => `
+                    <div class="record">
+                      <p style="margin:0 0 6px;"><strong>Caller:</strong> ${record.callerName || 'Unknown caller'}</p>
+                      <p style="margin:0 0 6px;"><strong>Phone:</strong> ${record.phoneNumber || 'No phone captured'}</p>
+                      <p style="margin:0 0 6px;"><strong>Received:</strong> ${record.receivedAt.toLocaleString()}</p>
+                      <p style="margin:0;"><strong>Summary:</strong> ${record.summary}</p>
+                    </div>
+                  `,
+                    )
+                    .join('')}
+              </div>
+              ${inboxUrl ? `<a class="cta" href="${inboxUrl}">Open Calls Inbox</a>` : ''}
+              <p class="meta" style="margin-top:20px;">This is an internal operational notification from the Kline Task Manager.</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `
+
+        await transporter.sendMail({
+            from: {
+                name: 'Kline Calls Inbox',
+                address: from,
+            },
+            to,
+            subject: `Voicemail batch promoted to your Calls Inbox (${records.length})`,
+            html: htmlContent,
+            text: [
+                `Voicemail batch promoted into your Calls Inbox by ${assignedByEmail}.`,
+                `Batch: ${batchLabel}`,
+                '',
+                ...records.flatMap((record, index) => [
+                    `${index + 1}. ${record.callerName || 'Unknown caller'} · ${record.phoneNumber || 'No phone captured'}`,
+                    `   Received: ${record.receivedAt.toLocaleString()}`,
+                    `   Summary: ${record.summary}`,
+                ]),
+                '',
+                inboxUrl ? `Open inbox: ${inboxUrl}` : '',
+            ]
+                .filter(Boolean)
+                .join('\n'),
+        })
+
+        return { success: true }
+    } catch (error) {
+        console.error('❌ Failed to send call assignment digest email:', error)
         return {
             success: false,
             error: error instanceof Error ? error.message : 'Unknown error',

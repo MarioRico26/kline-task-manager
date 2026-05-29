@@ -37,9 +37,13 @@ function getItemStatusColor(status: string) {
 
 function ReviewItemCard({
   item,
+  selected,
+  onToggleSelect,
   onUpdated,
 }: {
   item: VoicemailImportItemRecord
+  selected: boolean
+  onToggleSelect: (itemId: string) => void
   onUpdated: () => Promise<void>
 }) {
   const [reviewNotes, setReviewNotes] = useState(item.reviewNotes || '')
@@ -128,12 +132,23 @@ function ReviewItemCard({
   return (
     <article style={{ border: '1px solid var(--kline-gray)', borderRadius: 16, padding: '1.1rem 1.2rem', background: '#fff' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'flex-start', flexWrap: 'wrap' }}>
-        <div>
+        <div style={{ display: 'flex', gap: '0.9rem', alignItems: 'flex-start' }}>
+          <label style={{ display: 'inline-flex', alignItems: 'center', paddingTop: 2, cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={selected}
+              onChange={() => onToggleSelect(item.id)}
+              disabled={item.status === 'CREATED_AS_CALL_RECORD'}
+              style={{ width: 18, height: 18 }}
+            />
+          </label>
+          <div>
           <div style={{ fontWeight: 900, color: 'var(--kline-text)', fontSize: '1.02rem' }}>
             {item.callerNameRaw || 'Unknown caller'} · {item.phoneNumberRaw || 'No phone'}
           </div>
           <div style={{ color: 'var(--kline-text-light)', marginTop: 4 }}>
             {formatDateTime(item.recordedAt)}{item.detectedAddress ? ` · ${item.detectedAddress}` : ''}{item.detectedTown ? ` · ${item.detectedTown}` : ''}
+          </div>
           </div>
         </div>
         <span
@@ -288,6 +303,9 @@ export default function VoicemailImportBatchDetailPage() {
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [selectedItemIds, setSelectedItemIds] = useState<string[]>([])
+  const [bulkActionLoading, setBulkActionLoading] = useState(false)
+  const [sendDigestEmail, setSendDigestEmail] = useState(true)
 
   const loadBatch = useCallback(async () => {
     const res = await fetch(`/api/calls-inbox/imports/${params.batchId}`, { cache: 'no-store' })
@@ -317,7 +335,7 @@ export default function VoicemailImportBatchDetailPage() {
           user?: {
             canAccessCallsInbox?: boolean
             canAccessVoicemailImports?: boolean
-            accessScope?: 'ALL' | 'PERMITS_ONLY'
+            accessScope?: 'ALL' | 'PERMITS_ONLY' | 'NONE'
           }
         }
 
@@ -367,6 +385,91 @@ export default function VoicemailImportBatchDetailPage() {
     }),
     [items]
   )
+
+  const selectableItemIds = useMemo(
+    () => items.filter((item) => item.status !== 'CREATED_AS_CALL_RECORD').map((item) => item.id),
+    [items]
+  )
+
+  const readyItemIds = useMemo(
+    () => items.filter((item) => item.status === 'READY_TO_CREATE').map((item) => item.id),
+    [items]
+  )
+
+  const selectedReadyCount = useMemo(
+    () => items.filter((item) => selectedItemIds.includes(item.id) && item.status === 'READY_TO_CREATE').length,
+    [items, selectedItemIds]
+  )
+
+  const hasAllSelectableSelected = selectableItemIds.length > 0 && selectedItemIds.length === selectableItemIds.length
+
+  useEffect(() => {
+    setSelectedItemIds((current) => current.filter((id) => selectableItemIds.includes(id)))
+  }, [selectableItemIds])
+
+  function toggleItemSelection(itemId: string) {
+    setSelectedItemIds((current) => (current.includes(itemId) ? current.filter((id) => id !== itemId) : [...current, itemId]))
+  }
+
+  function toggleSelectAll() {
+    setSelectedItemIds(hasAllSelectableSelected ? [] : selectableItemIds)
+  }
+
+  async function runBulkStatusUpdate(status: 'REVIEW_REQUIRED' | 'READY_TO_CREATE' | 'DUPLICATE' | 'SKIPPED') {
+    if (selectedItemIds.length === 0) {
+      setError('Select at least one voicemail item first.')
+      return
+    }
+
+    setBulkActionLoading(true)
+    setError('')
+    try {
+      const res = await fetch(`/api/calls-inbox/imports/${params.batchId}/bulk-review`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ itemIds: selectedItemIds, status }),
+      })
+      const data = (await res.json()) as { error?: string; updatedItemIds?: string[] }
+      if (!res.ok) throw new Error(data.error || 'Unable to update selected voicemail items')
+      const updatedIds = new Set(data.updatedItemIds || [])
+      setSelectedItemIds((current) => current.filter((id) => !updatedIds.has(id)))
+      await loadBatch()
+    } catch (bulkError) {
+      setError(bulkError instanceof Error ? bulkError.message : 'Unable to update selected voicemail items')
+    } finally {
+      setBulkActionLoading(false)
+    }
+  }
+
+  async function runBulkPromotion(mode: 'selected' | 'all_ready') {
+    if (mode === 'selected' && selectedItemIds.length === 0) {
+      setError('Select at least one voicemail item first.')
+      return
+    }
+
+    setBulkActionLoading(true)
+    setError('')
+    try {
+      const res = await fetch(`/api/calls-inbox/imports/${params.batchId}/promote`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode,
+          itemIds: mode === 'selected' ? selectedItemIds : undefined,
+          sendDigestEmail,
+        }),
+      })
+      const data = (await res.json()) as { error?: string; promotedItemIds?: string[] }
+      if (!res.ok) throw new Error(data.error || 'Unable to promote voicemail items')
+      const promotedIds = new Set(data.promotedItemIds || [])
+      setSelectedItemIds((current) => current.filter((id) => !promotedIds.has(id)))
+      await loadBatch()
+    } catch (bulkError) {
+      setError(bulkError instanceof Error ? bulkError.message : 'Unable to promote voicemail items')
+    } finally {
+      setBulkActionLoading(false)
+    }
+  }
 
   if (authorized === null || loading) {
     return (
@@ -448,9 +551,68 @@ export default function VoicemailImportBatchDetailPage() {
         </section>
 
         <section className="kline-card" style={{ padding: '1.4rem' }}>
+          <div
+            style={{
+              display: 'grid',
+              gap: '1rem',
+              padding: '1rem 1.1rem',
+              marginBottom: '1rem',
+              borderRadius: 16,
+              background: 'linear-gradient(135deg, rgba(17,24,39,0.04), rgba(124,58,237,0.08))',
+              border: '1px solid rgba(17,24,39,0.08)',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
+              <div>
+                <div style={{ fontWeight: 900, color: 'var(--kline-text)', fontSize: '1.02rem' }}>Batch actions</div>
+                <div style={{ color: 'var(--kline-text-light)', marginTop: 4 }}>
+                  {selectedItemIds.length} selected · {selectedReadyCount} ready to promote · {counts.ready} ready in batch
+                </div>
+              </div>
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', color: 'var(--kline-text)' }}>
+                <input type="checkbox" checked={hasAllSelectableSelected} onChange={toggleSelectAll} />
+                Select all active items
+              </label>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+              <button className="ghost-btn" type="button" onClick={() => runBulkStatusUpdate('REVIEW_REQUIRED')} disabled={bulkActionLoading || selectedItemIds.length === 0}>
+                {bulkActionLoading ? 'Working…' : 'Keep Selected in Review'}
+              </button>
+              <button className="ghost-btn" type="button" onClick={() => runBulkStatusUpdate('READY_TO_CREATE')} disabled={bulkActionLoading || selectedItemIds.length === 0}>
+                Mark Selected Ready
+              </button>
+              <button className="ghost-btn" type="button" onClick={() => runBulkStatusUpdate('DUPLICATE')} disabled={bulkActionLoading || selectedItemIds.length === 0}>
+                Mark Selected Duplicate
+              </button>
+              <button className="ghost-btn" type="button" onClick={() => runBulkStatusUpdate('SKIPPED')} disabled={bulkActionLoading || selectedItemIds.length === 0}>
+                Skip Selected
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.55rem', color: 'var(--kline-text)' }}>
+                <input type="checkbox" checked={sendDigestEmail} onChange={(event) => setSendDigestEmail(event.target.checked)} />
+                Send one digest email per assignee
+              </label>
+              <button className="kline-btn-primary" type="button" onClick={() => runBulkPromotion('selected')} disabled={bulkActionLoading || selectedItemIds.length === 0}>
+                {bulkActionLoading ? 'Promoting…' : 'Promote Selected'}
+              </button>
+              <button className="ghost-btn" type="button" onClick={() => runBulkPromotion('all_ready')} disabled={bulkActionLoading || readyItemIds.length === 0}>
+                {bulkActionLoading ? 'Promoting…' : 'Promote All Ready'}
+              </button>
+            </div>
+          </div>
+
           <div style={{ display: 'grid', gap: '1rem' }}>
             {items.map((item) => (
-              <ReviewItemCard key={item.id} item={item} onUpdated={loadBatch} />
+              <ReviewItemCard
+                key={item.id}
+                item={item}
+                selected={selectedItemIds.includes(item.id)}
+                onToggleSelect={toggleItemSelection}
+                onUpdated={loadBatch}
+              />
             ))}
             {items.length === 0 && <div style={{ color: 'var(--kline-text-light)' }}>This batch does not have any voicemail items yet.</div>}
           </div>
