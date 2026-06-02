@@ -303,6 +303,7 @@ export default function VoicemailImportBatchDetailPage() {
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [infoMessage, setInfoMessage] = useState('')
   const [selectedItemIds, setSelectedItemIds] = useState<string[]>([])
   const [bulkActionLoading, setBulkActionLoading] = useState(false)
   const [sendDigestEmail, setSendDigestEmail] = useState(true)
@@ -423,6 +424,7 @@ export default function VoicemailImportBatchDetailPage() {
 
     setBulkActionLoading(true)
     setError('')
+    setInfoMessage('')
     try {
       const res = await fetch(`/api/calls-inbox/imports/${params.batchId}/bulk-review`, {
         method: 'PATCH',
@@ -433,6 +435,7 @@ export default function VoicemailImportBatchDetailPage() {
       if (!res.ok) throw new Error(data.error || 'Unable to update selected voicemail items')
       const updatedIds = new Set(data.updatedItemIds || [])
       setSelectedItemIds((current) => current.filter((id) => !updatedIds.has(id)))
+      setInfoMessage(`${updatedIds.size} voicemail ${updatedIds.size === 1 ? 'item was' : 'items were'} updated to ${formatEnumLabel(status)}.`)
       await loadBatch()
     } catch (bulkError) {
       setError(bulkError instanceof Error ? bulkError.message : 'Unable to update selected voicemail items')
@@ -449,6 +452,7 @@ export default function VoicemailImportBatchDetailPage() {
 
     setBulkActionLoading(true)
     setError('')
+    setInfoMessage('')
     try {
       const res = await fetch(`/api/calls-inbox/imports/${params.batchId}/promote`, {
         method: 'POST',
@@ -459,10 +463,17 @@ export default function VoicemailImportBatchDetailPage() {
           sendDigestEmail,
         }),
       })
-      const data = (await res.json()) as { error?: string; promotedItemIds?: string[] }
+      const data = (await res.json()) as { error?: string; promotedItemIds?: string[]; skippedItemIds?: string[]; promotedCount?: number; skippedCount?: number }
       if (!res.ok) throw new Error(data.error || 'Unable to promote voicemail items')
       const promotedIds = new Set(data.promotedItemIds || [])
       setSelectedItemIds((current) => current.filter((id) => !promotedIds.has(id)))
+      const promotedCount = data.promotedCount ?? promotedIds.size
+      const skippedCount = data.skippedCount ?? (data.skippedItemIds?.length || 0)
+      setInfoMessage(
+        skippedCount > 0
+          ? `${promotedCount} ready voicemail ${promotedCount === 1 ? 'item was' : 'items were'} promoted. ${skippedCount} selected ${skippedCount === 1 ? 'item was' : 'items were'} left behind because ${skippedCount === 1 ? 'it is' : 'they are'} still not marked Ready.`
+          : `${promotedCount} voicemail ${promotedCount === 1 ? 'item was' : 'items were'} promoted into Calls Inbox.`
+      )
       await loadBatch()
     } catch (bulkError) {
       setError(bulkError instanceof Error ? bulkError.message : 'Unable to promote voicemail items')
@@ -521,6 +532,12 @@ export default function VoicemailImportBatchDetailPage() {
           </section>
         )}
 
+        {infoMessage && (
+          <section className="kline-card" style={{ padding: '1rem 1.25rem', marginBottom: '1.25rem', borderLeft: '5px solid #198754' }}>
+            <strong style={{ color: '#14532d' }}>{infoMessage}</strong>
+          </section>
+        )}
+
         <section className="hero" style={{ marginBottom: '1.5rem' }}>
           <div>
             <p className="hero-overline">Batch Review</p>
@@ -568,6 +585,9 @@ export default function VoicemailImportBatchDetailPage() {
                 <div style={{ color: 'var(--kline-text-light)', marginTop: 4 }}>
                   {selectedItemIds.length} selected · {selectedReadyCount} ready to promote · {counts.ready} ready in batch
                 </div>
+                <div style={{ color: 'var(--kline-text-light)', marginTop: 4, fontSize: '0.92rem' }}>
+                  Only voicemail items marked <strong>Ready</strong> can be promoted into the live inbox.
+                </div>
               </div>
               <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', color: 'var(--kline-text)' }}>
                 <input type="checkbox" checked={hasAllSelectableSelected} onChange={toggleSelectAll} />
@@ -595,8 +615,8 @@ export default function VoicemailImportBatchDetailPage() {
                 <input type="checkbox" checked={sendDigestEmail} onChange={(event) => setSendDigestEmail(event.target.checked)} />
                 Send one digest email per assignee
               </label>
-              <button className="kline-btn-primary" type="button" onClick={() => runBulkPromotion('selected')} disabled={bulkActionLoading || selectedItemIds.length === 0}>
-                {bulkActionLoading ? 'Promoting…' : 'Promote Selected'}
+              <button className="kline-btn-primary" type="button" onClick={() => runBulkPromotion('selected')} disabled={bulkActionLoading || selectedItemIds.length === 0 || selectedReadyCount === 0}>
+                {bulkActionLoading ? 'Promoting…' : 'Promote Selected Ready'}
               </button>
               <button className="ghost-btn" type="button" onClick={() => runBulkPromotion('all_ready')} disabled={bulkActionLoading || readyItemIds.length === 0}>
                 {bulkActionLoading ? 'Promoting…' : 'Promote All Ready'}
