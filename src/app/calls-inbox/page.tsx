@@ -12,6 +12,8 @@ import {
   formatEnumLabel,
 } from '@/lib/callsInbox'
 
+const OPEN_RECORD_STATUSES = ['NEW', 'TRIAGE_REQUIRED', 'ASSIGNED', 'CALLBACK_PENDING'] as const
+
 function formatReceivedAt(value: string) {
   return new Date(value).toLocaleString([], {
     month: 'short',
@@ -179,13 +181,13 @@ export default function CallsInboxPage() {
     () => [
       {
         label: 'Open Records',
-        value: records.filter((record) => !['RESOLVED', 'CLOSED', 'SPAM'].includes(record.status)).length.toString(),
-        detail: 'Still need office follow-up',
+        value: records.filter((record) => OPEN_RECORD_STATUSES.includes(record.status as (typeof OPEN_RECORD_STATUSES)[number])).length.toString(),
+        detail: 'Freshly open and not yet in-progress',
         accent: '#c81e1e',
       },
       {
         label: 'Unassigned',
-        value: records.filter((record) => !['RESOLVED', 'CLOSED', 'SPAM'].includes(record.status) && !record.assignedToUserId).length.toString(),
+        value: records.filter((record) => OPEN_RECORD_STATUSES.includes(record.status as (typeof OPEN_RECORD_STATUSES)[number]) && !record.assignedToUserId).length.toString(),
         detail: 'Need intake ownership',
         accent: '#7c3aed',
       },
@@ -203,7 +205,7 @@ export default function CallsInboxPage() {
       },
       {
         label: '24h+ Aging',
-        value: records.filter((record) => !['RESOLVED', 'CLOSED', 'SPAM'].includes(record.status) && record.isSlaBreached).length.toString(),
+        value: records.filter((record) => OPEN_RECORD_STATUSES.includes(record.status as (typeof OPEN_RECORD_STATUSES)[number]) && record.isSlaBreached).length.toString(),
         detail: 'Breached the 24-hour response window',
         accent: '#c81e1e',
       },
@@ -221,22 +223,22 @@ export default function CallsInboxPage() {
     () => [
       {
         label: '0-4h',
-        value: records.filter((record) => !['RESOLVED', 'CLOSED', 'SPAM'].includes(record.status) && record.ageBucket === 'UNDER_4_HOURS').length,
+        value: records.filter((record) => OPEN_RECORD_STATUSES.includes(record.status as (typeof OPEN_RECORD_STATUSES)[number]) && record.ageBucket === 'UNDER_4_HOURS').length,
         accent: '#198754',
       },
       {
         label: '4-24h',
-        value: records.filter((record) => !['RESOLVED', 'CLOSED', 'SPAM'].includes(record.status) && record.ageBucket === 'FOUR_TO_TWENTY_FOUR_HOURS').length,
+        value: records.filter((record) => OPEN_RECORD_STATUSES.includes(record.status as (typeof OPEN_RECORD_STATUSES)[number]) && record.ageBucket === 'FOUR_TO_TWENTY_FOUR_HOURS').length,
         accent: '#fd7e14',
       },
       {
         label: '24-48h',
-        value: records.filter((record) => !['RESOLVED', 'CLOSED', 'SPAM'].includes(record.status) && record.ageBucket === 'ONE_TO_TWO_DAYS').length,
+        value: records.filter((record) => OPEN_RECORD_STATUSES.includes(record.status as (typeof OPEN_RECORD_STATUSES)[number]) && record.ageBucket === 'ONE_TO_TWO_DAYS').length,
         accent: '#c81e1e',
       },
       {
         label: '48h+',
-        value: records.filter((record) => !['RESOLVED', 'CLOSED', 'SPAM'].includes(record.status) && record.ageBucket === 'OVER_TWO_DAYS').length,
+        value: records.filter((record) => OPEN_RECORD_STATUSES.includes(record.status as (typeof OPEN_RECORD_STATUSES)[number]) && record.ageBucket === 'OVER_TWO_DAYS').length,
         accent: '#7b1e1e',
       },
     ],
@@ -269,7 +271,7 @@ export default function CallsInboxPage() {
     const query = filters.query.trim().toLowerCase()
 
     return records.filter((record) => {
-      if (filters.status === 'OPEN' && ['RESOLVED', 'CLOSED', 'SPAM'].includes(record.status)) return false
+      if (filters.status === 'OPEN' && !OPEN_RECORD_STATUSES.includes(record.status as (typeof OPEN_RECORD_STATUSES)[number])) return false
       if (filters.status !== 'ALL' && filters.status !== 'OPEN' && record.status !== filters.status) return false
       if (filters.assignedTo !== 'ALL' && (record.assignedToUserId || '') !== filters.assignedTo) return false
       if (filters.priority !== 'ALL' && record.priority !== filters.priority) return false

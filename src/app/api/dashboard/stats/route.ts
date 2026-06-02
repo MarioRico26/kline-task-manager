@@ -124,14 +124,14 @@ export async function GET() {
         prisma.callRecord.count({
           where: {
             status: {
-              notIn: ['RESOLVED', 'CLOSED', 'SPAM'],
+              in: ['NEW', 'TRIAGE_REQUIRED', 'ASSIGNED', 'CALLBACK_PENDING'],
             },
           },
         }),
         prisma.callRecord.count({
           where: {
             status: {
-              notIn: ['RESOLVED', 'CLOSED', 'SPAM'],
+              in: ['NEW', 'TRIAGE_REQUIRED', 'ASSIGNED', 'CALLBACK_PENDING'],
             },
             assignedToUserId: null,
           },
