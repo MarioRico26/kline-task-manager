@@ -77,7 +77,7 @@ export default function CallsInboxPage() {
   const [error, setError] = useState<string>('')
   const [filters, setFilters] = useState({
     query: '',
-    status: 'ALL',
+    status: 'OPEN',
     assignedTo: 'ALL',
     priority: 'ALL',
     callType: 'ALL',
@@ -269,7 +269,8 @@ export default function CallsInboxPage() {
     const query = filters.query.trim().toLowerCase()
 
     return records.filter((record) => {
-      if (filters.status !== 'ALL' && record.status !== filters.status) return false
+      if (filters.status === 'OPEN' && ['RESOLVED', 'CLOSED', 'SPAM'].includes(record.status)) return false
+      if (filters.status !== 'ALL' && filters.status !== 'OPEN' && record.status !== filters.status) return false
       if (filters.assignedTo !== 'ALL' && (record.assignedToUserId || '') !== filters.assignedTo) return false
       if (filters.priority !== 'ALL' && record.priority !== filters.priority) return false
       if (filters.callType !== 'ALL' && record.callType !== filters.callType) return false
@@ -446,6 +447,7 @@ export default function CallsInboxPage() {
             <div>
               <label style={{ display: 'block', fontWeight: 700, marginBottom: '0.45rem', color: 'var(--kline-text)' }}>Status</label>
               <select className="kline-input" value={filters.status} onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value }))}>
+                <option value="OPEN">Open only</option>
                 <option value="ALL">All statuses</option>
                 {callStatusOptions.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -561,7 +563,7 @@ export default function CallsInboxPage() {
                 onClick={() =>
                   setFilters({
                     query: '',
-                    status: 'ALL',
+                    status: 'OPEN',
                     assignedTo: 'ALL',
                     priority: 'ALL',
                     callType: 'ALL',
