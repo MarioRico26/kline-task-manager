@@ -190,9 +190,9 @@ export default function CallsInboxPage() {
         accent: '#7c3aed',
       },
       {
-        label: 'Due Today',
-        value: records.filter((record) => record.isFollowUpDueToday).length.toString(),
-        detail: 'Callback time lands today',
+        label: 'Callback Attempted',
+        value: records.filter((record) => record.callbackAttemptCount > 0).length.toString(),
+        detail: 'Already have at least one logged callback',
         accent: '#0d6efd',
       },
       {
@@ -208,13 +208,13 @@ export default function CallsInboxPage() {
         accent: '#c81e1e',
       },
       {
-        label: 'Assigned To Me',
-        value: records.filter((record) => record.assignedToUserId === currentUserId).length.toString(),
-        detail: 'Owned by the signed-in user',
+        label: 'Resolved / Closed',
+        value: records.filter((record) => ['RESOLVED', 'CLOSED'].includes(record.status)).length.toString(),
+        detail: 'Handled and no longer active',
         accent: '#198754',
       },
     ],
-    [currentUserId, records]
+    [records]
   )
 
   const agingCards = useMemo(
