@@ -93,6 +93,34 @@ function ReviewItemCard({
     }
   }
 
+  async function saveEdits() {
+    setSaving(true)
+    setError('')
+    try {
+      const res = await fetch(`/api/calls-inbox/imports/items/${item.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          callerNameRaw,
+          phoneNumberRaw,
+          transcriptRaw,
+          summaryDraft,
+          reviewNotes,
+          detectedAddress: item.detectedAddress,
+          detectedTown: item.detectedTown,
+          detectedServiceCategory: item.detectedServiceCategory,
+        }),
+      })
+      const data = (await res.json()) as { error?: string }
+      if (!res.ok) throw new Error(data.error || 'Unable to save voicemail edits')
+      await onUpdated()
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : 'Unable to save voicemail edits')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   async function promoteItem() {
     setPromoting(true)
     setError('')
@@ -262,8 +290,11 @@ function ReviewItemCard({
       {error && <div style={{ marginTop: '0.75rem', color: '#c81e1e', fontWeight: 700 }}>{error}</div>}
 
       <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem', flexWrap: 'wrap' }}>
+        <button className="ghost-btn" type="button" onClick={saveEdits} disabled={saving || promoting || transcribing}>
+          {saving ? 'Saving…' : 'Save Edits'}
+        </button>
         <button className="ghost-btn" type="button" onClick={() => saveStatus('REVIEW_REQUIRED')} disabled={saving || promoting || transcribing}>
-          {saving ? 'Saving…' : 'Keep in Review'}
+          Keep in Review
         </button>
         <button className="ghost-btn" type="button" onClick={() => saveStatus('READY_TO_CREATE')} disabled={saving || promoting || transcribing}>
           Mark Ready
@@ -587,6 +618,9 @@ export default function VoicemailImportBatchDetailPage() {
                 </div>
                 <div style={{ color: 'var(--kline-text-light)', marginTop: 4, fontSize: '0.92rem' }}>
                   Only voicemail items marked <strong>Ready</strong> can be promoted into the live inbox.
+                </div>
+                <div style={{ color: 'var(--kline-text-light)', marginTop: 4, fontSize: '0.92rem' }}>
+                  If you edit caller name, phone, summary, or transcript inside a card, click <strong>Save Edits</strong> or <strong>Mark Ready</strong> before bulk promotion.
                 </div>
               </div>
               <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', color: 'var(--kline-text)' }}>

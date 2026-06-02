@@ -65,6 +65,8 @@ export default function CallRecordDetailPage() {
     priority: '',
     callType: '',
     assignedToUserId: '',
+    callerNameRaw: '',
+    phoneNumber: '',
     summary: '',
     transcriptRaw: '',
     internalNotes: '',
@@ -95,6 +97,8 @@ export default function CallRecordDetailPage() {
         priority: payload.record.priority,
         callType: payload.record.callType,
         assignedToUserId: payload.record.assignedToUserId || '',
+        callerNameRaw: payload.record.callerNameRaw || '',
+        phoneNumber: payload.record.phoneNumber || '',
         summary: payload.record.summary || '',
         transcriptRaw: payload.record.transcriptRaw || '',
         internalNotes: payload.record.internalNotes || '',
@@ -154,6 +158,8 @@ export default function CallRecordDetailPage() {
             priority: payload.record.priority,
             callType: payload.record.callType,
             assignedToUserId: payload.record.assignedToUserId || '',
+            callerNameRaw: payload.record.callerNameRaw || '',
+            phoneNumber: payload.record.phoneNumber || '',
             summary: payload.record.summary || '',
             transcriptRaw: payload.record.transcriptRaw || '',
             internalNotes: payload.record.internalNotes || '',
@@ -406,6 +412,20 @@ export default function CallRecordDetailPage() {
                         </option>
                       ))}
                     </select>
+                  </div>
+                </div>
+
+                <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--kline-gray)' }}>
+                  <div style={{ fontWeight: 800, color: 'var(--kline-text)', marginBottom: '0.85rem' }}>Caller details</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
+                    <div>
+                      <label style={{ display: 'block', fontWeight: 700, marginBottom: '0.5rem', color: 'var(--kline-text)' }}>Caller Name</label>
+                      <input className="kline-input" value={form.callerNameRaw} onChange={(event) => setForm((current) => ({ ...current, callerNameRaw: event.target.value }))} />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontWeight: 700, marginBottom: '0.5rem', color: 'var(--kline-text)' }}>Phone</label>
+                      <input className="kline-input" value={form.phoneNumber} onChange={(event) => setForm((current) => ({ ...current, phoneNumber: event.target.value }))} />
+                    </div>
                   </div>
                 </div>
 

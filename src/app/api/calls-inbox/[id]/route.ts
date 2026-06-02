@@ -226,6 +226,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       status?: string
       priority?: string
       callType?: string
+      callerNameRaw?: string
+      phoneNumber?: string
       summary?: string
       transcriptRaw?: string
       internalNotes?: string
@@ -292,6 +294,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     const nextStatus = body.status ? (body.status as CallStatus) : existing.status
     const nextPriority = body.priority ? (body.priority as CallPriority) : existing.priority
     const nextCallType = body.callType ? (body.callType as CallType) : existing.callType
+    const nextCallerNameRaw = (body.callerNameRaw ?? existing.callerNameRaw ?? '').trim() || null
+    const nextPhoneNumber = (body.phoneNumber ?? existing.phoneNumber ?? '').trim() || null
     const nextSummary = (body.summary ?? existing.summary).trim()
     const nextTranscriptRaw = (body.transcriptRaw ?? existing.transcriptRaw ?? '').trim() || null
     const nextInternalNotes = (body.internalNotes ?? existing.internalNotes ?? '').trim() || null
@@ -372,6 +376,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
           status: nextStatus,
           priority: nextPriority,
           callType: nextCallType,
+          callerNameRaw: nextCallerNameRaw,
+          phoneNumber: nextPhoneNumber,
           summary: nextSummary,
           transcriptRaw: nextTranscriptRaw,
           internalNotes: nextInternalNotes,
@@ -433,6 +439,15 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
           callRecordId: id,
           actionType: 'NOTE_ADDED',
           note: `Priority updated from ${existing.priority} to ${nextPriority}.`,
+          createdByUserId: sessionUser.id,
+        })
+      }
+
+      if ((existing.callerNameRaw || null) !== nextCallerNameRaw || (existing.phoneNumber || null) !== nextPhoneNumber) {
+        activityCreates.push({
+          callRecordId: id,
+          actionType: 'NOTE_ADDED',
+          note: 'Caller name or phone number updated.',
           createdByUserId: sessionUser.id,
         })
       }
@@ -510,6 +525,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       priority: updatedRecord.priority,
       callType: updatedRecord.callType,
       summary: updatedRecord.summary,
+      callerNameRaw: updatedRecord.callerNameRaw,
+      phoneNumber: updatedRecord.phoneNumber,
       transcriptRaw: updatedRecord.transcriptRaw,
       internalNotes: updatedRecord.internalNotes,
       assignedToUserId: updatedRecord.assignedToUserId,
