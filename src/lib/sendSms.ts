@@ -25,7 +25,7 @@ export function buildTaskSMS(
   const noteText = cleanedNotes ? `\n\nNote: ${cleanedNotes.slice(0, 240)}` : ''
 
   return `
-Hi,
+Hello,
 
 ${body}${noteText}
 
