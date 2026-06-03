@@ -10,7 +10,7 @@ const client = twilio(accountSid, authToken)
 
 // ✅ Clean "human-proof" SMS template (no address, no status)
 export function buildTaskSMS(
-  customerName: string,
+  _customerName: string,
   serviceName: string,
   serviceDescription: string | null,
   clientMessage: string | null = null,
@@ -25,7 +25,7 @@ export function buildTaskSMS(
   const noteText = cleanedNotes ? `\n\nNote: ${cleanedNotes.slice(0, 240)}` : ''
 
   return `
-Hi ${customerName},
+Hi,
 
 ${body}${noteText}
 

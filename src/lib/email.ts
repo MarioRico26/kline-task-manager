@@ -93,7 +93,6 @@ export async function sendTaskUpdateEmail(emailData: EmailData) {
         const {
             to,
             subject,
-            customerName,
             service,
             property,
             notes,
@@ -203,7 +202,7 @@ export async function sendTaskUpdateEmail(emailData: EmailData) {
             
             <!-- Content -->
             <div class="content">
-              <p>Hello <strong>${customerName}</strong>,</p>
+              <p>Hello,</p>
               
               <p>We wanted to provide you with an update on your service request:</p>
               
@@ -274,7 +273,7 @@ export async function sendTaskUpdateEmail(emailData: EmailData) {
             text: `
 Service Update: ${service.name}
 
-Hello ${customerName},
+Hello,
 
 We wanted to update you on your service request:
 
