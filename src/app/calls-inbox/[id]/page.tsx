@@ -209,8 +209,7 @@ export default function CallRecordDetailPage() {
         throw new Error(data.error || 'Unable to save changes')
       }
 
-      setSuccess('Call record updated. Status/owner history was captured in the activity log.')
-      await loadRecordDetail(record.id)
+      router.push('/calls-inbox')
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : 'Unable to save changes')
     } finally {

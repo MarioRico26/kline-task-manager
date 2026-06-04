@@ -89,6 +89,7 @@ export default function CallsInboxPage() {
     mineOnly: false,
     overdueOnly: false,
     dueTodayOnly: false,
+    sortBy: 'RECEIVED_AT_DESC',
   })
 
   useEffect(() => {
@@ -267,10 +268,10 @@ export default function CallsInboxPage() {
     [records]
   )
 
-  const filteredRecords = useMemo(() => {
+  const visibleRecords = useMemo(() => {
     const query = filters.query.trim().toLowerCase()
 
-    return records.filter((record) => {
+    const filtered = records.filter((record) => {
       if (filters.status === 'OPEN' && !OPEN_RECORD_STATUSES.includes(record.status as (typeof OPEN_RECORD_STATUSES)[number])) return false
       if (filters.status !== 'ALL' && filters.status !== 'OPEN' && record.status !== filters.status) return false
       if (filters.assignedTo !== 'ALL' && (record.assignedToUserId || '') !== filters.assignedTo) return false
@@ -302,6 +303,20 @@ export default function CallsInboxPage() {
         .toLowerCase()
 
       return haystack.includes(query)
+    })
+
+    return [...filtered].sort((a, b) => {
+      switch (filters.sortBy) {
+        case 'RECEIVED_AT_ASC':
+          return new Date(a.receivedAt).getTime() - new Date(b.receivedAt).getTime()
+        case 'ASSIGNED_TO_ASC':
+          return (a.assignedToUser?.email || 'zzzz').localeCompare(b.assignedToUser?.email || 'zzzz')
+        case 'ASSIGNED_TO_DESC':
+          return (b.assignedToUser?.email || '').localeCompare(a.assignedToUser?.email || '')
+        case 'RECEIVED_AT_DESC':
+        default:
+          return new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime()
+      }
     })
   }, [currentUserId, filters, records])
 
@@ -416,7 +431,7 @@ export default function CallsInboxPage() {
             <div>
               <h3 style={{ margin: 0, color: 'var(--kline-text)' }}>Current records</h3>
               <p style={{ margin: '0.4rem 0 0', color: 'var(--kline-text-light)' }}>
-                {loadingRecords ? 'Loading records…' : `${filteredRecords.length} of ${records.length} call records shown.`}
+                {loadingRecords ? 'Loading records…' : `${visibleRecords.length} of ${records.length} call records shown.`}
               </p>
             </div>
             <button className="ghost-btn" onClick={() => window.location.reload()}>
@@ -523,6 +538,16 @@ export default function CallsInboxPage() {
               </select>
             </div>
 
+            <div>
+              <label style={{ display: 'block', fontWeight: 700, marginBottom: '0.45rem', color: 'var(--kline-text)' }}>Sort By</label>
+              <select className="kline-input" value={filters.sortBy} onChange={(event) => setFilters((current) => ({ ...current, sortBy: event.target.value }))}>
+                <option value="RECEIVED_AT_DESC">Newest first</option>
+                <option value="RECEIVED_AT_ASC">Oldest first</option>
+                <option value="ASSIGNED_TO_ASC">Assigned to (A-Z)</option>
+                <option value="ASSIGNED_TO_DESC">Assigned to (Z-A)</option>
+              </select>
+            </div>
+
             <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-end', flexWrap: 'wrap' }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', color: 'var(--kline-text)' }}>
                 <input
@@ -575,6 +600,7 @@ export default function CallsInboxPage() {
                     mineOnly: false,
                     overdueOnly: false,
                     dueTodayOnly: false,
+                    sortBy: 'RECEIVED_AT_DESC',
                   })
                 }
               >
@@ -585,7 +611,7 @@ export default function CallsInboxPage() {
 
           {loadingRecords ? (
             <div style={{ padding: '2rem 0', color: 'var(--kline-text-light)' }}>Loading call records…</div>
-          ) : filteredRecords.length === 0 ? (
+          ) : visibleRecords.length === 0 ? (
             <div style={{ padding: '2rem 0', color: 'var(--kline-text-light)' }}>
               {records.length === 0
                 ? 'No call records yet. The next safe test is to create an answered call or voicemail manually.'
@@ -607,7 +633,7 @@ export default function CallsInboxPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredRecords.map((record) => (
+                  {visibleRecords.map((record) => (
                     <tr key={record.id} style={{ borderBottom: '1px solid rgba(15, 23, 42, 0.08)' }}>
                       <td style={{ padding: '0.9rem 0.75rem', whiteSpace: 'nowrap', color: 'var(--kline-text)' }}>{formatReceivedAt(record.receivedAt)}</td>
                       <td style={{ padding: '0.9rem 0.75rem' }}>
