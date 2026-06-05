@@ -266,6 +266,8 @@ export default function NewTaskPage() {
   const [attachmentError, setAttachmentError] = useState<string | null>(null)
   const [uploadProgress, setUploadProgress] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [submitSuccess, setSubmitSuccess] = useState<string | null>(null)
+  const [fileInputKey, setFileInputKey] = useState(0)
 
   const [customerId, setCustomerId] = useState('')
   const [propertyId, setPropertyId] = useState('')
@@ -586,11 +588,35 @@ export default function NewTaskPage() {
     return uploadedUrls
   }
 
+  const resetCreateForm = () => {
+    setCustomerId('')
+    setPropertyId('')
+    setServiceId('')
+    setStatusId('')
+    setScheduledFor('')
+    setNotificationEmails('')
+    setNotificationPhones('')
+    setNotes('')
+    setFiles(null)
+    setCustomerSearch('')
+    setPropertySearch('')
+    setShowCustomerSuggestions(false)
+    setShowPropertySuggestions(false)
+    setAttachmentError(null)
+    setUploadProgress(null)
+    setFileInputKey((current) => current + 1)
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setSubmitError(null)
+    setSubmitSuccess(null)
     setAttachmentError(null)
     setUploadProgress(null)
+
+    const nativeEvent = e.nativeEvent as SubmitEvent
+    const submitter = nativeEvent.submitter as HTMLButtonElement | null
+    const submitMode = submitter?.value === 'return' ? 'return' : 'new'
 
     if (!customerId || !propertyId || !serviceId || !scheduledFor) {
       setSubmitError('Customer, property, service, and schedule date are required')
@@ -640,7 +666,13 @@ export default function NewTaskPage() {
         throw new Error(errorMessage)
       }
 
-      router.push('/tasks')
+      if (submitMode === 'return') {
+        router.push('/tasks')
+        return
+      }
+
+      resetCreateForm()
+      setSubmitSuccess('Task created, notifications sent, and the form is ready for the next entry.')
     } catch (err: unknown) {
       console.error('❌ Task create error:', err)
       setSubmitError(err instanceof Error ? err.message : 'Failed to create task')
@@ -794,6 +826,19 @@ export default function NewTaskPage() {
 
         {!loading && !errorMsg && (
           <form onSubmit={handleSubmit} className="kline-card" style={{ padding: 32, marginTop: 26 }}>
+            {submitSuccess && (
+              <div style={{
+                background: 'rgba(25, 135, 84, 0.1)',
+                border: '1px solid #198754',
+                color: '#14532d',
+                padding: '14px 16px',
+                borderRadius: '8px',
+                marginBottom: '22px',
+                fontWeight: 700,
+              }}>
+                {submitSuccess}
+              </div>
+            )}
             {submitError && (
               <div style={{
                 background: 'rgba(227, 6, 19, 0.1)',
@@ -1257,6 +1302,7 @@ export default function NewTaskPage() {
                 <div>
                   <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '8px', fontWeight: 700 }}>Attachments</label>
                   <input
+                    key={fileInputKey}
                     type="file"
                     multiple
                     accept="image/*"
@@ -1298,6 +1344,7 @@ export default function NewTaskPage() {
             <div style={{ marginTop: 28, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
               <button
                 type="submit"
+                value="new"
                 disabled={submitting}
                 style={{
                   padding: '12px 18px',
@@ -1310,7 +1357,24 @@ export default function NewTaskPage() {
                   opacity: submitting ? 0.7 : 1,
                 }}
               >
-                {submitting ? uploadProgress || 'Creating…' : 'Create Task'}
+                {submitting ? uploadProgress || 'Creating…' : 'Save & New'}
+              </button>
+              <button
+                type="submit"
+                value="return"
+                disabled={submitting}
+                style={{
+                  padding: '12px 18px',
+                  background: '#fff',
+                  color: 'var(--kline-text)',
+                  fontWeight: 800,
+                  borderRadius: '10px',
+                  border: '2px solid var(--kline-red)',
+                  cursor: submitting ? 'not-allowed' : 'pointer',
+                  opacity: submitting ? 0.7 : 1,
+                }}
+              >
+                {submitting ? uploadProgress || 'Creating…' : 'Save & Return'}
               </button>
               <button
                 type="button"
