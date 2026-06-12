@@ -109,6 +109,7 @@ export async function GET() {
     ])
 
     let callsInboxOpenCount = 0
+    let callsInboxTrackedCount = 0
     let callsInboxUnassignedCount = 0
     let callsInboxOverdueCount = 0
     let callsInboxNewTodayCount = 0
@@ -120,7 +121,8 @@ export async function GET() {
     try {
       const now = new Date()
       const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-      const [openCount, unassignedCount, overdueCount, newTodayCount, callbackPendingCount, resolvedTodayCount, voicemailReviewCount, voicemailReadyCount] = await Promise.all([
+      const [trackedCount, openCount, unassignedCount, overdueCount, newTodayCount, callbackPendingCount, resolvedTodayCount, voicemailReviewCount, voicemailReadyCount] = await Promise.all([
+        prisma.callRecord.count(),
         prisma.callRecord.count({
           where: {
             status: {
@@ -192,6 +194,7 @@ export async function GET() {
         }),
       ])
 
+      callsInboxTrackedCount = trackedCount
       callsInboxOpenCount = openCount
       callsInboxUnassignedCount = unassignedCount
       callsInboxOverdueCount = overdueCount
@@ -377,6 +380,7 @@ export async function GET() {
       completedTasks,
       pendingTasks,
       overdueTasks,
+      callsInboxTrackedCount,
       callsInboxOpenCount,
       callsInboxUnassignedCount,
       callsInboxOverdueCount,

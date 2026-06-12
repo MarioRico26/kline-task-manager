@@ -13,6 +13,7 @@ interface DashboardStats {
   completedTasks: number
   pendingTasks: number
   overdueTasks: number
+  callsInboxTrackedCount: number
   callsInboxOpenCount: number
   callsInboxUnassignedCount: number
   callsInboxOverdueCount: number
@@ -346,6 +347,12 @@ export default function DashboardPage() {
                   </button>
                 </div>
                 <div className="kpi-grid" style={{ marginTop: '1rem' }}>
+                  <KpiCard
+                    label="Tracked Calls"
+                    value={stats.callsInboxTrackedCount}
+                    detail="Calls and voicemails logged through the system"
+                    accent="#1f2937"
+                  />
                   <KpiCard
                     label="Open Queue"
                     value={stats.callsInboxOpenCount}
