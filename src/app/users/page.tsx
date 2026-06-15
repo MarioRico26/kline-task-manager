@@ -16,6 +16,11 @@ interface User {
   createdAt: string
 }
 
+type PermissionBadgeTone = {
+  background: string
+  color: string
+}
+
 type UserAccessState = {
   email: string
   role: 'ADMIN' | 'VIEWER'
@@ -55,6 +60,70 @@ function buildUserAccessState<T extends UserAccessState>(
   return next as T
 }
 
+function getTaskScopeTone(accessScope: User['accessScope']): PermissionBadgeTone {
+  if (accessScope === 'NONE') {
+    return { background: 'rgba(13, 110, 253, 0.12)', color: '#0d6efd' }
+  }
+
+  if (accessScope === 'PERMITS_ONLY') {
+    return { background: 'rgba(32, 201, 151, 0.16)', color: '#198754' }
+  }
+
+  return { background: 'rgba(108, 117, 125, 0.12)', color: '#495057' }
+}
+
+function getTaskScopeLabel(accessScope: User['accessScope']) {
+  if (accessScope === 'NONE') return 'Tasks: None'
+  if (accessScope === 'PERMITS_ONLY') return 'Tasks: Permits Only'
+  return 'Tasks: All'
+}
+
+function getPermissionBadges(user: User) {
+  const badges: Array<{ label: string; tone: PermissionBadgeTone }> = [
+    {
+      label: getTaskScopeLabel(user.accessScope),
+      tone: getTaskScopeTone(user.accessScope),
+    },
+  ]
+
+  if (user.canAccessPlanner) {
+    badges.push({
+      label: 'Planner',
+      tone: { background: 'rgba(13, 110, 253, 0.14)', color: '#0d6efd' },
+    })
+  }
+
+  if (user.canAccessSeasonalPrograms) {
+    badges.push({
+      label: 'Seasonal Programs',
+      tone: { background: 'rgba(20, 83, 45, 0.14)', color: '#14532d' },
+    })
+  }
+
+  if (user.canAccessCallsInbox) {
+    badges.push({
+      label: 'Calls Inbox',
+      tone: { background: 'rgba(124, 58, 237, 0.14)', color: '#7c3aed' },
+    })
+  }
+
+  if (user.canAccessVoicemailImports) {
+    badges.push({
+      label: 'Voicemail Imports',
+      tone: { background: 'rgba(13, 110, 253, 0.14)', color: '#0d6efd' },
+    })
+  }
+
+  if (user.isDefaultCallsInboxOwner) {
+    badges.push({
+      label: 'Default Intake Owner',
+      tone: { background: 'rgba(25, 135, 84, 0.14)', color: '#198754' },
+    })
+  }
+
+  return badges
+}
+
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
@@ -62,6 +131,7 @@ export default function UsersPage() {
   const [roleFilter, setRoleFilter] = useState('ALL')
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [editingUser, setEditingUser] = useState<User | null>(null)
+  const [resettingUser, setResettingUser] = useState<User | null>(null)
   const [deletingUser, setDeletingUser] = useState<User | null>(null)
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null) // 🔐 NUEVO
   const router = useRouter()
@@ -357,7 +427,7 @@ if (isAuthenticated === true && loading) {
             <>
               <div style={{ 
                 display: 'grid', 
-                gridTemplateColumns: '1fr auto auto auto auto auto auto auto auto', 
+                gridTemplateColumns: 'minmax(280px, 1.25fr) auto minmax(360px, 1.5fr) minmax(180px, auto) auto', 
                 padding: '1.2rem 1.5rem',
                 background: 'var(--kline-gray-light)',
                 borderBottom: '2px solid var(--kline-gray)',
@@ -365,14 +435,10 @@ if (isAuthenticated === true && loading) {
                 color: 'var(--kline-text)',
                 fontSize: '0.9rem'
               }}>
-                <div>Email</div>
+                <div>User</div>
                 <div>Role</div>
-                <div>Scope</div>
-                <div>Planner</div>
-                <div>Seasonal</div>
-                <div>Calls</div>
-                <div>Voicemail Imports</div>
-                <div>Calls Intake Owner</div>
+                <div>Permissions</div>
+                <div>Calls Routing</div>
                 <div>Actions</div>
               </div>
 
@@ -381,14 +447,20 @@ if (isAuthenticated === true && loading) {
                   key={user.id}
                   style={{ 
                     display: 'grid', 
-                    gridTemplateColumns: '1fr auto auto auto auto auto auto auto auto', 
+                    gridTemplateColumns: 'minmax(280px, 1.25fr) auto minmax(360px, 1.5fr) minmax(180px, auto) auto', 
                     padding: '1.2rem 1.5rem',
                     borderBottom: '1px solid var(--kline-gray)',
                     alignItems: 'center',
-                    fontSize: '0.9rem'
+                    fontSize: '0.9rem',
+                    gap: '1rem'
                   }}
                 >
-                  <div style={{ fontWeight: '500' }}>{user.email}</div>
+                  <div>
+                    <div style={{ fontWeight: '600', color: 'var(--kline-text)' }}>{user.email}</div>
+                    <div style={{ color: 'var(--kline-text-light)', fontSize: '0.78rem', marginTop: '0.3rem' }}>
+                      Created {new Date(user.createdAt).toLocaleDateString()}
+                    </div>
+                  </div>
                   <div>
                     <span 
                       style={{ 
@@ -404,84 +476,24 @@ if (isAuthenticated === true && loading) {
                     </span>
                   </div>
                   <div>
-                    <span
-                      style={{
-                        padding: '0.4rem 1rem',
-                        borderRadius: '20px',
-                        fontSize: '0.78rem',
-                        fontWeight: '700',
-                        background:
-                          user.accessScope === 'NONE'
-                            ? 'rgba(13, 110, 253, 0.12)'
-                            : user.accessScope === 'PERMITS_ONLY'
-                              ? 'rgba(32, 201, 151, 0.16)'
-                              : 'rgba(108, 117, 125, 0.12)',
-                        color:
-                          user.accessScope === 'NONE'
-                            ? '#0d6efd'
-                            : user.accessScope === 'PERMITS_ONLY'
-                              ? '#198754'
-                              : '#495057',
-                      }}
-                    >
-                      {user.accessScope === 'NONE' ? 'No Task Access' : user.accessScope === 'PERMITS_ONLY' ? 'Permits Only' : 'All'}
-                    </span>
-                  </div>
-                  <div>
-                    <span
-                      style={{
-                        padding: '0.4rem 1rem',
-                        borderRadius: '20px',
-                        fontSize: '0.78rem',
-                        fontWeight: '700',
-                        background: user.canAccessPlanner ? 'rgba(13, 110, 253, 0.14)' : 'rgba(108, 117, 125, 0.12)',
-                        color: user.canAccessPlanner ? '#0d6efd' : '#495057',
-                      }}
-                    >
-                      {user.canAccessPlanner ? 'Enabled' : 'Off'}
-                    </span>
-                  </div>
-                  <div>
-                    <span
-                      style={{
-                        padding: '0.4rem 1rem',
-                        borderRadius: '20px',
-                        fontSize: '0.78rem',
-                        fontWeight: '700',
-                        background: user.canAccessSeasonalPrograms ? 'rgba(20, 83, 45, 0.14)' : 'rgba(108, 117, 125, 0.12)',
-                        color: user.canAccessSeasonalPrograms ? '#14532d' : '#495057',
-                      }}
-                    >
-                      {user.canAccessSeasonalPrograms ? 'Enabled' : 'Off'}
-                    </span>
-                  </div>
-                  <div>
-                    <span
-                      style={{
-                        padding: '0.4rem 1rem',
-                        borderRadius: '20px',
-                        fontSize: '0.78rem',
-                        fontWeight: '700',
-                        background: user.canAccessCallsInbox ? 'rgba(124, 58, 237, 0.14)' : 'rgba(108, 117, 125, 0.12)',
-                        color: user.canAccessCallsInbox ? '#7c3aed' : '#495057',
-                      }}
-                    >
-                      {user.canAccessCallsInbox ? 'Enabled' : 'Off'}
-                    </span>
-                  </div>
-                  <div>
-                    <span
-                      style={{
-                        padding: '0.4rem 1rem',
-                        borderRadius: '20px',
-                        fontSize: '0.78rem',
-                        fontWeight: '700',
-                        background: user.canAccessVoicemailImports ? 'rgba(13, 110, 253, 0.14)' : 'rgba(108, 117, 125, 0.12)',
-                        color: user.canAccessVoicemailImports ? '#0d6efd' : '#495057',
-                      }}
-                    >
-                      {user.canAccessVoicemailImports ? 'Enabled' : 'Off'}
-                    </span>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.45rem' }}>
+                      {getPermissionBadges(user).map((badge) => (
+                        <span
+                          key={`${user.id}-${badge.label}`}
+                          style={{
+                            padding: '0.4rem 0.85rem',
+                            borderRadius: '999px',
+                            fontSize: '0.76rem',
+                            fontWeight: '700',
+                            letterSpacing: '0.01em',
+                            background: badge.tone.background,
+                            color: badge.tone.color,
+                          }}
+                        >
+                          {badge.label}
+                        </span>
+                      ))}
+                    </div>
                   </div>
                   <div>
                     <span
@@ -494,10 +506,25 @@ if (isAuthenticated === true && loading) {
                         color: user.isDefaultCallsInboxOwner ? '#198754' : '#495057',
                       }}
                     >
-                      {user.isDefaultCallsInboxOwner ? 'Default' : '—'}
+                      {user.isDefaultCallsInboxOwner ? 'Default Intake Owner' : 'Standard Routing'}
                     </span>
                   </div>
-                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                    <button
+                      style={{
+                        background: '#0d6efd',
+                        border: 'none',
+                        color: 'white',
+                        padding: '0.5rem 1rem',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontWeight: '600',
+                        fontSize: '0.8rem',
+                      }}
+                      onClick={() => setResettingUser(user)}
+                    >
+                      Reset Password
+                    </button>
                     <button 
                       style={{ 
                         background: 'var(--kline-yellow)',
@@ -621,6 +648,14 @@ if (isAuthenticated === true && loading) {
           user={editingUser}
           onClose={() => setEditingUser(null)}
           onUserUpdated={fetchUsers}
+        />
+      )}
+
+      {/* Reset Password Modal */}
+      {resettingUser && (
+        <ResetPasswordModal
+          user={resettingUser}
+          onClose={() => setResettingUser(null)}
         />
       )}
 
@@ -1163,6 +1198,190 @@ function EditUserModal({ user, onClose, onUserUpdated }: { user: User | null, on
               style={{ padding: '0.8rem 1.5rem', fontSize: '0.9rem' }}
             >
               {loading ? 'Updating...' : 'Update User'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+function ResetPasswordModal({ user, onClose }: { user: User | null, onClose: () => void }) {
+  const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+
+  if (!user) return null
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters long.')
+      return
+    }
+
+    if (password !== confirmPassword) {
+      setError('Password confirmation does not match.')
+      return
+    }
+
+    setLoading(true)
+    setError('')
+    setSuccess('')
+
+    try {
+      const response = await fetch(`/api/users/${user.id}/reset-password`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        setError(data.error || 'Error resetting password')
+        return
+      }
+
+      setSuccess(`Password updated for ${user.email}.`)
+      setPassword('')
+      setConfirmPassword('')
+
+      window.setTimeout(() => {
+        onClose()
+      }, 900)
+    } catch {
+      setError('Network error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      background: 'rgba(0, 0, 0, 0.5)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 1000
+    }}>
+      <div className="kline-card" style={{
+        width: '90%',
+        maxWidth: '520px',
+        padding: '2rem',
+        position: 'relative'
+      }}>
+        <button
+          onClick={onClose}
+          style={{
+            position: 'absolute',
+            top: '1rem',
+            right: '1rem',
+            background: 'none',
+            border: 'none',
+            fontSize: '1.5rem',
+            cursor: 'pointer',
+            color: 'var(--kline-text-light)'
+          }}
+        >
+          ×
+        </button>
+
+        <h2 style={{ fontSize: '1.5rem', fontWeight: '700', marginBottom: '0.75rem', color: 'var(--kline-text)' }}>
+          Reset Password
+        </h2>
+        <p style={{ marginBottom: '1.5rem', color: 'var(--kline-text-light)', lineHeight: 1.5 }}>
+          Set a new password for <strong style={{ color: 'var(--kline-text)' }}>{user.email}</strong>. This is an admin-only action.
+        </p>
+
+        {error && (
+          <div style={{
+            background: 'rgba(227, 6, 19, 0.1)',
+            border: '1px solid var(--kline-red)',
+            color: 'var(--kline-red)',
+            padding: '1rem',
+            borderRadius: '8px',
+            marginBottom: '1rem'
+          }}>
+            {error}
+          </div>
+        )}
+
+        {success && (
+          <div style={{
+            background: 'rgba(25, 135, 84, 0.12)',
+            border: '1px solid #198754',
+            color: '#198754',
+            padding: '1rem',
+            borderRadius: '8px',
+            marginBottom: '1rem'
+          }}>
+            {success}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <div>
+            <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '0.5rem', fontWeight: '600' }}>
+              New Password
+            </label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="kline-input"
+              placeholder="Enter new password"
+              required
+              minLength={6}
+            />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '0.5rem', fontWeight: '600' }}>
+              Confirm Password
+            </label>
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              className="kline-input"
+              placeholder="Confirm new password"
+              required
+              minLength={6}
+            />
+          </div>
+
+          <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end', marginTop: '1rem' }}>
+            <button
+              type="button"
+              onClick={onClose}
+              style={{
+                background: 'transparent',
+                border: '2px solid var(--kline-text-light)',
+                color: 'var(--kline-text-light)',
+                padding: '0.8rem 1.5rem',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontWeight: '600',
+                fontSize: '0.9rem'
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="kline-btn-primary"
+              style={{ padding: '0.8rem 1.5rem', fontSize: '0.9rem' }}
+            >
+              {loading ? 'Resetting...' : 'Reset Password'}
             </button>
           </div>
         </form>
