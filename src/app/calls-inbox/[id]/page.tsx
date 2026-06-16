@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
+import { buildCallSmsMessage, callSmsTemplates } from '@/lib/callSmsTemplates'
 import {
   callbackOutcomeOptions,
   callPriorityOptions,
@@ -54,6 +55,7 @@ export default function CallRecordDetailPage() {
   const [record, setRecord] = useState<CallsInboxDetailRecord | null>(null)
   const [users, setUsers] = useState<AssignmentUser[]>([])
   const [moduleReady, setModuleReady] = useState(true)
+  const [canSendCallSms, setCanSendCallSms] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
@@ -77,6 +79,12 @@ export default function CallRecordDetailPage() {
     notes: '',
     nextFollowUpAt: '',
   })
+  const [smsForm, setSmsForm] = useState({
+    phoneNumber: '',
+    template: 'RECEIVED_MESSAGE',
+    additionalNote: '',
+  })
+  const [sendingSms, setSendingSms] = useState(false)
 
   async function loadRecordDetail(recordId: string) {
     const refreshRes = await fetch(`/api/calls-inbox/${recordId}`, { cache: 'no-store' })
@@ -119,13 +127,14 @@ export default function CallRecordDetailPage() {
         }
 
         const authData = (await authRes.json()) as {
-          user?: { canAccessCallsInbox?: boolean; accessScope?: 'ALL' | 'PERMITS_ONLY' }
+          user?: { canAccessCallsInbox?: boolean; accessScope?: 'ALL' | 'PERMITS_ONLY'; canSendCallSms?: boolean }
         }
 
         if (cancelled) return
 
         const canAccess = authData.user?.canAccessCallsInbox === true && authData.user?.accessScope !== 'PERMITS_ONLY'
         setAuthorized(canAccess)
+        setCanSendCallSms(authData.user?.canSendCallSms === true)
 
         if (!canAccess) {
           router.replace(authData.user?.accessScope === 'PERMITS_ONLY' ? '/tasks' : '/dashboard')
@@ -153,18 +162,23 @@ export default function CallRecordDetailPage() {
         setUsers(usersData.filter((user) => user.canAccessCallsInbox === true))
 
         if (payload.record) {
+          const loadedRecord = payload.record
           setForm({
-            status: payload.record.status,
-            priority: payload.record.priority,
-            callType: payload.record.callType,
-            assignedToUserId: payload.record.assignedToUserId || '',
-            callerNameRaw: payload.record.callerNameRaw || '',
-            phoneNumber: payload.record.phoneNumber || '',
-            summary: payload.record.summary || '',
-            transcriptRaw: payload.record.transcriptRaw || '',
-            internalNotes: payload.record.internalNotes || '',
-            requestedAction: payload.record.requestedAction || '',
+            status: loadedRecord.status,
+            priority: loadedRecord.priority,
+            callType: loadedRecord.callType,
+            assignedToUserId: loadedRecord.assignedToUserId || '',
+            callerNameRaw: loadedRecord.callerNameRaw || '',
+            phoneNumber: loadedRecord.phoneNumber || '',
+            summary: loadedRecord.summary || '',
+            transcriptRaw: loadedRecord.transcriptRaw || '',
+            internalNotes: loadedRecord.internalNotes || '',
+            requestedAction: loadedRecord.requestedAction || '',
           })
+          setSmsForm((current) => ({
+            ...current,
+            phoneNumber: loadedRecord.phoneNumber || '',
+          }))
         }
       } catch (bootstrapError) {
         if (!cancelled) {
@@ -188,6 +202,21 @@ export default function CallRecordDetailPage() {
     if (!record) return null
     return record.latestNextFollowUpAt || record.callbackAttempts.find((attempt) => attempt.nextFollowUpAt)?.nextFollowUpAt || null
   }, [record])
+
+  const smsPreview = useMemo(
+    () => buildCallSmsMessage(smsForm.template, smsForm.additionalNote),
+    [smsForm.additionalNote, smsForm.template]
+  )
+  const smsActivities = useMemo(
+    () =>
+      record?.activities.filter(
+        (activity) =>
+          activity.actionType === 'NOTE_ADDED' &&
+          typeof activity.note === 'string' &&
+          activity.note.startsWith('SMS sent to ')
+      ) || [],
+    [record]
+  )
 
   async function handleSave(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -248,6 +277,39 @@ export default function CallRecordDetailPage() {
       setError(attemptError instanceof Error ? attemptError.message : 'Unable to log callback attempt')
     } finally {
       setLoggingAttempt(false)
+    }
+  }
+
+  async function handleSendSms(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!record) return
+
+    setSendingSms(true)
+    setError('')
+    setSuccess('')
+
+    try {
+      const res = await fetch(`/api/calls-inbox/${record.id}/send-sms`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(smsForm),
+      })
+
+      const data = (await res.json()) as { error?: string; phoneNumber?: string }
+      if (!res.ok) {
+        throw new Error(data.error || 'Unable to send SMS')
+      }
+
+      setSuccess(`SMS sent to ${data.phoneNumber || smsForm.phoneNumber}.`)
+      setSmsForm((current) => ({
+        ...current,
+        additionalNote: '',
+      }))
+      await loadRecordDetail(record.id)
+    } catch (smsError) {
+      setError(smsError instanceof Error ? smsError.message : 'Unable to send SMS')
+    } finally {
+      setSendingSms(false)
     }
   }
 
@@ -367,7 +429,7 @@ export default function CallRecordDetailPage() {
                 <div style={{ marginBottom: '1rem' }}>
                   <h3 style={{ margin: 0, color: 'var(--kline-text)' }}>Operational controls</h3>
                   <p style={{ margin: '0.35rem 0 0', color: 'var(--kline-text-light)' }}>
-                    Adjust ownership, status, and business context before office starts working the callback.
+                    Adjust ownership, status, and caller details before office starts working the callback.
                   </p>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
@@ -421,9 +483,17 @@ export default function CallRecordDetailPage() {
                       <label style={{ display: 'block', fontWeight: 700, marginBottom: '0.5rem', color: 'var(--kline-text)' }}>Caller Name</label>
                       <input className="kline-input" value={form.callerNameRaw} onChange={(event) => setForm((current) => ({ ...current, callerNameRaw: event.target.value }))} />
                     </div>
-                    <div>
-                      <label style={{ display: 'block', fontWeight: 700, marginBottom: '0.5rem', color: 'var(--kline-text)' }}>Phone</label>
-                      <input className="kline-input" value={form.phoneNumber} onChange={(event) => setForm((current) => ({ ...current, phoneNumber: event.target.value }))} />
+                  <div>
+                    <label style={{ display: 'block', fontWeight: 700, marginBottom: '0.5rem', color: 'var(--kline-text)' }}>Phone</label>
+                      <input
+                        className="kline-input"
+                        value={form.phoneNumber}
+                        onChange={(event) => {
+                          const value = event.target.value
+                          setForm((current) => ({ ...current, phoneNumber: value }))
+                          setSmsForm((current) => ({ ...current, phoneNumber: value }))
+                        }}
+                      />
                     </div>
                   </div>
                 </div>
@@ -466,6 +536,80 @@ export default function CallRecordDetailPage() {
               </form>
 
               <div style={{ display: 'grid', gap: '1rem' }}>
+                <section className="kline-card" style={{ padding: '1.4rem', borderTop: '4px solid #198754' }}>
+                  <h3 style={{ marginTop: 0, color: 'var(--kline-text)' }}>Send SMS reply</h3>
+                  {!canSendCallSms ? (
+                    <p style={{ color: 'var(--kline-text-light)', margin: 0 }}>
+                      This user does not have permission to send customer text replies from call records.
+                    </p>
+                  ) : (
+                    <form onSubmit={handleSendSms}>
+                      <div>
+                        <label style={{ display: 'block', fontWeight: 700, marginBottom: '0.5rem', color: 'var(--kline-text)' }}>To</label>
+                        <input
+                          className="kline-input"
+                          value={smsForm.phoneNumber}
+                          onChange={(event) => setSmsForm((current) => ({ ...current, phoneNumber: event.target.value }))}
+                          placeholder="Customer phone number"
+                        />
+                      </div>
+                      <div style={{ marginTop: '0.9rem' }}>
+                        <label style={{ display: 'block', fontWeight: 700, marginBottom: '0.5rem', color: 'var(--kline-text)' }}>Quick Template</label>
+                        <select
+                          className="kline-input"
+                          value={smsForm.template}
+                          onChange={(event) => setSmsForm((current) => ({ ...current, template: event.target.value }))}
+                        >
+                          <option value="">Manual message only</option>
+                          {callSmsTemplates.map((template) => (
+                            <option key={template.value} value={template.value}>
+                              {template.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div style={{ marginTop: '0.9rem' }}>
+                        <label style={{ display: 'block', fontWeight: 700, marginBottom: '0.5rem', color: 'var(--kline-text)' }}>Additional Note</label>
+                        <textarea
+                          className="kline-input"
+                          rows={3}
+                          value={smsForm.additionalNote}
+                          onChange={(event) => setSmsForm((current) => ({ ...current, additionalNote: event.target.value }))}
+                          placeholder="Add a short custom note for this customer."
+                        />
+                      </div>
+                      <div style={{ marginTop: '0.9rem' }}>
+                        <div style={{ display: 'block', fontWeight: 700, marginBottom: '0.5rem', color: 'var(--kline-text)' }}>Message Preview</div>
+                        <div
+                          style={{
+                            border: '1px solid var(--kline-gray)',
+                            borderRadius: 12,
+                            padding: '0.95rem',
+                            background: '#fff',
+                            color: smsPreview ? 'var(--kline-text)' : 'var(--kline-text-light)',
+                            lineHeight: 1.5,
+                            minHeight: 94,
+                            whiteSpace: 'pre-wrap',
+                          }}
+                        >
+                          {smsPreview || 'Choose a template or type a short manual message.'}
+                        </div>
+                        <div style={{ marginTop: 6, color: 'var(--kline-text-light)', fontSize: '0.8rem' }}>
+                          {smsPreview.length}/320 characters
+                        </div>
+                      </div>
+                      <button
+                        className="kline-btn-primary"
+                        type="submit"
+                        disabled={sendingSms || !smsPreview.trim()}
+                        style={{ marginTop: '1rem', width: '100%' }}
+                      >
+                        {sendingSms ? 'Sending…' : 'Send SMS'}
+                      </button>
+                    </form>
+                  )}
+                </section>
+
                 <section className="kline-card" style={{ padding: '1.4rem', borderTop: '4px solid #fd7e14' }}>
                   <h3 style={{ marginTop: 0, color: 'var(--kline-text)' }}>Log callback attempt</h3>
                   <form onSubmit={handleCallbackAttemptSubmit}>
@@ -506,6 +650,72 @@ export default function CallRecordDetailPage() {
                       {loggingAttempt ? 'Logging…' : 'Log Callback Attempt'}
                     </button>
                   </form>
+                </section>
+
+                <section className="kline-card" style={{ padding: '1.4rem', borderTop: '4px solid #0d6efd' }}>
+                  <h3 style={{ marginTop: 0, color: 'var(--kline-text)' }}>SMS history</h3>
+                  {smsActivities.length === 0 ? (
+                    <p style={{ color: 'var(--kline-text-light)', margin: 0 }}>
+                      No outbound customer texts have been sent from this call record yet.
+                    </p>
+                  ) : (
+                    <div style={{ display: 'grid', gap: '0.8rem' }}>
+                      {smsActivities.map((activity) => (
+                        <div
+                          key={activity.id}
+                          style={{
+                            border: '1px solid rgba(13, 110, 253, 0.18)',
+                            borderRadius: 14,
+                            padding: '0.95rem 1rem',
+                            background: 'linear-gradient(135deg, rgba(13, 110, 253, 0.06), rgba(32, 201, 151, 0.04))',
+                            boxShadow: '0 10px 24px rgba(13, 110, 253, 0.08)',
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                            <div style={{ fontWeight: 800, color: 'var(--kline-text)' }}>
+                              {activity.fromValue || 'Manual message'}
+                            </div>
+                            <span
+                              style={{
+                                padding: '0.32rem 0.7rem',
+                                borderRadius: '999px',
+                                fontSize: '0.72rem',
+                                fontWeight: 800,
+                                letterSpacing: '0.04em',
+                                textTransform: 'uppercase',
+                                background: 'rgba(13, 110, 253, 0.12)',
+                                color: '#0d6efd',
+                              }}
+                            >
+                              SMS Sent
+                            </span>
+                          </div>
+                          <div style={{ color: 'var(--kline-text-light)', marginTop: 4, fontSize: '0.84rem' }}>
+                            Customer text update
+                          </div>
+                          <div style={{ color: 'var(--kline-text-light)', marginTop: 8 }}>
+                            {formatDateTime(activity.createdAt)} · {activity.createdByUser?.email || 'System'}
+                          </div>
+                          {activity.note && (
+                            <div
+                              style={{
+                                color: 'var(--kline-text)',
+                                marginTop: 10,
+                                whiteSpace: 'pre-wrap',
+                                lineHeight: 1.55,
+                                background: 'rgba(255,255,255,0.8)',
+                                borderRadius: 10,
+                                padding: '0.8rem 0.85rem',
+                                border: '1px solid rgba(13, 110, 253, 0.1)',
+                              }}
+                            >
+                              {activity.note}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </section>
 
                 <section className="kline-card" style={{ padding: '1.4rem', borderTop: '4px solid #0d6efd' }}>

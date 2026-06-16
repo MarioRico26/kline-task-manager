@@ -12,6 +12,7 @@ interface User {
   canAccessSeasonalPrograms: boolean
   canAccessCallsInbox: boolean
   canAccessVoicemailImports: boolean
+  canSendCallSms: boolean
   isDefaultCallsInboxOwner: boolean
   createdAt: string
 }
@@ -29,6 +30,7 @@ type UserAccessState = {
   canAccessSeasonalPrograms: boolean
   canAccessCallsInbox: boolean
   canAccessVoicemailImports: boolean
+  canSendCallSms: boolean
   isDefaultCallsInboxOwner: boolean
 }
 
@@ -38,6 +40,7 @@ function buildUserAccessState<T extends UserAccessState>(
     canAccessSeasonalPrograms: boolean
     canAccessCallsInbox: boolean
     canAccessVoicemailImports: boolean
+    canSendCallSms: boolean
     isDefaultCallsInboxOwner: boolean
   }>,
   current: T
@@ -48,12 +51,17 @@ function buildUserAccessState<T extends UserAccessState>(
     next.canAccessCallsInbox = true
   }
 
+  if (next.canSendCallSms) {
+    next.canAccessCallsInbox = true
+  }
+
   if (next.isDefaultCallsInboxOwner) {
     next.canAccessCallsInbox = true
   }
 
   if (!next.canAccessCallsInbox) {
     next.canAccessVoicemailImports = false
+    next.canSendCallSms = false
     next.isDefaultCallsInboxOwner = false
   }
 
@@ -111,6 +119,13 @@ function getPermissionBadges(user: User) {
     badges.push({
       label: 'Voicemail Imports',
       tone: { background: 'rgba(13, 110, 253, 0.14)', color: '#0d6efd' },
+    })
+  }
+
+  if (user.canSendCallSms) {
+    badges.push({
+      label: 'Send Call SMS',
+      tone: { background: 'rgba(220, 53, 69, 0.12)', color: '#b02a37' },
     })
   }
 
@@ -682,6 +697,7 @@ function CreateUserModal({ isOpen, onClose, onUserCreated }: { isOpen: boolean, 
     canAccessSeasonalPrograms: false,
     canAccessCallsInbox: false,
     canAccessVoicemailImports: false,
+    canSendCallSms: false,
     isDefaultCallsInboxOwner: false,
   })
   const [loading, setLoading] = useState(false)
@@ -711,6 +727,7 @@ function CreateUserModal({ isOpen, onClose, onUserCreated }: { isOpen: boolean, 
           canAccessSeasonalPrograms: false,
           canAccessCallsInbox: false,
           canAccessVoicemailImports: false,
+          canSendCallSms: false,
           isDefaultCallsInboxOwner: false,
         })
       } else {
@@ -885,6 +902,21 @@ function CreateUserModal({ isOpen, onClose, onUserCreated }: { isOpen: boolean, 
           <label style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start', color: 'var(--kline-text)', fontWeight: '600' }}>
             <input
               type="checkbox"
+              checked={formData.canSendCallSms}
+              onChange={(e) => setFormData((current) => buildUserAccessState({ canSendCallSms: e.target.checked }, current))}
+              style={{ marginTop: 4 }}
+            />
+            <span>
+              Send Call SMS
+              <span style={{ display: 'block', color: 'var(--kline-text-light)', fontSize: '0.82rem', fontWeight: 500, marginTop: 3 }}>
+                Allows this user to send outbound text replies from a call record.
+              </span>
+            </span>
+          </label>
+
+          <label style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start', color: 'var(--kline-text)', fontWeight: '600' }}>
+            <input
+              type="checkbox"
               checked={formData.isDefaultCallsInboxOwner}
               onChange={(e) => setFormData((current) => buildUserAccessState({ isDefaultCallsInboxOwner: e.target.checked }, current))}
               style={{ marginTop: 4 }}
@@ -954,6 +986,7 @@ function EditUserModal({ user, onClose, onUserUpdated }: { user: User | null, on
     canAccessSeasonalPrograms: false,
     canAccessCallsInbox: false,
     canAccessVoicemailImports: false,
+    canSendCallSms: false,
     isDefaultCallsInboxOwner: false,
   })
   const [loading, setLoading] = useState(false)
@@ -969,6 +1002,7 @@ function EditUserModal({ user, onClose, onUserUpdated }: { user: User | null, on
         canAccessSeasonalPrograms: user.canAccessSeasonalPrograms || false,
         canAccessCallsInbox: user.canAccessCallsInbox || false,
         canAccessVoicemailImports: user.canAccessVoicemailImports || false,
+        canSendCallSms: user.canSendCallSms || false,
         isDefaultCallsInboxOwner: user.isDefaultCallsInboxOwner || false,
       })
     }
@@ -1140,6 +1174,21 @@ function EditUserModal({ user, onClose, onUserUpdated }: { user: User | null, on
               Voicemail Imports Access
               <span style={{ display: 'block', color: 'var(--kline-text-light)', fontSize: '0.82rem', fontWeight: 500, marginTop: 3 }}>
                 Allows this user to upload, review and promote voicemail batch imports.
+              </span>
+            </span>
+          </label>
+
+          <label style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start', color: 'var(--kline-text)', fontWeight: '600' }}>
+            <input
+              type="checkbox"
+              checked={formData.canSendCallSms}
+              onChange={(e) => setFormData((current) => buildUserAccessState({ canSendCallSms: e.target.checked }, current))}
+              style={{ marginTop: 4 }}
+            />
+            <span>
+              Send Call SMS
+              <span style={{ display: 'block', color: 'var(--kline-text-light)', fontSize: '0.82rem', fontWeight: 500, marginTop: 3 }}>
+                Allows this user to send outbound text replies from a call record.
               </span>
             </span>
           </label>

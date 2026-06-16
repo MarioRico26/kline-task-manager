@@ -4,6 +4,7 @@ import * as bcrypt from 'bcryptjs'
 import {
   getUserAccessScopeById,
   getUserCallsInboxAccessById,
+  getUserCallSmsAccessById,
   getUserPlannerAccessById,
   getUserSeasonalProgramsAccessById,
   getUserVoicemailImportsAccessById,
@@ -29,12 +30,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 })
     }
     
-    const [accessScope, plannerAccess, seasonalProgramsAccess, callsInboxAccess, voicemailImportsAccess] = await Promise.all([
+    const [accessScope, plannerAccess, seasonalProgramsAccess, callsInboxAccess, voicemailImportsAccess, callSmsAccess] = await Promise.all([
       getUserAccessScopeById(prisma, user.id),
       getUserPlannerAccessById(prisma, user.id),
       getUserSeasonalProgramsAccessById(prisma, user.id),
       getUserCallsInboxAccessById(prisma, user.id),
       getUserVoicemailImportsAccessById(prisma, user.id),
+      getUserCallSmsAccessById(prisma, user.id),
     ])
 
     const response = NextResponse.json({
@@ -48,6 +50,7 @@ export async function POST(request: Request) {
         canAccessSeasonalPrograms: seasonalProgramsAccess.canAccessSeasonalPrograms,
         canAccessCallsInbox: callsInboxAccess.canAccessCallsInbox,
         canAccessVoicemailImports: voicemailImportsAccess.canAccessVoicemailImports,
+        canSendCallSms: callSmsAccess.canSendCallSms,
       }
     })
     
@@ -93,6 +96,14 @@ export async function POST(request: Request) {
     })
 
     response.cookies.set('voicemail-imports-access', voicemailImportsAccess.canAccessVoicemailImports ? 'true' : 'false', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 60 * 60 * 24, // 24h
+    })
+
+    response.cookies.set('call-sms-access', callSmsAccess.canSendCallSms ? 'true' : 'false', {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',

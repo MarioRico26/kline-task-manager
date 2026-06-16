@@ -58,5 +58,13 @@ export async function GET() {
     maxAge: 60 * 60 * 24,
   })
 
+  response.cookies.set('call-sms-access', sessionUser.canSendCallSms ? 'true' : 'false', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 60 * 60 * 24,
+  })
+
   return response
 }

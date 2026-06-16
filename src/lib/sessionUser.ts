@@ -4,6 +4,7 @@ import {
   UserAccessScope,
   getUserAccessScopeById,
   getUserCallsInboxAccessById,
+  getUserCallSmsAccessById,
   getUserPlannerAccessById,
   getUserSeasonalProgramsAccessById,
   getUserVoicemailImportsAccessById,
@@ -18,6 +19,7 @@ export type SessionUser = {
   canAccessSeasonalPrograms: boolean
   canAccessCallsInbox: boolean
   canAccessVoicemailImports: boolean
+  canSendCallSms: boolean
 }
 
 export async function getSessionUser(prisma: PrismaClient): Promise<SessionUser | null> {
@@ -36,12 +38,13 @@ export async function getSessionUser(prisma: PrismaClient): Promise<SessionUser 
 
   if (!user) return null
 
-  const [accessScope, plannerAccess, seasonalProgramsAccess, callsInboxAccess, voicemailImportsAccess] = await Promise.all([
+  const [accessScope, plannerAccess, seasonalProgramsAccess, callsInboxAccess, voicemailImportsAccess, callSmsAccess] = await Promise.all([
     getUserAccessScopeById(prisma, user.id),
     getUserPlannerAccessById(prisma, user.id),
     getUserSeasonalProgramsAccessById(prisma, user.id),
     getUserCallsInboxAccessById(prisma, user.id),
     getUserVoicemailImportsAccessById(prisma, user.id),
+    getUserCallSmsAccessById(prisma, user.id),
   ])
 
   return {
@@ -51,5 +54,6 @@ export async function getSessionUser(prisma: PrismaClient): Promise<SessionUser 
     canAccessSeasonalPrograms: seasonalProgramsAccess.canAccessSeasonalPrograms,
     canAccessCallsInbox: callsInboxAccess.canAccessCallsInbox,
     canAccessVoicemailImports: voicemailImportsAccess.canAccessVoicemailImports,
+    canSendCallSms: callSmsAccess.canSendCallSms,
   }
 }

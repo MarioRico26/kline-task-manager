@@ -5,6 +5,7 @@ import {
   UserAccessScope,
   getUserAccessScopeById,
   getUserCallsInboxAccessById,
+  getUserCallSmsAccessById,
   getDefaultCallsInboxOwner,
   getUserPlannerAccessById,
   getUserSeasonalProgramsAccessById,
@@ -12,6 +13,7 @@ import {
   setUserAccessScope,
   setDefaultCallsInboxOwner,
   setUserCallsInboxAccess,
+  setUserCallSmsAccess,
   setUserPlannerAccess,
   setUserSeasonalProgramsAccess,
   setUserVoicemailImportsAccess,
@@ -38,14 +40,16 @@ export async function PUT(
     const access = await ensureUserAdminAccess()
     if ('error' in access) return access.error
 
-    const { email, role, accessScope, canAccessPlanner, canAccessSeasonalPrograms, canAccessCallsInbox, canAccessVoicemailImports, isDefaultCallsInboxOwner } = await request.json()
+    const { email, role, accessScope, canAccessPlanner, canAccessSeasonalPrograms, canAccessCallsInbox, canAccessVoicemailImports, canSendCallSms, isDefaultCallsInboxOwner } = await request.json()
     const { id } = await params
     const selectedScope: UserAccessScope =
       accessScope === 'NONE' ? 'NONE' : accessScope === 'PERMITS_ONLY' ? 'PERMITS_ONLY' : 'ALL'
     const selectedPlannerAccess = canAccessPlanner === true
     const selectedSeasonalProgramsAccess = canAccessSeasonalPrograms === true
     const selectedVoicemailImportsAccess = canAccessVoicemailImports === true
-    const selectedCallsInboxAccess = canAccessCallsInbox === true || isDefaultCallsInboxOwner === true || selectedVoicemailImportsAccess
+    const selectedCallSmsAccess = canSendCallSms === true
+    const selectedCallsInboxAccess =
+      canAccessCallsInbox === true || isDefaultCallsInboxOwner === true || selectedVoicemailImportsAccess || selectedCallSmsAccess
 
     const user = await prisma.user.update({
       where: { id },
@@ -64,6 +68,7 @@ export async function PUT(
       setUserSeasonalProgramsAccess(prisma, id, selectedSeasonalProgramsAccess, access.sessionUser.id),
       setUserCallsInboxAccess(prisma, id, selectedCallsInboxAccess, access.sessionUser.id),
       setUserVoicemailImportsAccess(prisma, id, selectedVoicemailImportsAccess, access.sessionUser.id),
+      setUserCallSmsAccess(prisma, id, selectedCallSmsAccess, access.sessionUser.id),
     ])
 
     if (isDefaultCallsInboxOwner === true) {
@@ -82,6 +87,7 @@ export async function PUT(
       canAccessSeasonalPrograms: selectedSeasonalProgramsAccess,
       canAccessCallsInbox: selectedCallsInboxAccess,
       canAccessVoicemailImports: selectedVoicemailImportsAccess,
+      canSendCallSms: selectedCallSmsAccess,
       isDefaultCallsInboxOwner: isDefaultCallsInboxOwner === true,
     })
   } catch (error) {
@@ -140,12 +146,13 @@ export async function GET(
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    const [accessScope, plannerAccess, seasonalProgramsAccess, callsInboxAccess, voicemailImportsAccess, defaultCallsInboxOwner] = await Promise.all([
+    const [accessScope, plannerAccess, seasonalProgramsAccess, callsInboxAccess, voicemailImportsAccess, callSmsAccess, defaultCallsInboxOwner] = await Promise.all([
       getUserAccessScopeById(prisma, id),
       getUserPlannerAccessById(prisma, id),
       getUserSeasonalProgramsAccessById(prisma, id),
       getUserCallsInboxAccessById(prisma, id),
       getUserVoicemailImportsAccessById(prisma, id),
+      getUserCallSmsAccessById(prisma, id),
       getDefaultCallsInboxOwner(prisma),
     ])
 
@@ -156,6 +163,7 @@ export async function GET(
       canAccessSeasonalPrograms: seasonalProgramsAccess.canAccessSeasonalPrograms,
       canAccessCallsInbox: callsInboxAccess.canAccessCallsInbox,
       canAccessVoicemailImports: voicemailImportsAccess.canAccessVoicemailImports,
+      canSendCallSms: callSmsAccess.canSendCallSms,
       isDefaultCallsInboxOwner: defaultCallsInboxOwner.userId === id,
     })
   } catch (error) {

@@ -13,6 +13,9 @@ export type UserCallsInboxAccess = {
 export type UserVoicemailImportsAccess = {
   canAccessVoicemailImports: boolean
 }
+export type UserCallSmsAccess = {
+  canSendCallSms: boolean
+}
 export type DefaultCallsInboxOwner = {
   userId: string | null
 }
@@ -52,6 +55,12 @@ function voicemailImportsAccessFromJson(details: Prisma.JsonValue | null): UserV
   if (!details || typeof details !== 'object' || Array.isArray(details)) return null
   const raw = details as Record<string, unknown>
   return { canAccessVoicemailImports: raw.canAccessVoicemailImports === true }
+}
+
+function callSmsAccessFromJson(details: Prisma.JsonValue | null): UserCallSmsAccess | null {
+  if (!details || typeof details !== 'object' || Array.isArray(details)) return null
+  const raw = details as Record<string, unknown>
+  return { canSendCallSms: raw.canSendCallSms === true }
 }
 
 function defaultCallsInboxOwnerFromJson(details: Prisma.JsonValue | null): DefaultCallsInboxOwner | null {
@@ -164,6 +173,26 @@ export async function getUserVoicemailImportsAccessById(
   })
 
   return voicemailImportsAccessFromJson(latestImportsLog?.details ?? null) ?? { canAccessVoicemailImports: false }
+}
+
+export async function getUserCallSmsAccessById(
+  prisma: PrismaClient,
+  userId: string
+): Promise<UserCallSmsAccess> {
+  const latestSmsLog = await prisma.auditLog.findFirst({
+    where: {
+      entity: 'USER_CALL_SMS_ACCESS',
+      entityId: userId,
+    },
+    orderBy: {
+      timestamp: 'desc',
+    },
+    select: {
+      details: true,
+    },
+  })
+
+  return callSmsAccessFromJson(latestSmsLog?.details ?? null) ?? { canSendCallSms: false }
 }
 
 export async function getDefaultCallsInboxOwner(prisma: PrismaClient): Promise<DefaultCallsInboxOwner> {
@@ -343,6 +372,38 @@ export async function getUserVoicemailImportsAccessMap(prisma: PrismaClient, use
   return map
 }
 
+export async function getUserCallSmsAccessMap(prisma: PrismaClient, userIds: string[]) {
+  const scopedIds = Array.from(new Set(userIds.filter(Boolean)))
+  const map = new Map<string, UserCallSmsAccess>()
+  const seen = new Set<string>()
+  if (scopedIds.length === 0) return map
+
+  const logs = await prisma.auditLog.findMany({
+    where: {
+      entity: 'USER_CALL_SMS_ACCESS',
+      entityId: { in: scopedIds },
+    },
+    orderBy: {
+      timestamp: 'desc',
+    },
+    select: {
+      entityId: true,
+      details: true,
+    },
+  })
+
+  for (const id of scopedIds) map.set(id, { canSendCallSms: false })
+
+  for (const log of logs) {
+    if (seen.has(log.entityId)) continue
+    seen.add(log.entityId)
+    const parsed = callSmsAccessFromJson(log.details)
+    map.set(log.entityId, parsed ?? { canSendCallSms: false })
+  }
+
+  return map
+}
+
 export async function setUserAccessScope(
   prisma: PrismaClient,
   targetUserId: string,
@@ -425,6 +486,23 @@ export async function setUserVoicemailImportsAccess(
       entity: 'USER_VOICEMAIL_IMPORTS_ACCESS',
       entityId: targetUserId,
       details: { canAccessVoicemailImports },
+    },
+  })
+}
+
+export async function setUserCallSmsAccess(
+  prisma: PrismaClient,
+  targetUserId: string,
+  canSendCallSms: boolean,
+  actorUserId?: string
+) {
+  return prisma.auditLog.create({
+    data: {
+      userId: actorUserId || targetUserId,
+      action: 'SET_CALL_SMS_ACCESS',
+      entity: 'USER_CALL_SMS_ACCESS',
+      entityId: targetUserId,
+      details: { canSendCallSms },
     },
   })
 }
