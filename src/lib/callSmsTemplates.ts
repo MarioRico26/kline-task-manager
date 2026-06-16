@@ -2,17 +2,17 @@ export const callSmsTemplates = [
   {
     value: 'RECEIVED_MESSAGE',
     label: 'Received your message',
-    text: 'Hello, we received your message and will follow up shortly.',
+    text: 'Hello, we received your message and will follow up shortly. Thank you, Kline Brothers.',
   },
   {
     value: 'TRIED_CALLING_BACK',
     label: 'We tried calling you back',
-    text: 'Hello, we tried calling you back. Please reply with the best time to reach you.',
+    text: 'Hello, we tried calling you back. Please reply with the best time to reach you. Thank you, Kline Brothers.',
   },
   {
     value: 'ROUTED_TO_TEAM',
     label: 'Your message has been routed',
-    text: 'Hello, your message has been routed to the appropriate team member and someone will follow up soon.',
+    text: 'Hello, your message has been routed to the appropriate team member and someone will follow up soon. Thank you, Kline Brothers.',
   },
 ] as const
 
