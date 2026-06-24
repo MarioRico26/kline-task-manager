@@ -10,6 +10,13 @@ export type ParsedImportItem = {
   detectedServiceCategory: CallServiceCategory | null
 }
 
+export type ParsedComcastVoicemailEmail = ParsedImportItem & {
+  voicemailDurationSeconds: number | null
+  sourceSubject: string
+  sourceSender: string | null
+  sourceMessageId: string | null
+}
+
 function stripLeadingTimestamp(block: string) {
   const lines = block.split('\n').map((line) => line.trim()).filter(Boolean)
   if (lines.length === 0) return ''
@@ -59,6 +66,54 @@ function extractDetectedTown(text: string) {
   return townCandidate || null
 }
 
+function normalizeComcastName(rawName: string | null) {
+  if (!rawName) return null
+  return rawName
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ') || null
+}
+
+function extractComcastSubjectPhone(subject: string) {
+  const match = subject.match(/voicemail from\s+(\d{10,})/i)
+  return match ? match[1] : null
+}
+
+function extractComcastSubjectName(subject: string) {
+  const match = subject.match(/voicemail from\s+\d{10,}\s+[–-]\s+(.+)$/i)
+  return normalizeComcastName(match ? match[1] : null)
+}
+
+function parseComcastBodyPreview(bodyPreview: string) {
+  const lines = bodyPreview
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+
+  const filtered: string[] = []
+  let durationSeconds: number | null = null
+
+  for (const line of lines) {
+    if (/^comcast business voicemail from/i.test(line)) continue
+
+    const durationMatch = line.match(/^(\d+)\s+seconds?$/i)
+    if (durationMatch) {
+      durationSeconds = Number(durationMatch[1])
+      continue
+    }
+
+    filtered.push(line)
+  }
+
+  return {
+    transcript: filtered.join(' ').trim(),
+    durationSeconds,
+  }
+}
+
 export function parseVoicemailImportDump(rawDump: string): ParsedImportItem[] {
   return rawDump
     .split(/\n\s*\n/g)
@@ -78,6 +133,27 @@ export function parseVoicemailImportEntry(rawText: string): ParsedImportItem {
     detectedAddress: extractDetectedAddress(cleanText),
     detectedTown: extractDetectedTown(cleanText),
     detectedServiceCategory: detectServiceCategory(cleanText),
+  }
+}
+
+export function parseComcastVoicemailEmail(input: {
+  subject: string
+  from?: string | null
+  bodyPreview: string
+  messageId?: string | null
+}) : ParsedComcastVoicemailEmail {
+  const subject = input.subject.trim()
+  const { transcript, durationSeconds } = parseComcastBodyPreview(input.bodyPreview || '')
+  const parsedTranscript = parseVoicemailImportEntry(transcript || subject)
+
+  return {
+    ...parsedTranscript,
+    callerNameRaw: extractComcastSubjectName(subject) || parsedTranscript.callerNameRaw,
+    phoneNumberRaw: extractComcastSubjectPhone(subject) || parsedTranscript.phoneNumberRaw,
+    voicemailDurationSeconds: durationSeconds,
+    sourceSubject: subject,
+    sourceSender: input.from?.trim() || null,
+    sourceMessageId: input.messageId?.trim() || null,
   }
 }
 
