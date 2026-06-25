@@ -153,6 +153,8 @@ export type CallsInboxApiResponse = {
   moduleReady: boolean
   totalRecords?: number
   loadedRecords?: number
+  page?: number
+  pageSize?: number
   stats?: CallsInboxStats
   message?: string
 }

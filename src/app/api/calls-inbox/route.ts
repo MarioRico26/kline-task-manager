@@ -117,7 +117,7 @@ async function resolveDefaultCallsInboxOwnerId(actorUserId: string) {
   return fallbackAdmin?.id || null
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const sessionUser = await getSessionUser(prisma)
     if (!sessionUser) {
@@ -127,10 +127,18 @@ export async function GET() {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
+    const { searchParams } = new URL(request.url)
+    const rawPage = Number(searchParams.get('page') || '1')
+    const rawPageSize = Number(searchParams.get('pageSize') || '100')
+    const page = Number.isFinite(rawPage) && rawPage > 0 ? Math.floor(rawPage) : 1
+    const pageSize = Number.isFinite(rawPageSize) && rawPageSize > 0 ? Math.min(Math.floor(rawPageSize), 100) : 100
+    const skip = (page - 1) * pageSize
+
     const [records, statsRecords, totalRecords] = await Promise.all([
       prisma.callRecord.findMany({
         orderBy: { receivedAt: 'desc' },
-        take: 100,
+        skip,
+        take: pageSize,
         include: {
         assignedToUser: {
           select: {
@@ -269,6 +277,8 @@ export async function GET() {
       moduleReady: true,
       totalRecords,
       loadedRecords: records.length,
+      page,
+      pageSize,
       stats,
     })
   } catch (error) {
@@ -279,6 +289,8 @@ export async function GET() {
         moduleReady: false,
         totalRecords: 0,
         loadedRecords: 0,
+        page: 1,
+        pageSize: 100,
         message: 'Calls Inbox schema is defined in code, but the database tables have not been activated yet.',
       })
     }

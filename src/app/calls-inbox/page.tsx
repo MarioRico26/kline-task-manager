@@ -14,6 +14,7 @@ import {
 } from '@/lib/callsInbox'
 
 const OPEN_RECORD_STATUSES = ['NEW', 'TRIAGE_REQUIRED', 'ASSIGNED', 'CALLBACK_PENDING'] as const
+const DEFAULT_PAGE_SIZE = 100
 
 function formatReceivedAt(value: string) {
   return new Date(value).toLocaleString([], {
@@ -74,6 +75,8 @@ export default function CallsInboxPage() {
   const [canAccessVoicemailImports, setCanAccessVoicemailImports] = useState(false)
   const [records, setRecords] = useState<CallsInboxRecord[]>([])
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
   const [totalRecords, setTotalRecords] = useState(0)
   const [loadedRecords, setLoadedRecords] = useState(0)
   const [stats, setStats] = useState<CallsInboxStats | null>(null)
@@ -150,7 +153,7 @@ export default function CallsInboxPage() {
       setError('')
 
       try {
-        const res = await fetch('/api/calls-inbox', { cache: 'no-store' })
+        const res = await fetch(`/api/calls-inbox?page=${currentPage}&pageSize=${pageSize}`, { cache: 'no-store' })
         const data = (await res.json()) as CallsInboxApiResponse | { error?: string }
 
         if (!res.ok) {
@@ -164,6 +167,8 @@ export default function CallsInboxPage() {
         setCurrentUserId(payload.currentUserId)
         setTotalRecords(payload.totalRecords || payload.records.length)
         setLoadedRecords(payload.loadedRecords || payload.records.length)
+        setPageSize(payload.pageSize || DEFAULT_PAGE_SIZE)
+        setCurrentPage(payload.page || currentPage)
         setStats(payload.stats || null)
         setModuleReady(payload.moduleReady)
         setModuleMessage(payload.message || '')
@@ -183,7 +188,7 @@ export default function CallsInboxPage() {
     return () => {
       cancelled = true
     }
-  }, [authorized])
+  }, [authorized, currentPage, pageSize])
 
   const summaryCards = useMemo(
     () => [
@@ -327,6 +332,12 @@ export default function CallsInboxPage() {
     })
   }, [currentUserId, filters, records])
 
+  const totalPages = Math.max(1, Math.ceil(totalRecords / Math.max(pageSize, 1)))
+  const rangeStart = totalRecords === 0 ? 0 : (currentPage - 1) * pageSize + 1
+  const rangeEnd = totalRecords === 0 ? 0 : Math.min((currentPage - 1) * pageSize + loadedRecords, totalRecords)
+  const canGoPrevious = currentPage > 1
+  const canGoNext = currentPage < totalPages
+
   if (authorized === null) {
     return (
       <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: 'var(--kline-gray-light)' }}>
@@ -440,14 +451,25 @@ export default function CallsInboxPage() {
               <p style={{ margin: '0.4rem 0 0', color: 'var(--kline-text-light)' }}>
                 {loadingRecords
                   ? 'Loading records…'
-                  : totalRecords > loadedRecords
-                    ? `${visibleRecords.length} of ${loadedRecords} loaded call records shown (${totalRecords} total).`
-                    : `${visibleRecords.length} of ${records.length} call records shown.`}
+                  : totalRecords > 0
+                    ? `${rangeStart}-${rangeEnd} of ${totalRecords} total records${visibleRecords.length !== loadedRecords ? ` (${visibleRecords.length} match filters on this page)` : ''}.`
+                    : '0 records found.'}
               </p>
             </div>
-            <button className="ghost-btn" onClick={() => window.location.reload()}>
-              Refresh
-            </button>
+            <div style={{ display: 'flex', gap: '0.65rem', alignItems: 'center', flexWrap: 'wrap' }}>
+              <span style={{ color: 'var(--kline-text-light)', fontSize: '0.92rem', fontWeight: 700 }}>
+                Page {currentPage} of {totalPages}
+              </span>
+              <button className="ghost-btn" onClick={() => setCurrentPage((page) => Math.max(1, page - 1))} disabled={!canGoPrevious || loadingRecords}>
+                Previous
+              </button>
+              <button className="ghost-btn" onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))} disabled={!canGoNext || loadingRecords}>
+                Next
+              </button>
+              <button className="ghost-btn" onClick={() => window.location.reload()}>
+                Refresh
+              </button>
+            </div>
           </div>
 
           <div
