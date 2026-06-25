@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import {
   CallsInboxApiResponse,
   CallsInboxRecord,
+  CallsInboxStats,
   callPriorityOptions,
   callSourceOptions,
   callStatusOptions,
@@ -73,6 +74,9 @@ export default function CallsInboxPage() {
   const [canAccessVoicemailImports, setCanAccessVoicemailImports] = useState(false)
   const [records, setRecords] = useState<CallsInboxRecord[]>([])
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [totalRecords, setTotalRecords] = useState(0)
+  const [loadedRecords, setLoadedRecords] = useState(0)
+  const [stats, setStats] = useState<CallsInboxStats | null>(null)
   const [moduleReady, setModuleReady] = useState(true)
   const [loadingRecords, setLoadingRecords] = useState(true)
   const [moduleMessage, setModuleMessage] = useState<string>('')
@@ -158,6 +162,9 @@ export default function CallsInboxPage() {
         const payload = data as CallsInboxApiResponse
         setRecords(payload.records)
         setCurrentUserId(payload.currentUserId)
+        setTotalRecords(payload.totalRecords || payload.records.length)
+        setLoadedRecords(payload.loadedRecords || payload.records.length)
+        setStats(payload.stats || null)
         setModuleReady(payload.moduleReady)
         setModuleMessage(payload.message || '')
       } catch (loadError) {
@@ -182,68 +189,68 @@ export default function CallsInboxPage() {
     () => [
       {
         label: 'Open Records',
-        value: records.filter((record) => OPEN_RECORD_STATUSES.includes(record.status as (typeof OPEN_RECORD_STATUSES)[number])).length.toString(),
-        detail: 'Freshly open and not yet in-progress',
+        value: (stats?.openRecords ?? records.filter((record) => OPEN_RECORD_STATUSES.includes(record.status as (typeof OPEN_RECORD_STATUSES)[number])).length).toString(),
+        detail: 'Currently active office follow-up records',
         accent: '#c81e1e',
       },
       {
         label: 'Unassigned',
-        value: records.filter((record) => OPEN_RECORD_STATUSES.includes(record.status as (typeof OPEN_RECORD_STATUSES)[number]) && !record.assignedToUserId).length.toString(),
-        detail: 'Need intake ownership',
+        value: (stats?.unassignedOpen ?? records.filter((record) => OPEN_RECORD_STATUSES.includes(record.status as (typeof OPEN_RECORD_STATUSES)[number]) && !record.assignedToUserId).length).toString(),
+        detail: 'Open records that still need ownership',
         accent: '#7c3aed',
       },
       {
         label: 'Callback Attempted',
-        value: records.filter((record) => record.callbackAttemptCount > 0).length.toString(),
-        detail: 'Already have at least one logged callback',
+        value: (stats?.callbackAttempted ?? records.filter((record) => record.status === 'CALLBACK_ATTEMPTED').length).toString(),
+        detail: 'Records currently sitting in attempted status',
         accent: '#0d6efd',
       },
       {
         label: 'Overdue Follow-Ups',
-        value: records.filter((record) => record.isFollowUpOverdue).length.toString(),
+        value: (stats?.overdueFollowUps ?? records.filter((record) => record.isFollowUpOverdue).length).toString(),
         detail: 'Past the scheduled callback time',
         accent: '#fd7e14',
       },
       {
         label: '24h+ Aging',
-        value: records.filter((record) => OPEN_RECORD_STATUSES.includes(record.status as (typeof OPEN_RECORD_STATUSES)[number]) && record.isSlaBreached).length.toString(),
-        detail: 'Breached the 24-hour response window',
+        value: (stats?.aging24h ?? records.filter((record) => OPEN_RECORD_STATUSES.includes(record.status as (typeof OPEN_RECORD_STATUSES)[number]) && record.isSlaBreached).length).toString(),
+        detail: 'Open records older than 24 hours',
         accent: '#c81e1e',
       },
       {
         label: 'Resolved / Closed',
-        value: records.filter((record) => ['RESOLVED', 'CLOSED'].includes(record.status)).length.toString(),
+        value: (stats?.resolvedClosed ?? records.filter((record) => ['RESOLVED', 'CLOSED'].includes(record.status)).length).toString(),
         detail: 'Handled and no longer active',
         accent: '#198754',
       },
     ],
-    [records]
+    [records, stats]
   )
 
   const agingCards = useMemo(
     () => [
       {
         label: '0-4h',
-        value: records.filter((record) => OPEN_RECORD_STATUSES.includes(record.status as (typeof OPEN_RECORD_STATUSES)[number]) && record.ageBucket === 'UNDER_4_HOURS').length,
+        value: stats?.agingBuckets.under4Hours ?? records.filter((record) => OPEN_RECORD_STATUSES.includes(record.status as (typeof OPEN_RECORD_STATUSES)[number]) && record.ageBucket === 'UNDER_4_HOURS').length,
         accent: '#198754',
       },
       {
         label: '4-24h',
-        value: records.filter((record) => OPEN_RECORD_STATUSES.includes(record.status as (typeof OPEN_RECORD_STATUSES)[number]) && record.ageBucket === 'FOUR_TO_TWENTY_FOUR_HOURS').length,
+        value: stats?.agingBuckets.fourToTwentyFourHours ?? records.filter((record) => OPEN_RECORD_STATUSES.includes(record.status as (typeof OPEN_RECORD_STATUSES)[number]) && record.ageBucket === 'FOUR_TO_TWENTY_FOUR_HOURS').length,
         accent: '#fd7e14',
       },
       {
         label: '24-48h',
-        value: records.filter((record) => OPEN_RECORD_STATUSES.includes(record.status as (typeof OPEN_RECORD_STATUSES)[number]) && record.ageBucket === 'ONE_TO_TWO_DAYS').length,
+        value: stats?.agingBuckets.oneToTwoDays ?? records.filter((record) => OPEN_RECORD_STATUSES.includes(record.status as (typeof OPEN_RECORD_STATUSES)[number]) && record.ageBucket === 'ONE_TO_TWO_DAYS').length,
         accent: '#c81e1e',
       },
       {
         label: '48h+',
-        value: records.filter((record) => OPEN_RECORD_STATUSES.includes(record.status as (typeof OPEN_RECORD_STATUSES)[number]) && record.ageBucket === 'OVER_TWO_DAYS').length,
+        value: stats?.agingBuckets.overTwoDays ?? records.filter((record) => OPEN_RECORD_STATUSES.includes(record.status as (typeof OPEN_RECORD_STATUSES)[number]) && record.ageBucket === 'OVER_TWO_DAYS').length,
         accent: '#7b1e1e',
       },
     ],
-    [records]
+    [records, stats]
   )
 
   const assigneeOptions = useMemo(() => {
@@ -431,7 +438,11 @@ export default function CallsInboxPage() {
             <div>
               <h3 style={{ margin: 0, color: 'var(--kline-text)' }}>Current records</h3>
               <p style={{ margin: '0.4rem 0 0', color: 'var(--kline-text-light)' }}>
-                {loadingRecords ? 'Loading records…' : `${visibleRecords.length} of ${records.length} call records shown.`}
+                {loadingRecords
+                  ? 'Loading records…'
+                  : totalRecords > loadedRecords
+                    ? `${visibleRecords.length} of ${loadedRecords} loaded call records shown (${totalRecords} total).`
+                    : `${visibleRecords.length} of ${records.length} call records shown.`}
               </p>
             </div>
             <button className="ghost-btn" onClick={() => window.location.reload()}>

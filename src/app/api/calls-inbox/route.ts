@@ -34,6 +34,8 @@ function deriveFollowUpFlags(nextFollowUpAt: Date | null) {
   }
 }
 
+const openRecordStatuses = new Set<CallStatus>(['NEW', 'TRIAGE_REQUIRED', 'ASSIGNED', 'CALLBACK_PENDING'])
+
 function deriveAging(receivedAt: Date) {
   const ageMs = Date.now() - receivedAt.getTime()
   const ageInHours = Math.max(0, Math.floor(ageMs / (1000 * 60 * 60)))
@@ -125,10 +127,11 @@ export async function GET() {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    const records = await prisma.callRecord.findMany({
-      orderBy: { receivedAt: 'desc' },
-      take: 100,
-      include: {
+    const [records, statsRecords, totalRecords] = await Promise.all([
+      prisma.callRecord.findMany({
+        orderBy: { receivedAt: 'desc' },
+        take: 100,
+        include: {
         assignedToUser: {
           select: {
             id: true,
@@ -171,8 +174,63 @@ export async function GET() {
             activities: true,
           },
         },
+        },
+      }),
+      prisma.callRecord.findMany({
+        select: {
+          status: true,
+          assignedToUserId: true,
+          receivedAt: true,
+          callbackAttempts: {
+            where: { nextFollowUpAt: { not: null } },
+            orderBy: { nextFollowUpAt: 'asc' },
+            take: 1,
+            select: {
+              nextFollowUpAt: true,
+            },
+          },
+        },
+      }),
+      prisma.callRecord.count(),
+    ])
+
+    const stats = statsRecords.reduce(
+      (acc, record) => {
+        const isOpen = openRecordStatuses.has(record.status)
+        const aging = deriveAging(record.receivedAt)
+        const followUpFlags = deriveFollowUpFlags(record.callbackAttempts[0]?.nextFollowUpAt || null)
+
+        if (isOpen) {
+          acc.openRecords += 1
+          if (!record.assignedToUserId) acc.unassignedOpen += 1
+          if (aging.isSlaBreached) acc.aging24h += 1
+          if (aging.ageBucket === 'UNDER_4_HOURS') acc.agingBuckets.under4Hours += 1
+          if (aging.ageBucket === 'FOUR_TO_TWENTY_FOUR_HOURS') acc.agingBuckets.fourToTwentyFourHours += 1
+          if (aging.ageBucket === 'ONE_TO_TWO_DAYS') acc.agingBuckets.oneToTwoDays += 1
+          if (aging.ageBucket === 'OVER_TWO_DAYS') acc.agingBuckets.overTwoDays += 1
+        }
+
+        if (record.status === 'CALLBACK_ATTEMPTED') acc.callbackAttempted += 1
+        if (followUpFlags.isFollowUpOverdue) acc.overdueFollowUps += 1
+        if (record.status === 'RESOLVED' || record.status === 'CLOSED') acc.resolvedClosed += 1
+
+        return acc
       },
-    })
+      {
+        openRecords: 0,
+        unassignedOpen: 0,
+        callbackAttempted: 0,
+        overdueFollowUps: 0,
+        aging24h: 0,
+        resolvedClosed: 0,
+        agingBuckets: {
+          under4Hours: 0,
+          fourToTwentyFourHours: 0,
+          oneToTwoDays: 0,
+          overTwoDays: 0,
+        },
+      }
+    )
 
     return NextResponse.json({
       records: records.map((record) => ({
@@ -209,6 +267,9 @@ export async function GET() {
       })),
       currentUserId: sessionUser.id,
       moduleReady: true,
+      totalRecords,
+      loadedRecords: records.length,
+      stats,
     })
   } catch (error) {
     if (isCallsInboxTableMissing(error)) {
@@ -216,6 +277,8 @@ export async function GET() {
         records: [],
         currentUserId: null,
         moduleReady: false,
+        totalRecords: 0,
+        loadedRecords: 0,
         message: 'Calls Inbox schema is defined in code, but the database tables have not been activated yet.',
       })
     }

@@ -132,10 +132,28 @@ export type CallsInboxRecord = {
   activityCount: number
 }
 
+export type CallsInboxStats = {
+  openRecords: number
+  unassignedOpen: number
+  callbackAttempted: number
+  overdueFollowUps: number
+  aging24h: number
+  resolvedClosed: number
+  agingBuckets: {
+    under4Hours: number
+    fourToTwentyFourHours: number
+    oneToTwoDays: number
+    overTwoDays: number
+  }
+}
+
 export type CallsInboxApiResponse = {
   records: CallsInboxRecord[]
   currentUserId: string | null
   moduleReady: boolean
+  totalRecords?: number
+  loadedRecords?: number
+  stats?: CallsInboxStats
   message?: string
 }
 
