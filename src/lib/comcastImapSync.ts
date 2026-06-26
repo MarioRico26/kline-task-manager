@@ -272,7 +272,7 @@ async function fetchRecentComcastMailboxMessages() {
         const bodyPreview = (parsed.text || parsed.html || '').toString().trim()
         if (!bodyPreview) continue
 
-        const receivedAt = parsed.date || (message.internalDate ? new Date(message.internalDate) : new Date())
+        const receivedAt = message.internalDate ? new Date(message.internalDate) : parsed.date || new Date()
 
         parsedMessages.push({
           uid: message.uid,
