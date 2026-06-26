@@ -98,6 +98,15 @@ function parseComcastBodyPreview(bodyPreview: string) {
 
   for (const line of lines) {
     if (/^comcast business voicemail from/i.test(line)) continue
+    if (/^https?:\/\/\S+$/i.test(line)) continue
+    if (/^some content in this message has been blocked/i.test(line)) continue
+    if (/^trust sender$/i.test(line)) continue
+    if (/^show blocked content$/i.test(line)) continue
+    if (/^this is a service-related email\./i.test(line)) break
+    if (/^services and features are subject to comcast/i.test(line)) break
+    if (/^comcast respects your privacy\./i.test(line)) break
+    if (/^one comcast center$/i.test(line)) break
+    if (/^attn:/i.test(line)) break
 
     const durationMatch = line.match(/^(\d+)\s+seconds?$/i)
     if (durationMatch) {
@@ -105,11 +114,11 @@ function parseComcastBodyPreview(bodyPreview: string) {
       continue
     }
 
-    filtered.push(line)
+    filtered.push(line.replace(/https?:\/\/\S+/gi, '').trim())
   }
 
   return {
-    transcript: filtered.join(' ').trim(),
+    transcript: filtered.join(' ').replace(/\s+/g, ' ').trim(),
     durationSeconds,
   }
 }

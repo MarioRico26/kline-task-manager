@@ -2,6 +2,8 @@ import { ImapFlow } from 'imapflow'
 import { simpleParser } from 'mailparser'
 import { Prisma, PrismaClient } from '@prisma/client'
 import { parseComcastVoicemailEmail } from '@/lib/callsInboxImport'
+import { promoteVoicemailImportItems, resolveDefaultCallsInboxOwnerId } from '@/lib/callsInboxPromotion'
+import { sendCallAssignmentEmail } from '@/lib/email'
 
 export type ComcastImapSyncSummary = {
   mailboxUser: string
@@ -9,6 +11,7 @@ export type ComcastImapSyncSummary = {
   scannedCount: number
   matchedCount: number
   createdCount: number
+  promotedCount: number
   duplicateCount: number
   skippedCount: number
   batchSources: string[]
@@ -324,10 +327,31 @@ async function getOrCreateBatchId(tx: PrismaClient | Prisma.TransactionClient, b
   return created.id
 }
 
+async function resolveAutomationActor(prisma: PrismaClient) {
+  const preferredUserId = await resolveDefaultCallsInboxOwnerId(prisma, '')
+  if (preferredUserId) {
+    const preferredUser = await prisma.user.findUnique({
+      where: { id: preferredUserId },
+      select: { id: true, email: true },
+    })
+    if (preferredUser) return preferredUser
+  }
+
+  const fallbackAdmin = await prisma.user.findFirst({
+    where: { role: 'ADMIN' },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true, email: true },
+  })
+
+  return fallbackAdmin
+}
+
 export async function syncComcastVoicemailImportsFromImap(prisma: PrismaClient): Promise<ComcastImapSyncSummary> {
   const { mailboxUser, folderName, scannedCount, matchedCount, messages } = await fetchRecentComcastMailboxMessages()
+  const automationActor = await resolveAutomationActor(prisma)
 
   let createdCount = 0
+  let promotedCount = 0
   let duplicateCount = 0
   let skippedCount = 0
   const batchSources = new Set<string>()
@@ -363,7 +387,7 @@ export async function syncComcastVoicemailImportsFromImap(prisma: PrismaClient):
 
     const batchSource = `Comcast Auto Import - ${formatBatchDateLabel(message.receivedAt)}`
 
-    await prisma.$transaction(async (tx) => {
+    const created = await prisma.$transaction(async (tx) => {
       const batchId = await getOrCreateBatchId(tx, batchSource, 'Automatic Comcast IMAP intake from mailbox.')
 
       const reviewNotes = [
@@ -378,7 +402,7 @@ export async function syncComcastVoicemailImportsFromImap(prisma: PrismaClient):
         .filter(Boolean)
         .join('\n')
 
-      await tx.voicemailImportItem.create({
+      const item = await tx.voicemailImportItem.create({
         data: {
           batchId,
           recordedAt: message.receivedAt,
@@ -393,6 +417,7 @@ export async function syncComcastVoicemailImportsFromImap(prisma: PrismaClient):
           transcriptionStatus: 'NOT_APPLICABLE',
           reviewNotes,
         },
+        select: { id: true, batchId: true },
       })
 
       await tx.voicemailImportBatch.update({
@@ -402,7 +427,51 @@ export async function syncComcastVoicemailImportsFromImap(prisma: PrismaClient):
           status: 'REVIEW_IN_PROGRESS',
         },
       })
+
+      return {
+        ...item,
+        reviewNotes,
+      }
     })
+
+    if (automationActor) {
+      try {
+        const promotion = await promoteVoicemailImportItems({
+          prisma,
+          itemIds: [created.id],
+          actorUserId: automationActor.id,
+          actorEmail: automationActor.email || 'calls-inbox-automation@klinebrothers.com',
+          requireReadyStatus: false,
+        })
+
+        const callRecord = promotion.promotedCallRecords[0]
+        if (callRecord?.assignedToUser.email) {
+          await sendCallAssignmentEmail({
+            to: callRecord.assignedToUser.email,
+            assigneeEmail: callRecord.assignedToUser.email,
+            assignedByEmail: 'Kline Calls Automation',
+            callerName: callRecord.callerNameRaw,
+            phoneNumber: callRecord.phoneNumber,
+            summary: callRecord.summary,
+            receivedAt: callRecord.receivedAt,
+            callRecordId: callRecord.id,
+            isReassignment: false,
+          })
+        }
+
+        promotedCount += promotion.promotedCallRecords.length
+      } catch (error) {
+        const note = `Automatic promotion to Calls Inbox failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+        await prisma.voicemailImportItem.update({
+          where: { id: created.id },
+          data: {
+            reviewNotes: {
+              set: [created.reviewNotes, note].filter(Boolean).join('\n'),
+            },
+          },
+        }).catch(() => undefined)
+      }
+    }
 
     batchSources.add(batchSource)
     createdCount += 1
@@ -414,6 +483,7 @@ export async function syncComcastVoicemailImportsFromImap(prisma: PrismaClient):
     scannedCount,
     matchedCount,
     createdCount,
+    promotedCount,
     duplicateCount,
     skippedCount,
     batchSources: Array.from(batchSources),
