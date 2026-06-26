@@ -78,7 +78,7 @@ async function getImapOAuthAccessToken() {
   const tenantId = optionalEnv('COMCAST_IMAP_OAUTH_TENANT_ID') || optionalEnv('MICROSOFT_GRAPH_TENANT_ID')
   const clientId = optionalEnv('COMCAST_IMAP_OAUTH_CLIENT_ID') || optionalEnv('MICROSOFT_GRAPH_CLIENT_ID')
   const clientSecret = optionalEnv('COMCAST_IMAP_OAUTH_CLIENT_SECRET') || optionalEnv('MICROSOFT_GRAPH_CLIENT_SECRET')
-  const scope = optionalEnv('COMCAST_IMAP_OAUTH_SCOPE') || 'https://ps.outlook.com/.default'
+  const scope = optionalEnv('COMCAST_IMAP_OAUTH_SCOPE') || 'https://outlook.office365.com/.default'
 
   if (!tenantId || !clientId || !clientSecret) {
     throw new Error(
