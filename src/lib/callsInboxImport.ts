@@ -77,6 +77,31 @@ function normalizeComcastName(rawName: string | null) {
     .join(' ') || null
 }
 
+function cleanupComcastTranscript(text: string) {
+  return text
+    .replace(/^["'<(\[\s]+/, '')
+    .replace(/[>'"\])\s]+$/, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function extractOpeningCallerName(text: string) {
+  const normalized = cleanupComcastTranscript(text)
+  const patterns = [
+    /^(?:hello|hi|good morning|good afternoon|good evening)[,.\s-]*this is\s+([a-z][a-z' -]+?)(?=,| calling| with| from| at|\.|$)/i,
+    /^this is\s+([a-z][a-z' -]+?)(?=,| calling| with| from| at|\.|$)/i,
+  ]
+
+  for (const pattern of patterns) {
+    const match = normalized.match(pattern)
+    if (match?.[1]) {
+      return normalizeComcastName(match[1])
+    }
+  }
+
+  return null
+}
+
 function extractComcastSubjectPhone(subject: string) {
   const match = subject.match(/voicemail from\s+(\d{10,})/i)
   return match ? match[1] : null
@@ -118,7 +143,7 @@ function parseComcastBodyPreview(bodyPreview: string) {
   }
 
   return {
-    transcript: filtered.join(' ').replace(/\s+/g, ' ').trim(),
+    transcript: cleanupComcastTranscript(filtered.join(' ')),
     durationSeconds,
   }
 }
@@ -154,10 +179,11 @@ export function parseComcastVoicemailEmail(input: {
   const subject = input.subject.trim()
   const { transcript, durationSeconds } = parseComcastBodyPreview(input.bodyPreview || '')
   const parsedTranscript = parseVoicemailImportEntry(transcript || subject)
+  const openingCallerName = extractOpeningCallerName(transcript)
 
   return {
     ...parsedTranscript,
-    callerNameRaw: extractComcastSubjectName(subject) || parsedTranscript.callerNameRaw,
+    callerNameRaw: openingCallerName || extractComcastSubjectName(subject) || parsedTranscript.callerNameRaw,
     phoneNumberRaw: extractComcastSubjectPhone(subject) || parsedTranscript.phoneNumberRaw,
     voicemailDurationSeconds: durationSeconds,
     sourceSubject: subject,
