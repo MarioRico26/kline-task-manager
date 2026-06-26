@@ -58,6 +58,26 @@ function isComcastVoicemailLike(subject: string, from: string) {
   return /^comcast business voicemail from\s+/i.test(subject.trim()) && from.toLowerCase().includes('comcast.net')
 }
 
+function formatImapError(error: unknown) {
+  if (error instanceof Error) {
+    const imapError = error as Error & {
+      response?: string
+      serverResponseCode?: string
+      code?: string
+      command?: string
+    }
+
+    const details = [imapError.message]
+    if (imapError.code) details.push(`code=${imapError.code}`)
+    if (imapError.command) details.push(`command=${imapError.command}`)
+    if (imapError.serverResponseCode) details.push(`serverResponseCode=${imapError.serverResponseCode}`)
+    if (imapError.response) details.push(`response=${imapError.response}`)
+    return details.join(' | ')
+  }
+
+  return String(error)
+}
+
 function normalizeMailboxPath(value: string) {
   return value.trim().replace(/\\/g, '/').replace(/\.+/g, '/').replace(/\/+/g, '/').toLowerCase()
 }
@@ -117,18 +137,30 @@ async function fetchRecentComcastMailboxMessages() {
   const parsedMessages: ParsedMailboxMessage[] = []
   let scannedCount = 0
 
-  await client.connect()
+  try {
+    await client.connect()
+  } catch (error) {
+    throw new Error(`IMAP connection failed for ${user}@${host}:${port}. ${formatImapError(error)}`)
+  }
 
   try {
-    const { resolvedPath, availablePaths } = await resolveMailboxPath(client, folderName)
+    let resolvedPath: string
+    let availablePaths: string[]
+
+    try {
+      const resolved = await resolveMailboxPath(client, folderName)
+      resolvedPath = resolved.resolvedPath
+      availablePaths = resolved.availablePaths
+    } catch (error) {
+      throw new Error(`IMAP mailbox lookup failed for ${user}. ${formatImapError(error)}`)
+    }
 
     let lock
     try {
       lock = await client.getMailboxLock(resolvedPath)
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown IMAP mailbox error'
       throw new Error(
-        `IMAP could not open mailbox folder "${resolvedPath}" for ${user}. ${message}. Available folders: ${availablePaths.slice(0, 20).join(', ')}`
+        `IMAP could not open mailbox folder "${resolvedPath}" for ${user}. ${formatImapError(error)}. Available folders: ${availablePaths.slice(0, 20).join(', ')}`
       )
     }
     try {
