@@ -23,12 +23,28 @@ type ParsedMailboxMessage = {
   bodyPreview: string
 }
 
+type ImapAuthConfig =
+  | {
+      method: 'password'
+      user: string
+      pass: string
+    }
+  | {
+      method: 'oauth'
+      user: string
+      accessToken: string
+    }
+
 function requiredEnv(name: string) {
   const value = process.env[name]?.trim()
   if (!value) {
     throw new Error(`${name} is not configured.`)
   }
   return value
+}
+
+function optionalEnv(name: string) {
+  return process.env[name]?.trim() || ''
 }
 
 function optionalNumberEnv(name: string, fallback: number) {
@@ -56,6 +72,69 @@ function formatBatchDateLabel(date: Date) {
 
 function isComcastVoicemailLike(subject: string, from: string) {
   return /^comcast business voicemail from\s+/i.test(subject.trim()) && from.toLowerCase().includes('comcast.net')
+}
+
+async function getImapOAuthAccessToken() {
+  const tenantId = optionalEnv('COMCAST_IMAP_OAUTH_TENANT_ID') || optionalEnv('MICROSOFT_GRAPH_TENANT_ID')
+  const clientId = optionalEnv('COMCAST_IMAP_OAUTH_CLIENT_ID') || optionalEnv('MICROSOFT_GRAPH_CLIENT_ID')
+  const clientSecret = optionalEnv('COMCAST_IMAP_OAUTH_CLIENT_SECRET') || optionalEnv('MICROSOFT_GRAPH_CLIENT_SECRET')
+  const scope = optionalEnv('COMCAST_IMAP_OAUTH_SCOPE') || 'https://ps.outlook.com/.default'
+
+  if (!tenantId || !clientId || !clientSecret) {
+    throw new Error(
+      'IMAP OAuth is not fully configured. Set COMCAST_IMAP_OAUTH_TENANT_ID / CLIENT_ID / CLIENT_SECRET or reuse the MICROSOFT_GRAPH_* credentials.'
+    )
+  }
+
+  const response = await fetch(`https://login.microsoftonline.com/${encodeURIComponent(tenantId)}/oauth2/v2.0/token`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      grant_type: 'client_credentials',
+      scope,
+    }),
+  })
+
+  const rawText = await response.text()
+  if (!response.ok) {
+    throw new Error(rawText || `Microsoft OAuth token request failed with status ${response.status}`)
+  }
+
+  const json = JSON.parse(rawText) as { access_token?: string }
+  if (!json.access_token) {
+    throw new Error('Microsoft OAuth token response did not include access_token.')
+  }
+
+  return json.access_token
+}
+
+async function getImapAuthConfig(user: string): Promise<ImapAuthConfig> {
+  const hasOAuthConfig = Boolean(
+    optionalEnv('COMCAST_IMAP_OAUTH_TENANT_ID') ||
+    optionalEnv('COMCAST_IMAP_OAUTH_CLIENT_ID') ||
+    optionalEnv('COMCAST_IMAP_OAUTH_CLIENT_SECRET') ||
+    optionalEnv('MICROSOFT_GRAPH_TENANT_ID') ||
+    optionalEnv('MICROSOFT_GRAPH_CLIENT_ID') ||
+    optionalEnv('MICROSOFT_GRAPH_CLIENT_SECRET')
+  )
+
+  if (hasOAuthConfig) {
+    return {
+      method: 'oauth',
+      user,
+      accessToken: await getImapOAuthAccessToken(),
+    }
+  }
+
+  return {
+    method: 'password',
+    user,
+    pass: requiredEnv('COMCAST_IMAP_PASSWORD'),
+  }
 }
 
 function formatImapError(error: unknown) {
@@ -121,16 +200,19 @@ async function fetchRecentComcastMailboxMessages() {
   const port = optionalNumberEnv('COMCAST_IMAP_PORT', 993)
   const secure = optionalBooleanEnv('COMCAST_IMAP_SECURE', true)
   const user = requiredEnv('COMCAST_IMAP_USER')
-  const pass = requiredEnv('COMCAST_IMAP_PASSWORD')
   const folderName = process.env.COMCAST_IMAP_FOLDER?.trim() || 'INBOX'
   const maxMessages = optionalNumberEnv('COMCAST_IMAP_MAX_MESSAGES', 50)
   const lookbackDays = optionalNumberEnv('COMCAST_IMAP_LOOKBACK_DAYS', 30)
+  const authConfig = await getImapAuthConfig(user)
 
   const client = new ImapFlow({
     host,
     port,
     secure,
-    auth: { user, pass },
+    auth:
+      authConfig.method === 'oauth'
+        ? { user: authConfig.user, accessToken: authConfig.accessToken }
+        : { user: authConfig.user, pass: authConfig.pass },
     logger: false,
   })
 
