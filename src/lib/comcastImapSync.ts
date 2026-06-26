@@ -58,6 +58,44 @@ function isComcastVoicemailLike(subject: string, from: string) {
   return /^comcast business voicemail from\s+/i.test(subject.trim()) && from.toLowerCase().includes('comcast.net')
 }
 
+function normalizeMailboxPath(value: string) {
+  return value.trim().replace(/\\/g, '/').replace(/\.+/g, '/').replace(/\/+/g, '/').toLowerCase()
+}
+
+async function resolveMailboxPath(client: ImapFlow, configuredFolderName: string) {
+  const mailboxes = await client.list()
+  const normalizedTarget = normalizeMailboxPath(configuredFolderName)
+
+  const exactMatch = mailboxes.find((mailbox) => mailbox.path === configuredFolderName || mailbox.pathAsListed === configuredFolderName)
+  if (exactMatch) {
+    return { resolvedPath: exactMatch.path, availablePaths: mailboxes.map((mailbox) => mailbox.path) }
+  }
+
+  const normalizedMatch = mailboxes.find((mailbox) => normalizeMailboxPath(mailbox.path) === normalizedTarget)
+  if (normalizedMatch) {
+    return { resolvedPath: normalizedMatch.path, availablePaths: mailboxes.map((mailbox) => mailbox.path) }
+  }
+
+  const basenameTarget = configuredFolderName.split(/[/.]/).filter(Boolean).pop()?.toLowerCase() || normalizedTarget
+  const basenameMatch = mailboxes.find((mailbox) => mailbox.name.trim().toLowerCase() == basenameTarget)
+  if (basenameMatch) {
+    return { resolvedPath: basenameMatch.path, availablePaths: mailboxes.map((mailbox) => mailbox.path) }
+  }
+
+  const candidatePaths = mailboxes
+    .map((mailbox) => mailbox.path)
+    .filter((mailboxPath) => {
+      const normalizedPath = mailboxPath.toLowerCase()
+      return normalizedPath.includes('comcast') || normalizedPath.includes('voice') || normalizedPath.includes('inbox')
+    })
+
+  const suggestedPaths = (candidatePaths.length > 0 ? candidatePaths : mailboxes.map((mailbox) => mailbox.path)).slice(0, 12)
+
+  throw new Error(
+    `IMAP could not find mailbox folder "${configuredFolderName}". Available candidates: ${suggestedPaths.join(', ')}`
+  )
+}
+
 async function fetchRecentComcastMailboxMessages() {
   const host = process.env.COMCAST_IMAP_HOST?.trim() || 'outlook.office365.com'
   const port = optionalNumberEnv('COMCAST_IMAP_PORT', 993)
@@ -82,7 +120,17 @@ async function fetchRecentComcastMailboxMessages() {
   await client.connect()
 
   try {
-    const lock = await client.getMailboxLock(folderName)
+    const { resolvedPath, availablePaths } = await resolveMailboxPath(client, folderName)
+
+    let lock
+    try {
+      lock = await client.getMailboxLock(resolvedPath)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown IMAP mailbox error'
+      throw new Error(
+        `IMAP could not open mailbox folder "${resolvedPath}" for ${user}. ${message}. Available folders: ${availablePaths.slice(0, 20).join(', ')}`
+      )
+    }
     try {
       const sinceDate = new Date(Date.now() - lookbackDays * 24 * 60 * 60 * 1000)
       const uidResults = await client.search({ all: true, since: sinceDate }, { uid: true })
