@@ -248,8 +248,11 @@ async function fetchRecentComcastMailboxMessages() {
     try {
       const sinceDate = new Date(Date.now() - lookbackDays * 24 * 60 * 60 * 1000)
       const uidResults = await client.search({ all: true, since: sinceDate }, { uid: true })
-      const uids = Array.isArray(uidResults) ? uidResults : []
-      const latestUids = uids.slice(-maxMessages).reverse()
+      const uids = Array.isArray(uidResults) ? uidResults.map((value) => Number(value)).filter((value) => Number.isFinite(value)) : []
+      const latestUids = uids
+        .sort((left, right) => left - right)
+        .slice(-maxMessages)
+        .reverse()
       scannedCount = latestUids.length
 
       for (const uid of latestUids) {
