@@ -35,9 +35,13 @@ async function authorizeRequest(request: Request) {
     return { authorized: true as const, sessionUser }
   }
 
-  const configuredSecret = process.env.COMCAST_VOICEMAIL_SYNC_SECRET?.trim()
   const providedSecret = getProvidedSecret(request)
-  if (configuredSecret && providedSecret && configuredSecret === providedSecret) {
+  const acceptedSecrets = [
+    process.env.COMCAST_VOICEMAIL_SYNC_SECRET?.trim(),
+    process.env.CRON_SECRET?.trim(),
+  ].filter(Boolean)
+
+  if (providedSecret && acceptedSecrets.includes(providedSecret)) {
     return { authorized: true as const, sessionUser: null }
   }
 

@@ -1,3 +1,9 @@
 {
-    "installCommand": "pnpm install --no-frozen-lockfile"
-  }
+  "installCommand": "pnpm install --no-frozen-lockfile",
+  "crons": [
+    {
+      "path": "/api/calls-inbox/imports/comcast-imap-sync",
+      "schedule": "*/5 * * * *"
+    }
+  ]
+}
