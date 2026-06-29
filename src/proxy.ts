@@ -4,11 +4,15 @@ import type { NextRequest } from 'next/server'
 export function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl
 
-  // Rutas públicas
+  // Rutas públicas o con autenticación propia por secret
   const publicPaths = ['/auth/login', '/api/auth/login']
+  const secretProtectedPaths = [
+    '/api/calls-inbox/imports/comcast-imap-sync',
+    '/api/calls-inbox/imports/comcast-email',
+  ]
 
-  // Si está en ruta pública, seguir normal
-  if (publicPaths.some(path => pathname.startsWith(path))) {
+  // Si está en ruta pública o secret-protected, seguir normal
+  if (publicPaths.some(path => pathname.startsWith(path)) || secretProtectedPaths.some(path => pathname.startsWith(path))) {
     return NextResponse.next()
   }
 
