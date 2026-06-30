@@ -233,6 +233,16 @@ export type VoicemailImportItemRecord = {
   reviewedAt: string | null
   reviewedByUser: { id: string; email: string } | null
   createdCallRecordId: string | null
+  possibleDuplicates: {
+    callRecordId: string
+    receivedAt: string
+    callerNameRaw: string | null
+    phoneNumber: string | null
+    summary: string
+    detectedAddress: string | null
+    score: number
+    reasons: string[]
+  }[]
 }
 
 export type VoicemailImportsListApiResponse = {

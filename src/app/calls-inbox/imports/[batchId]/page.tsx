@@ -276,6 +276,73 @@ function ReviewItemCard({
         )}
       </div>
 
+      {item.possibleDuplicates.length > 0 && (
+        <div
+          style={{
+            marginTop: '1rem',
+            border: '1px solid rgba(253, 126, 20, 0.24)',
+            background: 'rgba(253, 126, 20, 0.08)',
+            borderRadius: 14,
+            padding: '0.95rem 1rem',
+          }}
+        >
+          <div style={{ fontWeight: 900, color: '#9a3412', marginBottom: '0.65rem' }}>
+            Possible duplicates in current Calls Inbox
+          </div>
+          <div style={{ display: 'grid', gap: '0.75rem' }}>
+            {item.possibleDuplicates.map((match) => (
+              <div
+                key={match.callRecordId}
+                style={{
+                  background: '#fff',
+                  border: '1px solid rgba(249, 115, 22, 0.16)',
+                  borderRadius: 12,
+                  padding: '0.8rem 0.9rem',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                  <div style={{ fontWeight: 800, color: 'var(--kline-text)' }}>
+                    {match.callerNameRaw || 'Unknown caller'} · {match.phoneNumber || 'No phone'}
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                    <span style={{ padding: '0.24rem 0.55rem', borderRadius: 999, background: 'rgba(249, 115, 22, 0.12)', color: '#c2410c', fontWeight: 800, fontSize: '0.8rem' }}>
+                      Match score {match.score}
+                    </span>
+                    <button className="ghost-btn" type="button" onClick={() => window.open(`/calls-inbox/${match.callRecordId}`, '_blank')}>
+                      Open Existing Record
+                    </button>
+                    <button className="ghost-btn" type="button" onClick={() => saveStatus('DUPLICATE')} disabled={saving || promoting || transcribing}>
+                      Mark This Item Duplicate
+                    </button>
+                  </div>
+                </div>
+                <div style={{ color: 'var(--kline-text-light)', marginTop: 6 }}>
+                  {formatDateTime(match.receivedAt)}{match.detectedAddress ? ` · ${match.detectedAddress}` : ''}
+                </div>
+                <div style={{ marginTop: 6, color: 'var(--kline-text)' }}>{match.summary}</div>
+                <div style={{ marginTop: 8, display: 'flex', gap: '0.45rem', flexWrap: 'wrap' }}>
+                  {match.reasons.map((reason) => (
+                    <span
+                      key={reason}
+                      style={{
+                        padding: '0.24rem 0.55rem',
+                        borderRadius: 999,
+                        background: 'rgba(17, 24, 39, 0.06)',
+                        color: 'var(--kline-text-light)',
+                        fontWeight: 700,
+                        fontSize: '0.78rem',
+                      }}
+                    >
+                      {reason}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div style={{ marginTop: '1rem' }}>
         <label style={{ display: 'block', fontWeight: 700, marginBottom: '0.45rem', color: 'var(--kline-text)' }}>Review Notes</label>
         <textarea

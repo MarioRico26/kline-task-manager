@@ -17,6 +17,101 @@ function isVoicemailImportTableMissing(error: unknown) {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2021'
 }
 
+function normalizePhone(value: string | null | undefined) {
+  return (value || '').replace(/\D/g, '')
+}
+
+function normalizeText(value: string | null | undefined) {
+  return (value || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim()
+}
+
+function tokenize(value: string | null | undefined) {
+  return normalizeText(value)
+    .split(' ')
+    .filter((part) => part.length >= 4)
+}
+
+function buildDuplicateSuggestions(
+  items: Array<{
+    id: string
+    recordedAt: Date | null
+    phoneNumberRaw: string | null
+    callerNameRaw: string | null
+    summaryDraft: string | null
+    transcriptRaw: string | null
+    detectedAddress: string | null
+  }>,
+  callRecords: Array<{
+    id: string
+    receivedAt: Date
+    phoneNumber: string | null
+    callerNameRaw: string | null
+    summary: string
+    detectedAddress: string | null
+  }>
+) {
+  return new Map(
+    items.map((item) => {
+      const itemPhone = normalizePhone(item.phoneNumberRaw)
+      const itemCaller = normalizeText(item.callerNameRaw)
+      const itemAddress = normalizeText(item.detectedAddress)
+      const itemText = `${normalizeText(item.summaryDraft)} ${normalizeText(item.transcriptRaw)}`
+      const itemTokens = new Set(tokenize(itemText))
+
+      const matches = callRecords
+        .map((record) => {
+          let score = 0
+          const reasons: string[] = []
+
+          const recordPhone = normalizePhone(record.phoneNumber)
+          if (itemPhone && recordPhone && itemPhone === recordPhone) {
+            score += 100
+            reasons.push('Same phone')
+          }
+
+          const recordCaller = normalizeText(record.callerNameRaw)
+          if (itemCaller && recordCaller && (recordCaller.includes(itemCaller) || itemCaller.includes(recordCaller))) {
+            score += 30
+            reasons.push('Similar caller')
+          }
+
+          const recordAddress = normalizeText(record.detectedAddress)
+          if (itemAddress && recordAddress && (recordAddress.includes(itemAddress) || itemAddress.includes(recordAddress))) {
+            score += 45
+            reasons.push('Same address')
+          }
+
+          if (itemTokens.size > 0) {
+            const recordTokens = new Set(tokenize(record.summary))
+            const overlap = Array.from(itemTokens).filter((token) => recordTokens.has(token)).length
+            if (overlap >= 3) {
+              score += Math.min(overlap * 5, 25)
+              reasons.push(`Summary overlap (${overlap})`)
+            }
+          }
+
+          return score >= 60
+            ? {
+                callRecordId: record.id,
+                receivedAt: record.receivedAt.toISOString(),
+                callerNameRaw: record.callerNameRaw,
+                phoneNumber: record.phoneNumber,
+                summary: record.summary,
+                detectedAddress: record.detectedAddress,
+                score,
+                reasons,
+              }
+            : null
+        })
+        .filter(Boolean)
+        .sort((left, right) => (right?.score || 0) - (left?.score || 0))
+        .slice(0, 3)
+
+      return [item.id, matches]
+    })
+  )
+}
+
 function mapBatchRecord(batch: {
   id: string
   source: string
@@ -68,6 +163,32 @@ export async function GET(_request: Request, context: { params: Promise<{ batchI
       return NextResponse.json({ error: 'Voicemail import batch not found' }, { status: 404 })
     }
 
+    const duplicateCandidatePool = await prisma.callRecord.findMany({
+      orderBy: { receivedAt: 'desc' },
+      take: 1500,
+      select: {
+        id: true,
+        receivedAt: true,
+        phoneNumber: true,
+        callerNameRaw: true,
+        summary: true,
+        detectedAddress: true,
+      },
+    })
+
+    const possibleDuplicatesByItemId = buildDuplicateSuggestions(
+      batch.items.map((item) => ({
+        id: item.id,
+        recordedAt: item.recordedAt,
+        phoneNumberRaw: item.phoneNumberRaw,
+        callerNameRaw: item.callerNameRaw,
+        summaryDraft: item.summaryDraft,
+        transcriptRaw: item.transcriptRaw,
+        detectedAddress: item.detectedAddress,
+      })),
+      duplicateCandidatePool
+    )
+
     return NextResponse.json({
       batch: mapBatchRecord(batch),
       items: batch.items.map((item) => ({
@@ -91,6 +212,7 @@ export async function GET(_request: Request, context: { params: Promise<{ batchI
         reviewedAt: item.reviewedAt?.toISOString() || null,
         reviewedByUser: item.reviewedByUser,
         createdCallRecordId: item.createdCallRecordId,
+        possibleDuplicates: possibleDuplicatesByItemId.get(item.id) || [],
       })),
       moduleReady: true,
     })
