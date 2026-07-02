@@ -84,6 +84,9 @@ export default function CallsInboxPage() {
   const [loadingRecords, setLoadingRecords] = useState(true)
   const [moduleMessage, setModuleMessage] = useState<string>('')
   const [error, setError] = useState<string>('')
+  const [refreshKey, setRefreshKey] = useState(0)
+  const [quickActionRecordId, setQuickActionRecordId] = useState<string | null>(null)
+  const [quickActionType, setQuickActionType] = useState<'TAKE_OWNERSHIP' | 'CLOSE' | null>(null)
   const [filters, setFilters] = useState({
     query: '',
     status: 'OPEN',
@@ -188,7 +191,47 @@ export default function CallsInboxPage() {
     return () => {
       cancelled = true
     }
-  }, [authorized, currentPage, pageSize])
+  }, [authorized, currentPage, pageSize, refreshKey])
+
+  async function runQuickAction(record: CallsInboxRecord, action: 'TAKE_OWNERSHIP' | 'CLOSE') {
+    if (action === 'TAKE_OWNERSHIP' && !currentUserId) return
+
+    if (
+      action === 'CLOSE' &&
+      !window.confirm(`This will mark the call from ${record.callerNameRaw || record.phoneNumber || 'this caller'} as closed. Continue?`)
+    ) {
+      return
+    }
+
+    setQuickActionRecordId(record.id)
+    setQuickActionType(action)
+    setError('')
+
+    try {
+      const res = await fetch(`/api/calls-inbox/${record.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(
+          action === 'TAKE_OWNERSHIP'
+            ? { assignedToUserId: currentUserId }
+            : { status: 'CLOSED' }
+        ),
+      })
+
+      const data = (await res.json()) as { error?: string }
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Unable to apply quick action')
+      }
+
+      setRefreshKey((value) => value + 1)
+    } catch (actionError) {
+      setError(actionError instanceof Error ? actionError.message : 'Unable to apply quick action')
+    } finally {
+      setQuickActionRecordId(null)
+      setQuickActionType(null)
+    }
+  }
 
   const summaryCards = useMemo(
     () => [
@@ -352,7 +395,7 @@ export default function CallsInboxPage() {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--kline-gray-light)' }}>
       <header className="topbar">
-        <div className="topbar-inner">
+        <div className="topbar-inner" style={{ maxWidth: 1560 }}>
           <div className="brand">
             <div className="brand-icon">K</div>
             <div>
@@ -382,7 +425,7 @@ export default function CallsInboxPage() {
         </div>
       </header>
 
-      <main className="main-content">
+      <main className="main-content" style={{ maxWidth: 1560 }}>
         <section className="page-masthead page-masthead-calls" style={{ marginBottom: '1.5rem' }}>
           <div className="page-masthead-copy">
             <p className="page-masthead-kicker">Restricted module · office follow-up</p>
@@ -466,7 +509,7 @@ export default function CallsInboxPage() {
               <button className="ghost-btn" onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))} disabled={!canGoNext || loadingRecords}>
                 Next
               </button>
-              <button className="ghost-btn" onClick={() => window.location.reload()}>
+              <button className="ghost-btn" onClick={() => setRefreshKey((value) => value + 1)} disabled={loadingRecords}>
                 Refresh
               </button>
             </div>
@@ -651,8 +694,8 @@ export default function CallsInboxPage() {
                 : 'No call records match the current filters.'}
             </div>
           ) : (
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <div style={{ overflowX: 'auto', paddingBottom: '0.25rem' }}>
+              <table style={{ width: '100%', minWidth: 1450, borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--kline-gray)' }}>
                     <th style={{ padding: '0.8rem 0.75rem' }}>Received</th>
@@ -701,8 +744,8 @@ export default function CallsInboxPage() {
                           {formatEnumLabel(record.status)}
                         </span>
                       </td>
-                      <td style={{ padding: '0.9rem 0.75rem', color: 'var(--kline-text)' }}>{record.assignedToUser?.email || 'Unassigned'}</td>
-                      <td style={{ padding: '0.9rem 0.75rem', minWidth: 320 }}>
+                      <td style={{ padding: '0.9rem 0.75rem', color: 'var(--kline-text)', minWidth: 190 }}>{record.assignedToUser?.email || 'Unassigned'}</td>
+                      <td style={{ padding: '0.9rem 0.75rem', minWidth: 430 }}>
                         <div style={{ color: 'var(--kline-text)' }}>{record.summary}</div>
                         {(record.customer || record.property) && (
                           <div style={{ color: 'var(--kline-text-light)', fontSize: '0.92rem', marginTop: 8 }}>
@@ -784,13 +827,33 @@ export default function CallsInboxPage() {
                           </div>
                         )}
                       </td>
-                      <td style={{ padding: '0.9rem 0.75rem', color: 'var(--kline-text-light)', whiteSpace: 'nowrap' }}>
+                      <td style={{ padding: '0.9rem 0.75rem', color: 'var(--kline-text-light)', whiteSpace: 'nowrap', minWidth: 150 }}>
                         {record.callbackAttemptCount} callbacks · {record.activityCount} events
                       </td>
-                      <td style={{ padding: '0.9rem 0.75rem' }}>
-                        <button className="ghost-btn" onClick={() => router.push(`/calls-inbox/${record.id}`)}>
-                          View
-                        </button>
+                      <td style={{ padding: '0.9rem 0.75rem', minWidth: 220 }}>
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                          <button className="ghost-btn" onClick={() => router.push(`/calls-inbox/${record.id}`)}>
+                            View
+                          </button>
+                          {!record.assignedToUserId && currentUserId && (
+                            <button
+                              className="ghost-btn"
+                              onClick={() => runQuickAction(record, 'TAKE_OWNERSHIP')}
+                              disabled={quickActionRecordId === record.id}
+                            >
+                              {quickActionRecordId === record.id && quickActionType === 'TAKE_OWNERSHIP' ? 'Taking…' : 'Take Ownership'}
+                            </button>
+                          )}
+                          {!['CLOSED', 'RESOLVED', 'SPAM'].includes(record.status) && (
+                            <button
+                              className="ghost-btn"
+                              onClick={() => runQuickAction(record, 'CLOSE')}
+                              disabled={quickActionRecordId === record.id}
+                            >
+                              {quickActionRecordId === record.id && quickActionType === 'CLOSE' ? 'Closing…' : 'Close'}
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
