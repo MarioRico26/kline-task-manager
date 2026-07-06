@@ -913,7 +913,16 @@ export default function CallsInboxPage() {
                         >
                           <select
                             className="kline-input"
-                            style={{ width: '100%', minWidth: 0, height: 42 }}
+                            style={{
+                              width: '100%',
+                              minWidth: 0,
+                              minHeight: 52,
+                              height: 'auto',
+                              lineHeight: 1.35,
+                              paddingTop: '0.85rem',
+                              paddingBottom: '0.85rem',
+                              paddingRight: '2.4rem',
+                            }}
                             value={pendingAssignments[record.id] ?? record.assignedToUserId ?? ''}
                             onChange={(event) => {
                               const nextAssigneeId = event.target.value

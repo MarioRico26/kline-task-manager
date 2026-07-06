@@ -356,7 +356,17 @@ export default function CallRecordDetailPage() {
               onClick={() => window.print()}
               aria-label="Print call detail"
               title="Print call detail"
-              style={{ width: 44, height: 44, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+              style={{
+                width: 44,
+                height: 44,
+                padding: 0,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'var(--kline-red)',
+                borderColor: 'rgba(179, 22, 22, 0.24)',
+                background: 'rgba(179, 22, 22, 0.05)',
+              }}
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <path
