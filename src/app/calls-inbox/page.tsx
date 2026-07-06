@@ -903,14 +903,17 @@ export default function CallsInboxPage() {
                       <td style={{ padding: '0.9rem 0.75rem', color: 'var(--kline-text-light)', whiteSpace: 'nowrap', minWidth: 150 }}>
                         {record.callbackAttemptCount} callbacks · {record.activityCount} events
                       </td>
-                      <td style={{ padding: '0.9rem 0.75rem', minWidth: 220 }}>
-                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                          <button className="ghost-btn" onClick={() => router.push(`/calls-inbox/${record.id}`)}>
-                            View
-                          </button>
+                      <td style={{ padding: '0.9rem 0.75rem', minWidth: 320 }}>
+                        <div
+                          style={{
+                            display: 'grid',
+                            gap: 10,
+                            minWidth: 260,
+                          }}
+                        >
                           <select
                             className="kline-input"
-                            style={{ minWidth: 220, height: 42 }}
+                            style={{ width: '100%', minWidth: 0, height: 42 }}
                             value={pendingAssignments[record.id] ?? record.assignedToUserId ?? ''}
                             onChange={(event) => {
                               const nextAssigneeId = event.target.value
@@ -932,36 +935,40 @@ export default function CallsInboxPage() {
                               </option>
                             ))}
                           </select>
-                          {quickActionRecordId === record.id && quickActionType === 'ASSIGN' && (
-                            <span
-                              style={{
-                                alignSelf: 'center',
-                                color: 'var(--kline-text-light)',
-                                fontSize: '0.84rem',
-                                fontWeight: 700,
-                              }}
-                            >
-                              Saving…
-                            </span>
-                          )}
-                          {!record.assignedToUserId && currentUserId && (
-                            <button
-                              className="ghost-btn"
-                              onClick={() => runQuickAction(record, 'TAKE_OWNERSHIP')}
-                              disabled={quickActionRecordId === record.id}
-                            >
-                              {quickActionRecordId === record.id && quickActionType === 'TAKE_OWNERSHIP' ? 'Taking…' : 'Take Ownership'}
+                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                            <button className="ghost-btn" onClick={() => router.push(`/calls-inbox/${record.id}`)}>
+                              View
                             </button>
-                          )}
-                          {!['CLOSED', 'RESOLVED', 'SPAM'].includes(record.status) && (
-                            <button
-                              className="ghost-btn"
-                              onClick={() => runQuickAction(record, 'CLOSE')}
-                              disabled={quickActionRecordId === record.id}
-                            >
-                              {quickActionRecordId === record.id && quickActionType === 'CLOSE' ? 'Closing…' : 'Close'}
-                            </button>
-                          )}
+                            {!record.assignedToUserId && currentUserId && (
+                              <button
+                                className="ghost-btn"
+                                onClick={() => runQuickAction(record, 'TAKE_OWNERSHIP')}
+                                disabled={quickActionRecordId === record.id}
+                              >
+                                {quickActionRecordId === record.id && quickActionType === 'TAKE_OWNERSHIP' ? 'Taking…' : 'Take Ownership'}
+                              </button>
+                            )}
+                            {!['CLOSED', 'RESOLVED', 'SPAM'].includes(record.status) && (
+                              <button
+                                className="ghost-btn"
+                                onClick={() => runQuickAction(record, 'CLOSE')}
+                                disabled={quickActionRecordId === record.id}
+                              >
+                                {quickActionRecordId === record.id && quickActionType === 'CLOSE' ? 'Closing…' : 'Close'}
+                              </button>
+                            )}
+                            {quickActionRecordId === record.id && quickActionType === 'ASSIGN' && (
+                              <span
+                                style={{
+                                  color: 'var(--kline-text-light)',
+                                  fontSize: '0.84rem',
+                                  fontWeight: 700,
+                                }}
+                              >
+                                Saving…
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </td>
                     </tr>

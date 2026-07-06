@@ -350,8 +350,24 @@ export default function CallRecordDetailPage() {
           </div>
 
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            <button className="ghost-btn" type="button" onClick={() => window.print()}>
-              Print
+            <button
+              className="ghost-btn"
+              type="button"
+              onClick={() => window.print()}
+              aria-label="Print call detail"
+              title="Print call detail"
+              style={{ width: 44, height: 44, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path
+                  d="M7 8V4H17V8M7 14H5V10C5 8.89543 5.89543 8 7 8H17C18.1046 8 19 8.89543 19 10V14H17M7 12H17V20H7V12Z"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <circle cx="17.5" cy="10.5" r="0.75" fill="currentColor" />
+              </svg>
             </button>
             <button className="ghost-btn" onClick={() => router.push('/calls-inbox')}>
               Calls Inbox
