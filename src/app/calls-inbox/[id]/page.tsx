@@ -207,6 +207,17 @@ export default function CallRecordDetailPage() {
     () => buildCallSmsMessage(smsForm.template, smsForm.additionalNote),
     [smsForm.additionalNote, smsForm.template]
   )
+  const printGeneratedAt = useMemo(
+    () =>
+      new Date().toLocaleString([], {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      }),
+    [record?.id]
+  )
   const smsActivities = useMemo(
     () =>
       record?.activities.filter(
@@ -339,6 +350,9 @@ export default function CallRecordDetailPage() {
           </div>
 
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <button className="ghost-btn" type="button" onClick={() => window.print()}>
+              Print
+            </button>
             <button className="ghost-btn" onClick={() => router.push('/calls-inbox')}>
               Calls Inbox
             </button>
@@ -351,20 +365,20 @@ export default function CallRecordDetailPage() {
 
       <main className="main-content">
         {!moduleReady && (
-          <section className="kline-card" style={{ padding: '1.2rem 1.4rem', marginBottom: '1.25rem', borderLeft: '5px solid #fd7e14' }}>
+          <section className="kline-card feedback-banner" style={{ padding: '1.2rem 1.4rem', marginBottom: '1.25rem', borderLeft: '5px solid #fd7e14' }}>
             <strong style={{ color: 'var(--kline-text)' }}>Database activation pending.</strong>
             <p style={{ margin: '0.45rem 0 0', color: 'var(--kline-text-light)' }}>{message || 'The Calls Inbox tables still need activation.'}</p>
           </section>
         )}
 
         {error && (
-          <section className="kline-card" style={{ padding: '1rem 1.25rem', marginBottom: '1.25rem', borderLeft: '5px solid #c81e1e' }}>
+          <section className="kline-card feedback-banner" style={{ padding: '1rem 1.25rem', marginBottom: '1.25rem', borderLeft: '5px solid #c81e1e' }}>
             <strong style={{ color: '#c81e1e' }}>{error}</strong>
           </section>
         )}
 
         {success && (
-          <section className="kline-card" style={{ padding: '1rem 1.25rem', marginBottom: '1.25rem', borderLeft: '5px solid #198754' }}>
+          <section className="kline-card feedback-banner" style={{ padding: '1rem 1.25rem', marginBottom: '1.25rem', borderLeft: '5px solid #198754' }}>
             <strong style={{ color: '#198754' }}>{success}</strong>
           </section>
         )}
@@ -376,6 +390,7 @@ export default function CallRecordDetailPage() {
           </section>
         ) : (
           <>
+        <div className="screen-layout">
         <section className="page-masthead page-masthead-detail" style={{ marginBottom: '1.5rem' }}>
           <div className="page-masthead-copy">
             <p className="page-masthead-kicker">{formatEnumLabel(record.sourceType)} · live record</p>
@@ -764,11 +779,175 @@ export default function CallRecordDetailPage() {
                 </section>
               </div>
             </section>
+            </div>
+
+            <section className="print-sheet">
+              <div className="print-sheet-topline" />
+              <div className="print-sheet-header">
+                <div>
+                  <div className="print-brand">Kline Brothers · Calls Inbox</div>
+                  <h1>Call Detail Report</h1>
+                  <p>
+                    {record.callerNameRaw || 'Unknown caller'} · {record.phoneNumber || 'No phone number captured'} · {formatDateTime(record.receivedAt)}
+                  </p>
+                  <div className="print-meta-row">
+                    <span>Record ID: {record.id}</span>
+                    <span>Printed: {printGeneratedAt}</span>
+                  </div>
+                </div>
+                <div className="print-status-stack">
+                  <span>{formatEnumLabel(record.sourceType)}</span>
+                  <span>{formatEnumLabel(record.status)}</span>
+                  <span>{formatEnumLabel(record.priority)}</span>
+                  <span>{formatEnumLabel(record.callType)}</span>
+                </div>
+              </div>
+
+              <div className="print-grid print-grid-4">
+                <div className="print-card">
+                  <div className="print-label">Assigned To</div>
+                  <div className="print-value">{record.assignedToUser?.email || 'Unassigned'}</div>
+                </div>
+                <div className="print-card">
+                  <div className="print-label">Next Follow-Up</div>
+                  <div className="print-value">{formatDateTime(nextFollowUpAt)}</div>
+                </div>
+                <div className="print-card">
+                  <div className="print-label">SLA / Aging</div>
+                  <div className="print-value">{record.ageLabel}</div>
+                </div>
+                <div className="print-card">
+                  <div className="print-label">History Snapshot</div>
+                  <div className="print-value">
+                    {record.callbackAttemptCount} callback attempts · {record.activityCount} activity events
+                  </div>
+                </div>
+              </div>
+
+              <div className="print-grid print-grid-3">
+                <div className="print-card">
+                  <div className="print-label">Customer</div>
+                  <div className="print-value">{record.customer?.fullName || 'Not linked'}</div>
+                </div>
+                <div className="print-card">
+                  <div className="print-label">Property</div>
+                  <div className="print-value">{record.property?.address || 'Not linked'}</div>
+                </div>
+                <div className="print-card">
+                  <div className="print-label">Related Task</div>
+                  <div className="print-value">{record.relatedTask?.serviceName || 'Not linked'}</div>
+                </div>
+              </div>
+
+              <div className="print-section print-section-feature">
+                <h2>Summary</h2>
+                <div className="print-block">{form.summary || 'No summary recorded.'}</div>
+              </div>
+
+              <div className="print-grid print-grid-2">
+                <div className="print-section">
+                  <h2>Requested Action</h2>
+                  <div className="print-block">{form.requestedAction || 'No requested action recorded.'}</div>
+                </div>
+                <div className="print-section">
+                  <h2>Internal Notes</h2>
+                  <div className="print-block">{form.internalNotes || 'No internal notes recorded.'}</div>
+                </div>
+              </div>
+
+              <div className="print-section">
+                <h2>Transcript / Detailed Notes</h2>
+                <div className="print-block print-block-large">{form.transcriptRaw || 'No transcript recorded.'}</div>
+              </div>
+
+              <div className="print-section">
+                <h2>Callback History</h2>
+                {record.callbackAttempts.length === 0 ? (
+                  <div className="print-empty">No callback attempts logged yet.</div>
+                ) : (
+                  <div className="print-list">
+                    {record.callbackAttempts.map((attempt) => (
+                      <div key={attempt.id} className="print-list-item">
+                        <div className="print-item-title">{formatEnumLabel(attempt.outcome)}</div>
+                        <div className="print-item-meta">
+                          {formatDateTime(attempt.attemptedAt)} · {attempt.attemptedByUser?.email || 'Unknown user'}
+                        </div>
+                        {attempt.nextFollowUpAt && <div className="print-item-body">Next follow-up: {formatDateTime(attempt.nextFollowUpAt)}</div>}
+                        {attempt.notes && <div className="print-item-body">{attempt.notes}</div>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="print-section">
+                <h2>SMS History</h2>
+                {smsActivities.length === 0 ? (
+                  <div className="print-empty">No outbound customer texts have been sent from this call record yet.</div>
+                ) : (
+                  <div className="print-list">
+                    {smsActivities.map((activity) => (
+                      <div key={activity.id} className="print-list-item">
+                        <div className="print-item-title">{activity.fromValue || 'Manual message'}</div>
+                        <div className="print-item-meta">
+                          {formatDateTime(activity.createdAt)} · {activity.createdByUser?.email || 'System'}
+                        </div>
+                        {activity.note && <div className="print-item-body">{activity.note}</div>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="print-section">
+                <h2>Audit Trail</h2>
+                {record.activities.length === 0 ? (
+                  <div className="print-empty">No activity log entries recorded yet.</div>
+                ) : (
+                  <div className="print-list">
+                    {record.activities.map((activity) => (
+                      <div key={activity.id} className="print-list-item">
+                        <div className="print-item-title">{formatEnumLabel(activity.actionType)}</div>
+                        <div className="print-item-meta">
+                          {formatDateTime(activity.createdAt)} · {activity.createdByUser?.email || 'System'}
+                        </div>
+                        {(activity.fromValue || activity.toValue) && (
+                          <div className="print-item-body">
+                            {activity.fromValue ? `${activity.fromValue} → ` : ''}
+                            {activity.toValue || 'Updated'}
+                          </div>
+                        )}
+                        {activity.note && <div className="print-item-body">{activity.note}</div>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="print-footer">
+                Internal operational record · Kline Brothers Calls Inbox · {record.id}
+              </div>
+            </section>
           </>
         )}
       </main>
 
       <style jsx>{`
+        .screen-layout {
+          display: block;
+        }
+
+        .print-sheet {
+          display: none;
+        }
+
+        .print-sheet-topline {
+          height: 8px;
+          border-radius: 999px;
+          background: linear-gradient(90deg, #b80510 0%, #e30613 30%, #0d6efd 68%, #7c3aed 100%);
+          margin-bottom: 1.1rem;
+        }
+
         .page-masthead {
           display: grid;
           grid-template-columns: 1fr;
@@ -829,9 +1008,242 @@ export default function CallRecordDetailPage() {
           gap: 1rem;
         }
 
+        .print-sheet-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          gap: 1.5rem;
+          padding: 0 0 1.1rem;
+          border-bottom: 2px solid #d8dee8;
+        }
+
+        .print-brand {
+          font-size: 0.8rem;
+          font-weight: 800;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+          color: #b80510;
+        }
+
+        .print-sheet-header h1 {
+          margin: 0.35rem 0 0;
+          color: #0f172a;
+          font-size: 2.15rem;
+          letter-spacing: -0.03em;
+        }
+
+        .print-sheet-header p {
+          margin: 0.5rem 0 0;
+          color: #475569;
+          font-size: 0.98rem;
+        }
+
+        .print-meta-row {
+          display: flex;
+          gap: 0.65rem;
+          flex-wrap: wrap;
+          margin-top: 0.8rem;
+        }
+
+        .print-meta-row span {
+          padding: 0.28rem 0.62rem;
+          border-radius: 999px;
+          background: #f8fafc;
+          border: 1px solid #d8dee8;
+          color: #475569;
+          font-size: 0.82rem;
+          font-weight: 700;
+        }
+
+        .print-status-stack {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.45rem;
+          justify-content: flex-end;
+          max-width: 260px;
+        }
+
+        .print-status-stack span {
+          padding: 0.35rem 0.7rem;
+          border-radius: 999px;
+          border: 1px solid #d8dee8;
+          color: #0f172a;
+          font-weight: 700;
+          font-size: 0.84rem;
+          background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+        }
+
+        .print-grid {
+          display: grid;
+          gap: 0.85rem;
+          margin-top: 1rem;
+        }
+
+        .print-grid-4 {
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+
+        .print-grid-3 {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+
+        .print-grid-2 {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .print-card {
+          border: 1px solid #d8dee8;
+          border-radius: 14px;
+          padding: 0.95rem 1rem;
+          background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+        }
+
+        .print-label {
+          font-size: 0.78rem;
+          font-weight: 800;
+          letter-spacing: 0.05em;
+          text-transform: uppercase;
+          color: #64748b;
+        }
+
+        .print-value {
+          margin-top: 0.45rem;
+          color: #0f172a;
+          font-weight: 700;
+          line-height: 1.5;
+        }
+
+        .print-section {
+          margin-top: 1.2rem;
+        }
+
+        .print-section h2 {
+          margin: 0 0 0.7rem;
+          color: #0f172a;
+          font-size: 1.08rem;
+          letter-spacing: -0.01em;
+        }
+
+        .print-section-feature h2 {
+          color: #b80510;
+        }
+
+        .print-block {
+          border: 1px solid #d8dee8;
+          border-radius: 14px;
+          padding: 1rem 1.05rem;
+          background: linear-gradient(180deg, #ffffff 0%, #fcfcfd 100%);
+          color: #0f172a;
+          line-height: 1.6;
+          white-space: pre-wrap;
+        }
+
+        .print-block-large {
+          min-height: 180px;
+          font-size: 0.97rem;
+        }
+
+        .print-list {
+          display: grid;
+          gap: 0.75rem;
+        }
+
+        .print-list-item {
+          border-left: 4px solid #cbd5e1;
+          padding: 0.1rem 0 0.1rem 0.9rem;
+        }
+
+        .print-item-title {
+          font-weight: 800;
+          color: #0f172a;
+        }
+
+        .print-item-meta {
+          margin-top: 0.25rem;
+          color: #64748b;
+          font-size: 0.9rem;
+        }
+
+        .print-item-body {
+          margin-top: 0.4rem;
+          color: #0f172a;
+          line-height: 1.55;
+          white-space: pre-wrap;
+        }
+
+        .print-empty {
+          color: #64748b;
+          padding: 0.35rem 0 0;
+        }
+
+        .print-footer {
+          margin-top: 1.4rem;
+          padding-top: 0.9rem;
+          border-top: 1px solid #d8dee8;
+          color: #64748b;
+          font-size: 0.78rem;
+          letter-spacing: 0.03em;
+        }
+
         @media (max-width: 1080px) {
           .detail-layout {
             grid-template-columns: 1fr;
+          }
+
+          .print-grid-4,
+          .print-grid-3,
+          .print-grid-2 {
+            grid-template-columns: 1fr;
+          }
+
+          .print-sheet-header {
+            flex-direction: column;
+          }
+
+          .print-status-stack {
+            justify-content: flex-start;
+            max-width: none;
+          }
+        }
+
+        @media print {
+          .topbar,
+          .screen-layout,
+          .feedback-banner {
+            display: none !important;
+          }
+
+          .print-sheet {
+            display: block;
+            color: #0f172a;
+          }
+
+          :global(body) {
+            background: #fff !important;
+          }
+
+          :global(.main-content) {
+            max-width: 1020px !important;
+            margin: 0 auto !important;
+            padding: 0.25in 0.2in 0.35in !important;
+            gap: 0 !important;
+          }
+
+          :global(.kline-card) {
+            box-shadow: none !important;
+          }
+
+          .print-sheet-topline {
+            margin-bottom: 0.85rem;
+          }
+
+          .print-section,
+          .print-card,
+          .print-list-item,
+          .print-sheet-header,
+          .print-block {
+            break-inside: avoid;
           }
         }
       `}</style>

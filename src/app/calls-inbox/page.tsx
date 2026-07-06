@@ -13,6 +13,13 @@ import {
   formatEnumLabel,
 } from '@/lib/callsInbox'
 
+type AssignmentUser = {
+  id: string
+  email: string
+  accessScope?: 'ALL' | 'PERMITS_ONLY' | 'NONE'
+  canAccessCallsInbox?: boolean
+}
+
 const OPEN_RECORD_STATUSES = ['NEW', 'TRIAGE_REQUIRED', 'ASSIGNED', 'CALLBACK_PENDING'] as const
 const DEFAULT_PAGE_SIZE = 100
 
@@ -73,6 +80,7 @@ export default function CallsInboxPage() {
   const router = useRouter()
   const [authorized, setAuthorized] = useState<boolean | null>(null)
   const [canAccessVoicemailImports, setCanAccessVoicemailImports] = useState(false)
+  const [assignmentUsers, setAssignmentUsers] = useState<AssignmentUser[]>([])
   const [records, setRecords] = useState<CallsInboxRecord[]>([])
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
@@ -86,7 +94,8 @@ export default function CallsInboxPage() {
   const [error, setError] = useState<string>('')
   const [refreshKey, setRefreshKey] = useState(0)
   const [quickActionRecordId, setQuickActionRecordId] = useState<string | null>(null)
-  const [quickActionType, setQuickActionType] = useState<'TAKE_OWNERSHIP' | 'CLOSE' | null>(null)
+  const [quickActionType, setQuickActionType] = useState<'TAKE_OWNERSHIP' | 'CLOSE' | 'ASSIGN' | null>(null)
+  const [pendingAssignments, setPendingAssignments] = useState<Record<string, string>>({})
   const [filters, setFilters] = useState({
     query: '',
     status: 'OPEN',
@@ -193,8 +202,63 @@ export default function CallsInboxPage() {
     }
   }, [authorized, currentPage, pageSize, refreshKey])
 
-  async function runQuickAction(record: CallsInboxRecord, action: 'TAKE_OWNERSHIP' | 'CLOSE') {
+  useEffect(() => {
+    if (!authorized) return
+
+    let cancelled = false
+
+    async function loadAssignmentUsers() {
+      try {
+        const res = await fetch('/api/users', { cache: 'no-store' })
+        if (!res.ok) {
+          throw new Error('Unable to load assignment users')
+        }
+
+        const usersData = (await res.json()) as AssignmentUser[]
+        if (cancelled) return
+
+        setAssignmentUsers(usersData.filter((user) => user.canAccessCallsInbox === true && user.accessScope !== 'PERMITS_ONLY'))
+      } catch (usersError) {
+        if (!cancelled) {
+          setError(usersError instanceof Error ? usersError.message : 'Unable to load assignment users')
+        }
+      }
+    }
+
+    loadAssignmentUsers()
+
+    return () => {
+      cancelled = true
+    }
+  }, [authorized])
+
+  useEffect(() => {
+    setPendingAssignments((current) => {
+      const next = { ...current }
+      let changed = false
+
+      for (const record of records) {
+        const nextValue = current[record.id] ?? record.assignedToUserId ?? ''
+        if (next[record.id] !== nextValue) {
+          next[record.id] = nextValue
+          changed = true
+        }
+      }
+
+      return changed ? next : current
+    })
+  }, [records])
+
+  async function runQuickAction(record: CallsInboxRecord, action: 'TAKE_OWNERSHIP' | 'CLOSE' | 'ASSIGN') {
     if (action === 'TAKE_OWNERSHIP' && !currentUserId) return
+
+    const selectedAssignmentUserId =
+      action === 'ASSIGN' ? (pendingAssignments[record.id] ?? record.assignedToUserId ?? '').trim() : ''
+
+    if (action === 'ASSIGN' && !selectedAssignmentUserId) {
+      setError('Select an assignee first.')
+      return
+    }
 
     if (
       action === 'CLOSE' &&
@@ -214,7 +278,9 @@ export default function CallsInboxPage() {
         body: JSON.stringify(
           action === 'TAKE_OWNERSHIP'
             ? { assignedToUserId: currentUserId }
-            : { status: 'CLOSED' }
+            : action === 'ASSIGN'
+              ? { assignedToUserId: selectedAssignmentUserId }
+              : { status: 'CLOSED' }
         ),
       })
 
@@ -222,6 +288,13 @@ export default function CallsInboxPage() {
 
       if (!res.ok) {
         throw new Error(data.error || 'Unable to apply quick action')
+      }
+
+      if (action === 'ASSIGN') {
+        setPendingAssignments((current) => ({
+          ...current,
+          [record.id]: selectedAssignmentUserId,
+        }))
       }
 
       setRefreshKey((value) => value + 1)
@@ -834,6 +907,35 @@ export default function CallsInboxPage() {
                         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                           <button className="ghost-btn" onClick={() => router.push(`/calls-inbox/${record.id}`)}>
                             View
+                          </button>
+                          <select
+                            className="kline-input"
+                            style={{ minWidth: 220, height: 42 }}
+                            value={pendingAssignments[record.id] ?? record.assignedToUserId ?? ''}
+                            onChange={(event) =>
+                              setPendingAssignments((current) => ({
+                                ...current,
+                                [record.id]: event.target.value,
+                              }))
+                            }
+                            disabled={quickActionRecordId === record.id}
+                          >
+                            <option value="">Unassigned</option>
+                            {assignmentUsers.map((user) => (
+                              <option key={user.id} value={user.id}>
+                                {user.email}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            className="ghost-btn"
+                            onClick={() => runQuickAction(record, 'ASSIGN')}
+                            disabled={
+                              quickActionRecordId === record.id ||
+                              (pendingAssignments[record.id] ?? record.assignedToUserId ?? '') === (record.assignedToUserId ?? '')
+                            }
+                          >
+                            {quickActionRecordId === record.id && quickActionType === 'ASSIGN' ? 'Assigning…' : 'Assign'}
                           </button>
                           {!record.assignedToUserId && currentUserId && (
                             <button
