@@ -249,11 +249,11 @@ export default function CallsInboxPage() {
     })
   }, [records])
 
-  async function runQuickAction(record: CallsInboxRecord, action: 'TAKE_OWNERSHIP' | 'CLOSE' | 'ASSIGN') {
+  async function runQuickAction(record: CallsInboxRecord, action: 'TAKE_OWNERSHIP' | 'CLOSE' | 'ASSIGN', overrideAssignedToUserId?: string) {
     if (action === 'TAKE_OWNERSHIP' && !currentUserId) return
 
     const selectedAssignmentUserId =
-      action === 'ASSIGN' ? (pendingAssignments[record.id] ?? record.assignedToUserId ?? '').trim() : ''
+      action === 'ASSIGN' ? (overrideAssignedToUserId ?? pendingAssignments[record.id] ?? record.assignedToUserId ?? '').trim() : ''
 
     if (action === 'ASSIGN' && !selectedAssignmentUserId) {
       setError('Select an assignee first.')
@@ -912,12 +912,17 @@ export default function CallsInboxPage() {
                             className="kline-input"
                             style={{ minWidth: 220, height: 42 }}
                             value={pendingAssignments[record.id] ?? record.assignedToUserId ?? ''}
-                            onChange={(event) =>
+                            onChange={(event) => {
+                              const nextAssigneeId = event.target.value
                               setPendingAssignments((current) => ({
                                 ...current,
-                                [record.id]: event.target.value,
+                                [record.id]: nextAssigneeId,
                               }))
-                            }
+
+                              if ((record.assignedToUserId ?? '') !== nextAssigneeId) {
+                                void runQuickAction(record, 'ASSIGN', nextAssigneeId)
+                              }
+                            }}
                             disabled={quickActionRecordId === record.id}
                           >
                             <option value="">Unassigned</option>
@@ -927,16 +932,18 @@ export default function CallsInboxPage() {
                               </option>
                             ))}
                           </select>
-                          <button
-                            className="ghost-btn"
-                            onClick={() => runQuickAction(record, 'ASSIGN')}
-                            disabled={
-                              quickActionRecordId === record.id ||
-                              (pendingAssignments[record.id] ?? record.assignedToUserId ?? '') === (record.assignedToUserId ?? '')
-                            }
-                          >
-                            {quickActionRecordId === record.id && quickActionType === 'ASSIGN' ? 'Assigning…' : 'Assign'}
-                          </button>
+                          {quickActionRecordId === record.id && quickActionType === 'ASSIGN' && (
+                            <span
+                              style={{
+                                alignSelf: 'center',
+                                color: 'var(--kline-text-light)',
+                                fontSize: '0.84rem',
+                                fontWeight: 700,
+                              }}
+                            >
+                              Saving…
+                            </span>
+                          )}
                           {!record.assignedToUserId && currentUserId && (
                             <button
                               className="ghost-btn"
