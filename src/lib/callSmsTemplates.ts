@@ -1,3 +1,5 @@
+const CALL_SMS_NO_REPLY_NOTICE = 'Please do not reply to this message.'
+
 export const callSmsTemplates = [
   {
     value: 'RECEIVED_MESSAGE',
@@ -7,7 +9,7 @@ export const callSmsTemplates = [
   {
     value: 'TRIED_CALLING_BACK',
     label: 'We tried calling you back',
-    text: 'Hello, we tried calling you back. Please reply with the best time to reach you. Thank you, Kline Brothers.',
+    text: 'Hello, we tried calling you back. Please call our office with the best time to reach you. Thank you, Kline Brothers.',
   },
   {
     value: 'ROUTED_TO_TEAM',
@@ -27,12 +29,12 @@ export function buildCallSmsMessage(templateValue: string, additionalNote: strin
   }
 
   if (!template) {
-    return cleanedNote
+    return `${cleanedNote} ${CALL_SMS_NO_REPLY_NOTICE}`.trim()
   }
 
   if (!cleanedNote) {
-    return template.text
+    return `${template.text} ${CALL_SMS_NO_REPLY_NOTICE}`.trim()
   }
 
-  return `${template.text} ${cleanedNote}`.trim()
+  return `${template.text} ${cleanedNote} ${CALL_SMS_NO_REPLY_NOTICE}`.trim()
 }
