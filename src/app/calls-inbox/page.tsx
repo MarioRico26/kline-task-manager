@@ -111,6 +111,23 @@ export default function CallsInboxPage() {
     sortBy: 'RECEIVED_AT_DESC',
   })
 
+  const filtersQueryString = useMemo(() => {
+    const params = new URLSearchParams()
+    params.set('status', filters.status)
+    params.set('assignedTo', filters.assignedTo)
+    params.set('priority', filters.priority)
+    params.set('callType', filters.callType)
+    params.set('sourceType', filters.sourceType)
+    params.set('serviceCategory', filters.serviceCategory)
+    params.set('sortBy', filters.sortBy)
+    if (filters.query.trim()) params.set('query', filters.query.trim())
+    if (filters.unassignedOnly) params.set('unassignedOnly', 'true')
+    if (filters.mineOnly) params.set('mineOnly', 'true')
+    if (filters.overdueOnly) params.set('overdueOnly', 'true')
+    if (filters.dueTodayOnly) params.set('dueTodayOnly', 'true')
+    return params.toString()
+  }, [filters])
+
   useEffect(() => {
     let cancelled = false
 
@@ -165,7 +182,7 @@ export default function CallsInboxPage() {
       setError('')
 
       try {
-        const res = await fetch(`/api/calls-inbox?page=${currentPage}&pageSize=${pageSize}`, { cache: 'no-store' })
+        const res = await fetch(`/api/calls-inbox?page=${currentPage}&pageSize=${pageSize}&${filtersQueryString}`, { cache: 'no-store' })
         const data = (await res.json()) as CallsInboxApiResponse | { error?: string }
 
         if (!res.ok) {
@@ -200,7 +217,11 @@ export default function CallsInboxPage() {
     return () => {
       cancelled = true
     }
-  }, [authorized, currentPage, pageSize, refreshKey])
+  }, [authorized, currentPage, pageSize, refreshKey, filtersQueryString])
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [filtersQueryString])
 
   useEffect(() => {
     if (!authorized) return
@@ -396,57 +417,7 @@ export default function CallsInboxPage() {
     [records]
   )
 
-  const visibleRecords = useMemo(() => {
-    const query = filters.query.trim().toLowerCase()
-
-    const filtered = records.filter((record) => {
-      if (filters.status === 'OPEN' && !OPEN_RECORD_STATUSES.includes(record.status as (typeof OPEN_RECORD_STATUSES)[number])) return false
-      if (filters.status !== 'ALL' && filters.status !== 'OPEN' && record.status !== filters.status) return false
-      if (filters.assignedTo !== 'ALL' && (record.assignedToUserId || '') !== filters.assignedTo) return false
-      if (filters.priority !== 'ALL' && record.priority !== filters.priority) return false
-      if (filters.callType !== 'ALL' && record.callType !== filters.callType) return false
-      if (filters.sourceType !== 'ALL' && record.sourceType !== filters.sourceType) return false
-      if (filters.serviceCategory !== 'ALL' && (record.detectedServiceCategory || '') !== filters.serviceCategory) return false
-      if (filters.unassignedOnly && record.assignedToUserId) return false
-      if (filters.mineOnly && record.assignedToUserId !== currentUserId) return false
-      if (filters.overdueOnly && !record.isFollowUpOverdue) return false
-      if (filters.dueTodayOnly && !record.isFollowUpDueToday) return false
-
-      if (!query) return true
-
-      const haystack = [
-        record.callerNameRaw,
-        record.phoneNumber,
-        record.summary,
-        record.transcriptRaw,
-        record.detectedAddress,
-        record.detectedTown,
-        record.customer?.fullName,
-        record.property?.address,
-        record.assignedToUser?.email,
-        record.relatedTask?.serviceName,
-      ]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase()
-
-      return haystack.includes(query)
-    })
-
-    return [...filtered].sort((a, b) => {
-      switch (filters.sortBy) {
-        case 'RECEIVED_AT_ASC':
-          return new Date(a.receivedAt).getTime() - new Date(b.receivedAt).getTime()
-        case 'ASSIGNED_TO_ASC':
-          return (a.assignedToUser?.email || 'zzzz').localeCompare(b.assignedToUser?.email || 'zzzz')
-        case 'ASSIGNED_TO_DESC':
-          return (b.assignedToUser?.email || '').localeCompare(a.assignedToUser?.email || '')
-        case 'RECEIVED_AT_DESC':
-        default:
-          return new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime()
-      }
-    })
-  }, [currentUserId, filters, records])
+  const visibleRecords = useMemo(() => records, [records])
 
   const totalPages = Math.max(1, Math.ceil(totalRecords / Math.max(pageSize, 1)))
   const rangeStart = totalRecords === 0 ? 0 : (currentPage - 1) * pageSize + 1

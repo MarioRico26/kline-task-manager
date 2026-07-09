@@ -35,6 +35,7 @@ function deriveFollowUpFlags(nextFollowUpAt: Date | null) {
 }
 
 const openRecordStatuses = new Set<CallStatus>(['NEW', 'TRIAGE_REQUIRED', 'ASSIGNED', 'CALLBACK_PENDING'])
+const openRecordStatusValues: CallStatus[] = ['NEW', 'TRIAGE_REQUIRED', 'ASSIGNED', 'CALLBACK_PENDING']
 
 function deriveAging(receivedAt: Date) {
   const ageMs = Date.now() - receivedAt.getTime()
@@ -133,10 +134,103 @@ export async function GET(request: Request) {
     const page = Number.isFinite(rawPage) && rawPage > 0 ? Math.floor(rawPage) : 1
     const pageSize = Number.isFinite(rawPageSize) && rawPageSize > 0 ? Math.min(Math.floor(rawPageSize), 100) : 100
     const skip = (page - 1) * pageSize
+    const query = (searchParams.get('query') || '').trim()
+    const status = (searchParams.get('status') || 'OPEN').trim()
+    const assignedTo = (searchParams.get('assignedTo') || 'ALL').trim()
+    const priority = (searchParams.get('priority') || 'ALL').trim()
+    const callType = (searchParams.get('callType') || 'ALL').trim()
+    const sourceType = (searchParams.get('sourceType') || 'ALL').trim()
+    const serviceCategory = (searchParams.get('serviceCategory') || 'ALL').trim()
+    const unassignedOnly = searchParams.get('unassignedOnly') === 'true'
+    const mineOnly = searchParams.get('mineOnly') === 'true'
+    const overdueOnly = searchParams.get('overdueOnly') === 'true'
+    const dueTodayOnly = searchParams.get('dueTodayOnly') === 'true'
+    const sortBy = (searchParams.get('sortBy') || 'RECEIVED_AT_DESC').trim()
+    const now = new Date()
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const startOfTomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
 
-    const [records, statsRecords, totalRecords] = await Promise.all([
+    const where: Prisma.CallRecordWhereInput = {}
+
+    if (status === 'OPEN') {
+      where.status = { in: openRecordStatusValues }
+    } else if (status !== 'ALL') {
+      where.status = status as CallStatus
+    }
+
+    if (mineOnly) {
+      where.assignedToUserId = sessionUser.id
+    } else if (unassignedOnly) {
+      where.assignedToUserId = null
+    } else if (assignedTo !== 'ALL') {
+      where.assignedToUserId = assignedTo
+    }
+
+    if (priority !== 'ALL') {
+      where.priority = priority as CallPriority
+    }
+
+    if (callType !== 'ALL') {
+      where.callType = callType as CallType
+    }
+
+    if (sourceType !== 'ALL') {
+      where.sourceType = sourceType as CallSourceType
+    }
+
+    if (serviceCategory !== 'ALL') {
+      where.detectedServiceCategory = serviceCategory as Prisma.CallRecordWhereInput['detectedServiceCategory']
+    }
+
+    if (overdueOnly) {
+      where.callbackAttempts = {
+        some: {
+          nextFollowUpAt: {
+            not: null,
+            lt: now,
+          },
+        },
+      }
+    } else if (dueTodayOnly) {
+      where.callbackAttempts = {
+        some: {
+          nextFollowUpAt: {
+            not: null,
+            gte: startOfToday,
+            lt: startOfTomorrow,
+          },
+        },
+      }
+    }
+
+    if (query) {
+      where.OR = [
+        { callerNameRaw: { contains: query, mode: 'insensitive' } },
+        { phoneNumber: { contains: query, mode: 'insensitive' } },
+        { summary: { contains: query, mode: 'insensitive' } },
+        { transcriptRaw: { contains: query, mode: 'insensitive' } },
+        { detectedAddress: { contains: query, mode: 'insensitive' } },
+        { detectedTown: { contains: query, mode: 'insensitive' } },
+        { customer: { fullName: { contains: query, mode: 'insensitive' } } },
+        { property: { address: { contains: query, mode: 'insensitive' } } },
+        { assignedToUser: { email: { contains: query, mode: 'insensitive' } } },
+        { relatedTask: { service: { name: { contains: query, mode: 'insensitive' } } } },
+      ]
+    }
+
+    const orderBy: Prisma.CallRecordOrderByWithRelationInput[] =
+      sortBy === 'RECEIVED_AT_ASC'
+        ? [{ receivedAt: 'asc' }]
+        : sortBy === 'ASSIGNED_TO_ASC'
+          ? [{ assignedToUser: { email: 'asc' } }, { receivedAt: 'desc' }]
+          : sortBy === 'ASSIGNED_TO_DESC'
+            ? [{ assignedToUser: { email: 'desc' } }, { receivedAt: 'desc' }]
+            : [{ receivedAt: 'desc' }]
+
+    const [records, statsRecords, filteredTotalRecords] = await Promise.all([
       prisma.callRecord.findMany({
-        orderBy: { receivedAt: 'desc' },
+        where,
+        orderBy,
         skip,
         take: pageSize,
         include: {
@@ -199,7 +293,7 @@ export async function GET(request: Request) {
           },
         },
       }),
-      prisma.callRecord.count(),
+      prisma.callRecord.count({ where }),
     ])
 
     const stats = statsRecords.reduce(
@@ -275,7 +369,7 @@ export async function GET(request: Request) {
       })),
       currentUserId: sessionUser.id,
       moduleReady: true,
-      totalRecords,
+      totalRecords: filteredTotalRecords,
       loadedRecords: records.length,
       page,
       pageSize,
