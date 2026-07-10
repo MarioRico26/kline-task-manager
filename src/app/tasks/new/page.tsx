@@ -140,6 +140,18 @@ const TARGET_COMPRESSED_FILE_BYTES = 1.8 * 1024 * 1024
 const MAX_IMAGE_DIMENSION = 1920
 const MIN_IMAGE_DIMENSION = 900
 
+function isHeicLike(file: File) {
+  const normalizedType = file.type.trim().toLowerCase()
+  const normalizedName = file.name.trim().toLowerCase()
+
+  return (
+    normalizedType === 'image/heic' ||
+    normalizedType === 'image/heif' ||
+    normalizedName.endsWith('.heic') ||
+    normalizedName.endsWith('.heif')
+  )
+}
+
 function formatBytes(value: number) {
   if (value >= 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(1)} MB`
   if (value >= 1024) return `${Math.round(value / 1024)} KB`
@@ -215,6 +227,7 @@ async function renderCompressedImage(image: ImageBitmap | HTMLImageElement, maxD
 
 async function compressImageForUpload(file: File) {
   if (!file.type.startsWith('image/')) return file
+  if (isHeicLike(file)) return file
   if (file.size <= TARGET_COMPRESSED_FILE_BYTES) return file
 
   const image = await createDrawableImage(file)
@@ -584,12 +597,19 @@ export default function NewTaskPage() {
     for (let index = 0; index < totalFiles; index += 1) {
       const originalFile = selectedFiles[index]
       setUploadProgress(`Processing attachment ${index + 1} of ${totalFiles}...`)
+
+      if (isHeicLike(originalFile) && originalFile.size > MAX_UPLOAD_FILE_BYTES) {
+        throw new Error(
+          `"${originalFile.name}" is an iPhone HEIC photo (${formatBytes(originalFile.size)}). Please convert it to JPG/PNG or choose a smaller version under ${formatBytes(MAX_UPLOAD_FILE_BYTES)}.`
+        )
+      }
+
       let processedFile: File
       try {
         processedFile = await compressImageForUpload(originalFile)
       } catch {
         throw new Error(
-          `Could not optimize "${originalFile.name}". Please send it as JPG/PNG or choose a smaller photo.`
+          `Could not optimize "${originalFile.name}". If it is an iPhone HEIC photo, convert it to JPG/PNG or choose a smaller version.`
         )
       }
 
@@ -1360,7 +1380,7 @@ export default function NewTaskPage() {
                     </div>
                   )}
                   <div style={{ marginTop: 8, color: 'var(--kline-text-light)', fontSize: '0.78rem', maxWidth: 430, lineHeight: 1.45 }}>
-                    Images are auto-optimized before upload. No total batch cap. Max per processed image: {formatBytes(MAX_UPLOAD_FILE_BYTES)}.
+                    Images are auto-optimized before upload. iPhone HEIC photos can upload directly when they are under {formatBytes(MAX_UPLOAD_FILE_BYTES)}. No total batch cap.
                   </div>
                 </div>
               </div>
