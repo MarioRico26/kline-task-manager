@@ -598,12 +598,6 @@ export default function NewTaskPage() {
       const originalFile = selectedFiles[index]
       setUploadProgress(`Processing attachment ${index + 1} of ${totalFiles}...`)
 
-      if (isHeicLike(originalFile) && originalFile.size > MAX_UPLOAD_FILE_BYTES) {
-        throw new Error(
-          `"${originalFile.name}" is an iPhone HEIC photo (${formatBytes(originalFile.size)}). Please convert it to JPG/PNG or choose a smaller version under ${formatBytes(MAX_UPLOAD_FILE_BYTES)}.`
-        )
-      }
-
       let processedFile: File
       try {
         processedFile = await compressImageForUpload(originalFile)
@@ -1380,7 +1374,7 @@ export default function NewTaskPage() {
                     </div>
                   )}
                   <div style={{ marginTop: 8, color: 'var(--kline-text-light)', fontSize: '0.78rem', maxWidth: 430, lineHeight: 1.45 }}>
-                    Images are auto-optimized before upload. iPhone HEIC photos can upload directly when they are under {formatBytes(MAX_UPLOAD_FILE_BYTES)}. No total batch cap.
+                    Images are auto-optimized before upload. Larger iPhone HEIC photos are converted on upload when possible. No total batch cap.
                   </div>
                 </div>
               </div>
