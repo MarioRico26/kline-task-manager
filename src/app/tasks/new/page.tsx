@@ -1355,7 +1355,7 @@ export default function NewTaskPage() {
                     key={fileInputKey}
                     type="file"
                     multiple
-                    accept="image/*"
+                    accept="image/*,.heic,.heif"
                     className="kline-input"
                     onChange={(e) =>
                       handleFileSelection(e.target.files, () => {
