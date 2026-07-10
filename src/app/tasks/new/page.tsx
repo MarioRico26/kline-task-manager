@@ -56,6 +56,8 @@ interface TaskHistoryItem {
   }
 }
 
+type AccessScope = 'ALL' | 'PERMITS_ONLY' | 'NONE'
+
 function normalizeWorkflowKey(value?: string | null) {
   return (value || '').trim().toLowerCase()
 }
@@ -289,32 +291,66 @@ export default function NewTaskPage() {
         setLoading(true)
         setErrorMsg(null)
 
-        const [cRes, pRes, sRes, stRes, tRes] = await Promise.all([
+        const authRes = await fetch('/api/auth/check', { cache: 'no-store' })
+
+        if (authRes.status === 401) {
+          router.replace('/auth/login')
+          return
+        }
+
+        if (!authRes.ok) {
+          throw new Error(`Load failed (auth:${authRes.status})`)
+        }
+
+        const authData = (await authRes.json()) as {
+          user?: { accessScope?: AccessScope; canAccessCallsInbox?: boolean }
+        }
+
+        if (authData.user?.accessScope === 'NONE') {
+          router.replace(authData.user.canAccessCallsInbox ? '/calls-inbox' : '/dashboard')
+          return
+        }
+
+        const [cRes, pRes, sRes, stRes] = await Promise.all([
           fetch('/api/customers', { cache: 'no-store' }),
           fetch('/api/properties', { cache: 'no-store' }),
           fetch('/api/services', { cache: 'no-store' }),
           fetch('/api/statuses', { cache: 'no-store' }),
-          fetch('/api/tasks', { cache: 'no-store' }),
         ])
 
-        if (!cRes.ok || !pRes.ok || !sRes.ok || !stRes.ok || !tRes.ok) {
-          const msg = `Load failed (customers:${cRes.status}, properties:${pRes.status}, services:${sRes.status}, statuses:${stRes.status}, tasks:${tRes.status})`
+        if (!cRes.ok || !pRes.ok || !sRes.ok || !stRes.ok) {
+          const msg = `Load failed (customers:${cRes.status}, properties:${pRes.status}, services:${sRes.status}, statuses:${stRes.status})`
           throw new Error(msg)
         }
 
-        const [cData, pData, sData, stData, tData] = await Promise.all([
+        const [cData, pData, sData, stData] = await Promise.all([
           cRes.json(),
           pRes.json(),
           sRes.json(),
           stRes.json(),
-          tRes.json(),
         ])
 
         setCustomers(cData)
         setProperties(pData)
         setServices(sData)
         setStatuses(stData)
-        setTasksHistory(tData)
+
+        // Task history is only used for sequential-service hints, so it should
+        // never block the New Task form from loading.
+        void fetch('/api/tasks', { cache: 'no-store' })
+          .then(async (response) => {
+            if (!response.ok) {
+              throw new Error(`tasks:${response.status}`)
+            }
+            return response.json()
+          })
+          .then((taskData: TaskHistoryItem[]) => {
+            setTasksHistory(taskData)
+          })
+          .catch((historyError: unknown) => {
+            console.warn('⚠️ New Task history load skipped:', historyError)
+            setTasksHistory([])
+          })
       } catch (err: unknown) {
         console.error('❌ New Task load error:', err)
         setErrorMsg(err instanceof Error ? err.message : 'Failed to load form data')
@@ -324,7 +360,7 @@ export default function NewTaskPage() {
     }
 
     loadFormData()
-  }, [])
+  }, [router])
 
   const customerById = useMemo(() => {
     return new Map(customers.map((customer) => [customer.id, customer]))
