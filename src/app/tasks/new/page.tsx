@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { upload } from '@vercel/blob/client'
 
 interface CustomerItem {
   id: string
@@ -134,137 +135,22 @@ function getPropertyDisplay(property: PropertyItem, customerName?: string) {
   return customerName ? `${base} • ${customerName}` : base
 }
 
-const MAX_ORIGINAL_FILE_BYTES = 35 * 1024 * 1024
-const MAX_UPLOAD_FILE_BYTES = 2.8 * 1024 * 1024
-const TARGET_COMPRESSED_FILE_BYTES = 1.8 * 1024 * 1024
-const MAX_IMAGE_DIMENSION = 1920
-const MIN_IMAGE_DIMENSION = 900
+const MAX_ORIGINAL_FILE_BYTES = 50 * 1024 * 1024
+const DIRECT_UPLOAD_MULTIPART_THRESHOLD_BYTES = 10 * 1024 * 1024
 
-function isHeicLike(file: File) {
-  const normalizedType = file.type.trim().toLowerCase()
-  const normalizedName = file.name.trim().toLowerCase()
+function sanitizeUploadFileName(name: string) {
+  const cleaned = name
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-zA-Z0-9._-]/g, '')
 
-  return (
-    normalizedType === 'image/heic' ||
-    normalizedType === 'image/heif' ||
-    normalizedName.endsWith('.heic') ||
-    normalizedName.endsWith('.heif')
-  )
+  return cleaned || `upload-${Date.now()}`
 }
 
 function formatBytes(value: number) {
   if (value >= 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(1)} MB`
   if (value >= 1024) return `${Math.round(value / 1024)} KB`
   return `${value} B`
-}
-
-function canvasToBlob(canvas: HTMLCanvasElement, quality: number) {
-  return new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob(
-      (blob) => {
-        if (blob) {
-          resolve(blob)
-          return
-        }
-        reject(new Error('Unable to process image'))
-      },
-      'image/jpeg',
-      quality
-    )
-  })
-}
-
-function loadImageElement(file: File) {
-  return new Promise<HTMLImageElement>((resolve, reject) => {
-    const imageUrl = URL.createObjectURL(file)
-    const image = new Image()
-    image.onload = () => {
-      URL.revokeObjectURL(imageUrl)
-      resolve(image)
-    }
-    image.onerror = () => {
-      URL.revokeObjectURL(imageUrl)
-      reject(new Error('Unable to read image'))
-    }
-    image.src = imageUrl
-  })
-}
-
-async function createDrawableImage(file: File) {
-  if (typeof createImageBitmap === 'function') {
-    try {
-      return await createImageBitmap(file)
-    } catch {
-      // Some mobile formats fail createImageBitmap but still work through Image.
-    }
-  }
-
-  return loadImageElement(file)
-}
-
-function closeDrawableImage(image: ImageBitmap | HTMLImageElement) {
-  if ('close' in image && typeof image.close === 'function') {
-    image.close()
-  }
-}
-
-async function renderCompressedImage(image: ImageBitmap | HTMLImageElement, maxDimension: number, quality: number) {
-  const sourceWidth = image.width
-  const sourceHeight = image.height
-  const scale = Math.min(1, maxDimension / Math.max(sourceWidth, sourceHeight))
-  const width = Math.max(1, Math.round(sourceWidth * scale))
-  const height = Math.max(1, Math.round(sourceHeight * scale))
-
-  const canvas = document.createElement('canvas')
-  canvas.width = width
-  canvas.height = height
-  const context = canvas.getContext('2d')
-  if (!context) throw new Error('Unable to process image')
-
-  context.drawImage(image, 0, 0, width, height)
-  return canvasToBlob(canvas, quality)
-}
-
-async function compressImageForUpload(file: File) {
-  if (!file.type.startsWith('image/')) return file
-  if (isHeicLike(file)) return file
-  if (file.size <= TARGET_COMPRESSED_FILE_BYTES) return file
-
-  const image = await createDrawableImage(file)
-
-  try {
-    let maxDimension = MAX_IMAGE_DIMENSION
-    let bestBlob: Blob | null = null
-
-    while (maxDimension >= MIN_IMAGE_DIMENSION) {
-      let quality = 0.84
-      let blob = await renderCompressedImage(image, maxDimension, quality)
-      bestBlob = blob
-
-      while (blob.size > TARGET_COMPRESSED_FILE_BYTES && quality > 0.42) {
-        quality -= 0.08
-        blob = await renderCompressedImage(image, maxDimension, quality)
-        bestBlob = blob
-      }
-
-      if (blob.size <= TARGET_COMPRESSED_FILE_BYTES) {
-        bestBlob = blob
-        break
-      }
-
-      maxDimension = Math.floor(maxDimension * 0.82)
-    }
-
-    if (!bestBlob || bestBlob.size >= file.size) return file
-
-    const normalizedName = file.name.replace(/\.[^.]+$/, '')
-    return new File([bestBlob], `${normalizedName}.jpg`, {
-      type: 'image/jpeg',
-      lastModified: Date.now(),
-    })
-  } finally {
-    closeDrawableImage(image)
-  }
 }
 
 export default function NewTaskPage() {
@@ -596,43 +482,27 @@ export default function NewTaskPage() {
 
     for (let index = 0; index < totalFiles; index += 1) {
       const originalFile = selectedFiles[index]
-      setUploadProgress(`Processing attachment ${index + 1} of ${totalFiles}...`)
-
-      let processedFile: File
-      try {
-        processedFile = await compressImageForUpload(originalFile)
-      } catch {
-        throw new Error(
-          `Could not optimize "${originalFile.name}". If it is an iPhone HEIC photo, convert it to JPG/PNG or choose a smaller version.`
-        )
-      }
-
-      if (processedFile.size > MAX_UPLOAD_FILE_BYTES) {
-        throw new Error(
-          `"${originalFile.name}" is still too large after optimization (${formatBytes(processedFile.size)}). Try sending a smaller photo or screenshot.`
-        )
-      }
+      const safeName = sanitizeUploadFileName(originalFile.name)
+      const pathname = `tasks/manual/${Date.now()}-${index + 1}-${safeName}`
+      const usingMultipart = originalFile.size >= DIRECT_UPLOAD_MULTIPART_THRESHOLD_BYTES
 
       setUploadProgress(`Uploading attachment ${index + 1} of ${totalFiles}...`)
-      const uploadData = new FormData()
-      uploadData.set('file', processedFile)
-      uploadData.set('folder', 'tasks/manual')
 
-      const uploadResponse = await fetch('/api/uploads', {
-        method: 'POST',
-        body: uploadData,
+      const blob = await upload(pathname, originalFile, {
+        access: 'public',
+        handleUploadUrl: '/api/uploads/client',
+        multipart: usingMultipart,
+        contentType: originalFile.type || undefined,
+        onUploadProgress: ({ percentage }) => {
+          const rounded = Math.max(1, Math.min(100, Math.round(percentage)))
+          setUploadProgress(`Uploading attachment ${index + 1} of ${totalFiles}... ${rounded}%`)
+        },
       })
 
-      if (!uploadResponse.ok) {
-        const payload = (await uploadResponse.json().catch(() => ({}))) as { error?: string }
-        throw new Error(payload.error || `Upload failed for "${originalFile.name}" (${uploadResponse.status}).`)
-      }
-
-      const uploadPayload = (await uploadResponse.json()) as { url?: string }
-      if (!uploadPayload.url) {
+      if (!blob.url) {
         throw new Error(`Upload finished without URL for "${originalFile.name}".`)
       }
-      uploadedUrls.push(uploadPayload.url)
+      uploadedUrls.push(blob.url)
     }
 
     return uploadedUrls
@@ -700,7 +570,7 @@ export default function NewTaskPage() {
       if (!res.ok) {
         if (res.status === 413) {
           throw new Error(
-            `Attachments are too large for Vercel limits. Please use smaller photos (max ${formatBytes(MAX_UPLOAD_FILE_BYTES)} each).`
+            `One or more attachments are still too large to process. Please try a smaller photo or split the upload.`
           )
         }
         let errorMessage = `Create failed (${res.status})`
@@ -1355,7 +1225,7 @@ export default function NewTaskPage() {
                     key={fileInputKey}
                     type="file"
                     multiple
-                    accept="image/*,.heic,.heif"
+                    accept="image/*,.heic,.heif,.tif,.tiff"
                     className="kline-input"
                     onChange={(e) =>
                       handleFileSelection(e.target.files, () => {
@@ -1374,7 +1244,7 @@ export default function NewTaskPage() {
                     </div>
                   )}
                   <div style={{ marginTop: 8, color: 'var(--kline-text-light)', fontSize: '0.78rem', maxWidth: 430, lineHeight: 1.45 }}>
-                    Images are auto-optimized before upload. Larger iPhone HEIC photos are converted on upload when possible. No total batch cap.
+                    Photos upload directly to storage now. Common formats including HEIC, HEIF, JPG, PNG, WEBP, and TIFF are supported up to {formatBytes(MAX_ORIGINAL_FILE_BYTES)} each.
                   </div>
                 </div>
               </div>
