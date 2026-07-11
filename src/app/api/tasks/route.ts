@@ -6,6 +6,7 @@ import { sendSMS, buildTaskSMS } from '@/lib/sendSms'
 import { formatPhone } from '@/lib/formatPhone'
 import { getSessionUser } from '@/lib/sessionUser'
 import { isPermitsServiceLike } from '@/lib/userScope'
+import { normalizeTaskAttachmentUrl } from '@/lib/taskAttachments'
 
 const prisma = new PrismaClient()
 
@@ -359,10 +360,11 @@ export async function POST(request: Request) {
     if (uploadedImageUrls.length > 0) {
       for (const imageUrl of uploadedImageUrls) {
         try {
+          const normalizedUrl = await normalizeTaskAttachmentUrl(imageUrl, task.id)
           await prisma.taskMedia.create({
-            data: { url: imageUrl, taskId: task.id },
+            data: { url: normalizedUrl, taskId: task.id },
           })
-          uploadedImages.push(imageUrl)
+          uploadedImages.push(normalizedUrl)
         } catch (uploadErr) {
           console.error('⚠ Error linking pre-uploaded file:', uploadErr)
         }
