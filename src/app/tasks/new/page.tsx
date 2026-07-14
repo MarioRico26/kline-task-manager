@@ -147,6 +147,13 @@ function sanitizeUploadFileName(name: string) {
   return cleaned || `upload-${Date.now()}`
 }
 
+function isSafariBrowser() {
+  if (typeof navigator === 'undefined') return false
+
+  const userAgent = navigator.userAgent
+  return /Safari/i.test(userAgent) && !/Chrome|Chromium|CriOS|Edg|OPR|Firefox|FxiOS|Android/i.test(userAgent)
+}
+
 function formatBytes(value: number) {
   if (value >= 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(1)} MB`
   if (value >= 1024) return `${Math.round(value / 1024)} KB`
@@ -484,9 +491,13 @@ export default function NewTaskPage() {
       const originalFile = selectedFiles[index]
       const safeName = sanitizeUploadFileName(originalFile.name)
       const pathname = `tasks/manual/${Date.now()}-${index + 1}-${safeName}`
-      const usingMultipart = originalFile.size >= DIRECT_UPLOAD_MULTIPART_THRESHOLD_BYTES
+      const usingMultipart = originalFile.size >= DIRECT_UPLOAD_MULTIPART_THRESHOLD_BYTES && !isSafariBrowser()
 
-      setUploadProgress(`Uploading attachment ${index + 1} of ${totalFiles}...`)
+      setUploadProgress(
+        usingMultipart
+          ? `Uploading attachment ${index + 1} of ${totalFiles}...`
+          : `Uploading attachment ${index + 1} of ${totalFiles} with Safari-compatible mode...`
+      )
 
       const blob = await upload(pathname, originalFile, {
         access: 'public',
