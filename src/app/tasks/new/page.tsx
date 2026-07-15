@@ -177,6 +177,16 @@ function formatBytes(value: number) {
   return `${value} B`
 }
 
+function getSelectedFileLabel(file: File, index: number) {
+  const trimmedName = file.name.trim()
+  if (/^tempimage/i.test(trimmedName)) {
+    const detectedType = (file.type || 'image').replace(/^image\//i, '').toUpperCase()
+    return `Image ${index + 1} (${detectedType || 'IMAGE'})`
+  }
+
+  return trimmedName || `Image ${index + 1}`
+}
+
 export default function NewTaskPage() {
   const router = useRouter()
   const [customers, setCustomers] = useState<CustomerItem[]>([])
@@ -702,6 +712,7 @@ export default function NewTaskPage() {
     }
 
     setFiles(list)
+    if (clearInput) clearInput()
   }
 
   return (
@@ -1306,6 +1317,32 @@ export default function NewTaskPage() {
                       })
                     }
                   />
+                  {files && files.length > 0 && (
+                    <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                      {Array.from(files).map((file, index) => (
+                        <div
+                          key={`${file.name}-${file.size}-${index}`}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 8,
+                            padding: '8px 12px',
+                            borderRadius: 999,
+                            background: '#fff',
+                            border: '1px solid var(--kline-gray)',
+                            color: 'var(--kline-text)',
+                            fontSize: '0.82rem',
+                            fontWeight: 700,
+                          }}
+                        >
+                          <span>{getSelectedFileLabel(file, index)}</span>
+                          <span style={{ color: 'var(--kline-text-light)', fontWeight: 600 }}>
+                            {formatBytes(file.size)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   {attachmentError && (
                     <div style={{ marginTop: 8, color: 'var(--kline-red)', fontSize: '0.8rem', fontWeight: 700 }}>
                       {attachmentError}
