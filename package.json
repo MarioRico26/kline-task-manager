@@ -13,6 +13,7 @@
     "@prisma/client": "^6.18.0",
     "@vercel/blob": "^2.0.0",
     "bcryptjs": "^3.0.2",
+    "heic-convert": "^2.1.0",
     "imapflow": "^1.4.3",
     "jsonwebtoken": "^9.0.2",
     "mailparser": "^3.9.12",

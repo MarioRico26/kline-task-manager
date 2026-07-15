@@ -1,5 +1,6 @@
 import sharp from 'sharp'
 import { uploadFile } from '@/lib/upload'
+import { convertHeicBufferToJpeg, isHeicLikeInput } from '@/lib/heic'
 
 export type PreparedTaskAttachment = {
   originalUrl: string
@@ -84,6 +85,14 @@ async function buildPreviewBuffer(inputBuffer: Buffer) {
     .toBuffer()
 }
 
+async function normalizeInputBufferForPreview(inputBuffer: Buffer, fileName: string | null, contentType: string | null) {
+  if (isHeicLikeInput(fileName, contentType)) {
+    return convertHeicBufferToJpeg(inputBuffer)
+  }
+
+  return inputBuffer
+}
+
 async function uploadPreviewBuffer(previewBuffer: Buffer, baseName: string, taskId: string) {
   const previewFile = new File([new Uint8Array(previewBuffer)], `${baseName}-preview.jpg`, {
     type: 'image/jpeg',
@@ -120,7 +129,8 @@ export async function prepareTaskAttachmentFromUrl(url: string, taskId: string):
 
     try {
       const arrayBuffer = await response.arrayBuffer()
-      const previewBuffer = await buildPreviewBuffer(Buffer.from(arrayBuffer))
+      const inputBuffer = await normalizeInputBufferForPreview(Buffer.from(arrayBuffer), fileName, mimeType)
+      const previewBuffer = await buildPreviewBuffer(inputBuffer)
       const previewUrl = await uploadPreviewBuffer(previewBuffer, getNormalizedName(fileName, url), taskId)
 
       return {
@@ -166,7 +176,12 @@ export async function prepareTaskAttachmentFromFile(file: File, taskId: string):
   }
 
   try {
-    const previewBuffer = await buildPreviewBuffer(Buffer.from(await file.arrayBuffer()))
+    const inputBuffer = await normalizeInputBufferForPreview(
+      Buffer.from(await file.arrayBuffer()),
+      originalFilename,
+      mimeType
+    )
+    const previewBuffer = await buildPreviewBuffer(inputBuffer)
     const previewUrl = await uploadPreviewBuffer(previewBuffer, getNormalizedName(originalFilename, originalUrl), taskId)
 
     return {

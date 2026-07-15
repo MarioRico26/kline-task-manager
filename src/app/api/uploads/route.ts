@@ -3,6 +3,7 @@ import { PrismaClient } from '@prisma/client'
 import { uploadFile } from '@/lib/upload'
 import { getSessionUser } from '@/lib/sessionUser'
 import sharp from 'sharp'
+import { convertHeicBufferToJpeg, isHeicLikeInput, replaceWithJpgExtension } from '@/lib/heic'
 
 const prisma = new PrismaClient()
 
@@ -18,12 +19,9 @@ function isHeicLike(file: File) {
   const normalizedName = file.name.trim().toLowerCase()
 
   return (
-    normalizedType === 'image/heic' ||
-    normalizedType === 'image/heif' ||
+    isHeicLikeInput(file.name, file.type) ||
     normalizedType === 'image/tiff' ||
     normalizedType === 'image/avif' ||
-    normalizedName.endsWith('.heic') ||
-    normalizedName.endsWith('.heif') ||
     normalizedName.endsWith('.tif') ||
     normalizedName.endsWith('.tiff') ||
     normalizedName.endsWith('.avif')
@@ -34,15 +32,14 @@ function isImageLike(file: File) {
   return file.type.startsWith('image/') || /\.(heic|heif|tiff?|avif|jpe?g|png|webp|gif)$/i.test(file.name)
 }
 
-function replaceFileExtension(name: string, extension: string) {
-  return name.replace(/\.[^.]+$/, '') + extension
-}
-
 async function optimizeImageForUpload(file: File) {
   if (!isImageLike(file)) return file
   if (file.size <= MAX_SINGLE_FILE_BYTES && !isHeicLike(file)) return file
 
-  const inputBuffer = Buffer.from(await file.arrayBuffer())
+  const sourceBuffer = Buffer.from(await file.arrayBuffer())
+  const inputBuffer = isHeicLikeInput(file.name, file.type)
+    ? await convertHeicBufferToJpeg(sourceBuffer)
+    : sourceBuffer
   const metadata = await sharp(inputBuffer, { failOn: 'none' }).metadata()
   const longestSide = Math.max(metadata.width || 0, metadata.height || 0)
 
@@ -80,7 +77,7 @@ async function optimizeImageForUpload(file: File) {
     }
 
     if (outputBuffer.length <= MAX_SINGLE_FILE_BYTES) {
-      return new File([new Uint8Array(outputBuffer)], replaceFileExtension(file.name, '.jpg'), {
+      return new File([new Uint8Array(outputBuffer)], replaceWithJpgExtension(file.name), {
         type: 'image/jpeg',
         lastModified: Date.now(),
       })
@@ -90,7 +87,7 @@ async function optimizeImageForUpload(file: File) {
   }
 
   if (bestBuffer && bestBuffer.length <= MAX_SINGLE_FILE_BYTES) {
-    return new File([new Uint8Array(bestBuffer)], replaceFileExtension(file.name, '.jpg'), {
+    return new File([new Uint8Array(bestBuffer)], replaceWithJpgExtension(file.name), {
       type: 'image/jpeg',
       lastModified: Date.now(),
     })
