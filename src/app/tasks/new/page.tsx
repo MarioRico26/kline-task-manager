@@ -212,7 +212,7 @@ export default function NewTaskPage() {
   const [notificationEmails, setNotificationEmails] = useState('')
   const [notificationPhones, setNotificationPhones] = useState('')
   const [notes, setNotes] = useState('')
-  const [files, setFiles] = useState<FileList | null>(null)
+  const [files, setFiles] = useState<File[] | null>(null)
   const [customerSearch, setCustomerSearch] = useState('')
   const [propertySearch, setPropertySearch] = useState('')
   const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false)
@@ -510,7 +510,7 @@ export default function NewTaskPage() {
     }
   }
 
-  const uploadSelectedFiles = async (selectedFiles: FileList) => {
+  const uploadSelectedFiles = async (selectedFiles: File[]) => {
     const totalFiles = selectedFiles.length
     const uploadedUrls: string[] = []
 
@@ -690,10 +690,13 @@ export default function NewTaskPage() {
     setUploadProgress(null)
     if (!list || list.length === 0) {
       setFiles(null)
+      if (clearInput) clearInput()
       return
     }
 
-    const unsupportedFile = Array.from(list).find((file) => !file.type.startsWith('image/'))
+    const nextFiles = Array.from(list)
+
+    const unsupportedFile = nextFiles.find((file) => !file.type.startsWith('image/'))
     if (unsupportedFile) {
       setFiles(null)
       setAttachmentError(`"${unsupportedFile.name}" is not an image. Please upload image files only.`)
@@ -701,7 +704,7 @@ export default function NewTaskPage() {
       return
     }
 
-    const oversizedFile = Array.from(list).find((file) => file.size > MAX_ORIGINAL_FILE_BYTES)
+    const oversizedFile = nextFiles.find((file) => file.size > MAX_ORIGINAL_FILE_BYTES)
     if (oversizedFile) {
       setFiles(null)
       setAttachmentError(
@@ -711,7 +714,7 @@ export default function NewTaskPage() {
       return
     }
 
-    setFiles(list)
+    setFiles(nextFiles)
     if (clearInput) clearInput()
   }
 
@@ -1319,7 +1322,7 @@ export default function NewTaskPage() {
                   />
                   {files && files.length > 0 && (
                     <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                      {Array.from(files).map((file, index) => (
+                      {files.map((file, index) => (
                         <div
                           key={`${file.name}-${file.size}-${index}`}
                           style={{
