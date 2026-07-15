@@ -20,13 +20,18 @@ function isHeicLike(file: File) {
   return (
     normalizedType === 'image/heic' ||
     normalizedType === 'image/heif' ||
+    normalizedType === 'image/tiff' ||
+    normalizedType === 'image/avif' ||
     normalizedName.endsWith('.heic') ||
-    normalizedName.endsWith('.heif')
+    normalizedName.endsWith('.heif') ||
+    normalizedName.endsWith('.tif') ||
+    normalizedName.endsWith('.tiff') ||
+    normalizedName.endsWith('.avif')
   )
 }
 
 function isImageLike(file: File) {
-  return file.type.startsWith('image/') || /\.(heic|heif|jpe?g|png|webp)$/i.test(file.name)
+  return file.type.startsWith('image/') || /\.(heic|heif|tiff?|avif|jpe?g|png|webp|gif)$/i.test(file.name)
 }
 
 function replaceFileExtension(name: string, extension: string) {

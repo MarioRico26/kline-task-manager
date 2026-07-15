@@ -147,6 +147,23 @@ function sanitizeUploadFileName(name: string) {
   return cleaned || `upload-${Date.now()}`
 }
 
+function shouldUseServerSideUpload(file: File) {
+  const normalizedType = file.type.trim().toLowerCase()
+  const normalizedName = file.name.trim().toLowerCase()
+
+  return (
+    normalizedType === 'image/heic' ||
+    normalizedType === 'image/heif' ||
+    normalizedType === 'image/tiff' ||
+    normalizedType === 'image/avif' ||
+    normalizedName.endsWith('.heic') ||
+    normalizedName.endsWith('.heif') ||
+    normalizedName.endsWith('.tif') ||
+    normalizedName.endsWith('.tiff') ||
+    normalizedName.endsWith('.avif')
+  )
+}
+
 function isSafariBrowser() {
   if (typeof navigator === 'undefined') return false
 
@@ -489,6 +506,41 @@ export default function NewTaskPage() {
 
     for (let index = 0; index < totalFiles; index += 1) {
       const originalFile = selectedFiles[index]
+
+      if (shouldUseServerSideUpload(originalFile)) {
+        setUploadProgress(`Preparing attachment ${index + 1} of ${totalFiles} on the server...`)
+
+        const serverFormData = new FormData()
+        serverFormData.set('file', originalFile)
+        serverFormData.set('folder', 'tasks/manual')
+
+        const response = await fetch('/api/uploads', {
+          method: 'POST',
+          body: serverFormData,
+        })
+
+        if (!response.ok) {
+          let errorMessage = `Upload failed for "${originalFile.name}" (${response.status})`
+          try {
+            const payload = (await response.json()) as { error?: string }
+            if (payload?.error) errorMessage = payload.error
+          } catch {
+            const raw = await response.text().catch(() => '')
+            if (raw) errorMessage = raw
+          }
+
+          throw new Error(errorMessage)
+        }
+
+        const payload = (await response.json()) as { url?: string }
+        if (!payload?.url) {
+          throw new Error(`Upload finished without URL for "${originalFile.name}".`)
+        }
+
+        uploadedUrls.push(payload.url)
+        continue
+      }
+
       const safeName = sanitizeUploadFileName(originalFile.name)
       const pathname = `tasks/manual/${Date.now()}-${index + 1}-${safeName}`
       const usingMultipart = originalFile.size >= DIRECT_UPLOAD_MULTIPART_THRESHOLD_BYTES && !isSafariBrowser()
