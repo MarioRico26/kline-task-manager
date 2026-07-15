@@ -690,7 +690,6 @@ export default function NewTaskPage() {
     setUploadProgress(null)
     if (!list || list.length === 0) {
       setFiles(null)
-      if (clearInput) clearInput()
       return
     }
 
@@ -715,7 +714,6 @@ export default function NewTaskPage() {
     }
 
     setFiles(nextFiles)
-    if (clearInput) clearInput()
   }
 
   return (
