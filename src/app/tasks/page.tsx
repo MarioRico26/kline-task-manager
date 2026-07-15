@@ -36,7 +36,13 @@ interface TaskItem {
     name: string
     color?: string | null
   }
-  media: Array<{ id: string; url: string }>
+  media: Array<{
+    id: string
+    url: string
+    previewUrl?: string | null
+    mimeType?: string | null
+    originalFilename?: string | null
+  }>
 }
 
 interface StatusItem {
@@ -2292,8 +2298,8 @@ function TaskDetailsModal({
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
-                      src={item.url}
-                      alt="Task attachment"
+                      src={item.previewUrl || item.url}
+                      alt={item.originalFilename || 'Task attachment'}
                       style={{ width: '100%', height: 140, objectFit: 'cover', display: 'block' }}
                     />
                   </a>

@@ -1,12 +1,11 @@
 import { NextResponse } from 'next/server'
 import { PrismaClient } from '@prisma/client'
-import { uploadFile } from '@/lib/upload'
 import { sendTaskUpdateEmail } from '@/lib/email'
 import { sendSMS, buildTaskSMS } from '@/lib/sendSms'
 import { formatPhone } from '@/lib/formatPhone'
 import { getSessionUser } from '@/lib/sessionUser'
 import { isPermitsServiceLike } from '@/lib/userScope'
-import { normalizeTaskAttachmentUrl } from '@/lib/taskAttachments'
+import { prepareTaskAttachmentFromFile, prepareTaskAttachmentFromUrl } from '@/lib/taskAttachments'
 
 const prisma = new PrismaClient()
 
@@ -357,16 +356,27 @@ export async function POST(request: Request) {
 
     // ✅ uploads
     const uploadedImages: string[] = []
+    const attachmentWarnings: string[] = []
     if (uploadedImageUrls.length > 0) {
       for (const imageUrl of uploadedImageUrls) {
         try {
-          const normalizedUrl = await normalizeTaskAttachmentUrl(imageUrl, task.id)
+          const preparedAttachment = await prepareTaskAttachmentFromUrl(imageUrl, task.id)
+
           await prisma.taskMedia.create({
-            data: { url: normalizedUrl, taskId: task.id },
+            data: {
+              url: preparedAttachment.originalUrl,
+              previewUrl: preparedAttachment.previewUrl,
+              mimeType: preparedAttachment.mimeType,
+              originalFilename: preparedAttachment.originalFilename,
+              taskId: task.id,
+            },
           })
-          uploadedImages.push(normalizedUrl)
+
+          uploadedImages.push(preparedAttachment.previewUrl)
+          if (preparedAttachment.warning) attachmentWarnings.push(preparedAttachment.warning)
         } catch (uploadErr) {
           console.error('⚠ Error linking pre-uploaded file:', uploadErr)
+          attachmentWarnings.push(`Could not attach ${imageUrl.split('/').pop() || 'an uploaded file'}.`)
         }
       }
     }
@@ -375,15 +385,23 @@ export async function POST(request: Request) {
       for (const file of files) {
         if (file.size > 0) {
           try {
-            const imageUrl = await uploadFile(file, task.id)
+            const preparedAttachment = await prepareTaskAttachmentFromFile(file, task.id)
 
             await prisma.taskMedia.create({
-              data: { url: imageUrl, taskId: task.id },
+              data: {
+                url: preparedAttachment.originalUrl,
+                previewUrl: preparedAttachment.previewUrl,
+                mimeType: preparedAttachment.mimeType,
+                originalFilename: preparedAttachment.originalFilename,
+                taskId: task.id,
+              },
             })
 
-            uploadedImages.push(imageUrl)
+            uploadedImages.push(preparedAttachment.previewUrl)
+            if (preparedAttachment.warning) attachmentWarnings.push(preparedAttachment.warning)
           } catch (uploadErr) {
             console.error('⚠ Error uploading file:', uploadErr)
+            attachmentWarnings.push(`Could not upload ${file.name}.`)
           }
         }
       }
@@ -453,7 +471,10 @@ export async function POST(request: Request) {
       },
     })
 
-    return NextResponse.json(taskWithMedia || task)
+    return NextResponse.json({
+      ...(taskWithMedia || task),
+      attachmentWarnings,
+    })
   } catch (error) {
     console.error('❌ Error creating task:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

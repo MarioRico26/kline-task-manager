@@ -1,12 +1,12 @@
 // kline-task-manager/src/app/api/tasks/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server"
 import { PrismaClient } from "@prisma/client"
-import { uploadFile } from "@/lib/upload"
 import { sendTaskUpdateEmail } from "@/lib/email"
 import { sendSMS, buildTaskSMS } from "@/lib/sendSms"
 import { getSessionUser } from "@/lib/sessionUser"
 import { isPermitsServiceLike } from "@/lib/userScope"
 import { formatPhone } from "@/lib/formatPhone"
+import { prepareTaskAttachmentFromFile } from "@/lib/taskAttachments"
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient }
 const prisma = globalForPrisma.prisma ?? new PrismaClient()
@@ -368,11 +368,17 @@ export async function PUT(request: NextRequest) {
       for (const file of files) {
         if (file.size > 0) {
           try {
-            const fileUrl = await uploadFile(file, taskId)
+            const preparedAttachment = await prepareTaskAttachmentFromFile(file, taskId)
             await prisma.taskMedia.create({
-              data: { url: fileUrl, taskId },
+              data: {
+                url: preparedAttachment.originalUrl,
+                previewUrl: preparedAttachment.previewUrl,
+                mimeType: preparedAttachment.mimeType,
+                originalFilename: preparedAttachment.originalFilename,
+                taskId,
+              },
             })
-            uploadedImages.push(fileUrl)
+            uploadedImages.push(preparedAttachment.previewUrl)
           } catch (err) {
             console.error("⚠ Failed uploading a file:", err)
           }

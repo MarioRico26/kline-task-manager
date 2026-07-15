@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
 
     const notificationPromises: Promise<unknown>[] = []
     const propertyLabel = `${task.property.address}, ${task.property.city}, ${task.property.state} ${task.property.zip}`
-    const imageUrls = task.media.map((media) => media.url)
+    const imageUrls = task.media.map((media) => media.previewUrl || media.url)
 
     for (const email of emailRecipients) {
       notificationPromises.push(

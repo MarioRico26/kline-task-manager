@@ -111,10 +111,13 @@ model Task {
 }
 
 model TaskMedia {
-  id         String   @id @default(uuid())
-  url        String
-  taskId     String
-  uploadedAt DateTime @default(now())
+  id               String   @id @default(uuid())
+  url              String
+  previewUrl       String?
+  mimeType         String?
+  originalFilename String?
+  taskId           String
+  uploadedAt       DateTime @default(now())
 
   task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
 }

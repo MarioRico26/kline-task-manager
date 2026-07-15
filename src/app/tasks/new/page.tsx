@@ -597,6 +597,16 @@ export default function NewTaskPage() {
         throw new Error(errorMessage)
       }
 
+      const payload = (await res.json().catch(() => null)) as
+        | { attachmentWarnings?: string[] }
+        | null
+
+      if (payload?.attachmentWarnings?.length) {
+        throw new Error(
+          `Task created, but some attachments did not finish correctly: ${payload.attachmentWarnings.join(' ')}`
+        )
+      }
+
       if (submitMode === 'return') {
         router.push('/tasks')
         return
