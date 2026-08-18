@@ -1,7 +1,8 @@
 //kline-task-manager/src/app/customers/page.tsx:
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
+import { buildCallSmsMessage, callSmsTemplates } from '@/lib/callSmsTemplates'
 
 interface Customer {
   id: string
@@ -9,6 +10,15 @@ interface Customer {
   email: string
   phone: string
   createdAt: string
+  properties: CustomerPropertySummary[]
+}
+
+interface CustomerPropertySummary {
+  id: string
+  address: string
+  city: string
+  state: string
+  zip: string
 }
 
 interface CallHistoryRecord {
@@ -31,6 +41,17 @@ interface CallHistoryRecord {
   isSlaBreached: boolean
 }
 
+interface CustomerSmsHistoryRecord {
+  id: string
+  timestamp: string
+  userEmail: string | null
+  phoneNumber: string | null
+  template: string | null
+  additionalNote: string | null
+  message: string | null
+  sid: string | null
+}
+
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([])
   const [loading, setLoading] = useState(true)
@@ -42,6 +63,7 @@ export default function CustomersPage() {
   const [viewMode, setViewMode] = useState<'table' | 'cards'>('table')
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
   const [canAccessCallsInbox, setCanAccessCallsInbox] = useState(false)
+  const [canSendCallSms, setCanSendCallSms] = useState(false)
   const [historyCustomer, setHistoryCustomer] = useState<Customer | null>(null)
   const [historyRecords, setHistoryRecords] = useState<CallHistoryRecord[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
@@ -75,9 +97,10 @@ useEffect(() => {
       const response = await fetch('/api/auth/check', { cache: 'no-store' })
       if (!response.ok) return
       const data = (await response.json()) as {
-        user?: { canAccessCallsInbox?: boolean; accessScope?: 'ALL' | 'PERMITS_ONLY' }
+        user?: { canAccessCallsInbox?: boolean; accessScope?: 'ALL' | 'PERMITS_ONLY'; canSendCallSms?: boolean }
       }
       setCanAccessCallsInbox(data.user?.canAccessCallsInbox === true && data.user?.accessScope !== 'PERMITS_ONLY')
+      setCanSendCallSms(data.user?.canSendCallSms === true)
     } catch (error) {
       console.error('Error checking calls access:', error)
     }
@@ -189,6 +212,9 @@ useEffect(() => {
     }
     return phone;
   }
+
+  const formatPropertyLabel = (property: CustomerPropertySummary) =>
+    `${property.address}, ${property.city}, ${property.state} ${property.zip}`
 
   const formatEnumLabel = (value: string) =>
     value
@@ -380,7 +406,7 @@ useEffect(() => {
           <div className="kline-card" style={{ overflow: 'hidden' }}>
             <div style={{ 
               display: 'grid', 
-              gridTemplateColumns: '2fr 2fr 1.5fr auto', 
+              gridTemplateColumns: '1.6fr 2fr 1.35fr 2fr auto', 
               padding: '1.2rem 1.5rem',
               background: 'var(--kline-gray-light)',
               borderBottom: '2px solid var(--kline-gray)',
@@ -391,6 +417,7 @@ useEffect(() => {
               <div>Name</div>
               <div>Email</div>
               <div>Phone</div>
+              <div>Properties</div>
               <div>Actions</div>
             </div>
 
@@ -399,7 +426,7 @@ useEffect(() => {
                 key={customer.id}
                 style={{ 
                   display: 'grid', 
-                  gridTemplateColumns: '2fr 2fr 1.5fr auto', 
+                  gridTemplateColumns: '1.6fr 2fr 1.35fr 2fr auto', 
                   padding: '1.2rem 1.5rem',
                   borderBottom: '1px solid var(--kline-gray)',
                   alignItems: 'center',
@@ -410,6 +437,50 @@ useEffect(() => {
                 <div style={{ color: 'var(--kline-blue)' }}>{customer.email}</div>
                 <div style={{ color: 'var(--kline-text-light)', fontFamily: 'monospace' }}>
                   {formatPhone(customer.phone)}
+                </div>
+                <div>
+                  {customer.properties.length === 0 ? (
+                    <span style={{ color: 'var(--kline-text-light)', fontSize: '0.82rem' }}>No properties yet</span>
+                  ) : (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.45rem' }}>
+                      {customer.properties.slice(0, 2).map((property) => (
+                        <span
+                          key={property.id}
+                          title={formatPropertyLabel(property)}
+                          style={{
+                            display: 'inline-flex',
+                            maxWidth: '100%',
+                            padding: '0.28rem 0.62rem',
+                            borderRadius: 999,
+                            background: 'rgba(15, 23, 42, 0.05)',
+                            color: 'var(--kline-text)',
+                            fontSize: '0.78rem',
+                            fontWeight: 700,
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                          }}
+                        >
+                          {property.address}
+                        </span>
+                      ))}
+                      {customer.properties.length > 2 && (
+                        <span
+                          style={{
+                            display: 'inline-flex',
+                            padding: '0.28rem 0.62rem',
+                            borderRadius: 999,
+                            background: 'rgba(227, 6, 19, 0.08)',
+                            color: 'var(--kline-red)',
+                            fontSize: '0.78rem',
+                            fontWeight: 800,
+                          }}
+                        >
+                          +{customer.properties.length - 2} more
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
                   {canAccessCallsInbox && (
@@ -579,6 +650,51 @@ useEffect(() => {
                 <div style={{ color: 'var(--kline-text-light)', fontSize: '0.8rem' }}>
                   Customer since: {new Date(customer.createdAt).toLocaleDateString()}
                 </div>
+                <div style={{ marginTop: '1rem' }}>
+                  <div style={{ color: 'var(--kline-text-light)', fontSize: '0.76rem', fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: '0.55rem' }}>
+                    Linked Properties
+                  </div>
+                  {customer.properties.length === 0 ? (
+                    <div style={{ color: 'var(--kline-text-light)', fontSize: '0.84rem' }}>No properties linked yet</div>
+                  ) : (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                      {customer.properties.slice(0, 3).map((property) => (
+                        <span
+                          key={property.id}
+                          title={formatPropertyLabel(property)}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            padding: '0.38rem 0.72rem',
+                            borderRadius: 999,
+                            background: 'rgba(15, 23, 42, 0.05)',
+                            color: 'var(--kline-text)',
+                            fontSize: '0.8rem',
+                            fontWeight: 700,
+                          }}
+                        >
+                          {property.address}
+                        </span>
+                      ))}
+                      {customer.properties.length > 3 && (
+                        <span
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            padding: '0.38rem 0.72rem',
+                            borderRadius: 999,
+                            background: 'rgba(227, 6, 19, 0.08)',
+                            color: 'var(--kline-red)',
+                            fontSize: '0.8rem',
+                            fontWeight: 800,
+                          }}
+                        >
+                          +{customer.properties.length - 3} more
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             ))}
 
@@ -687,6 +803,7 @@ useEffect(() => {
       {editingCustomer && (
         <EditCustomerModal
           customer={editingCustomer}
+          canSendCallSms={canSendCallSms}
           onClose={() => setEditingCustomer(null)}
           onCustomerUpdated={fetchCustomers}
         />
@@ -999,8 +1116,9 @@ function CreateCustomerModal({
 }
 
 // Edit Customer Modal Component
-function EditCustomerModal({ customer, onClose, onCustomerUpdated }: { 
+function EditCustomerModal({ customer, canSendCallSms, onClose, onCustomerUpdated }: { 
   customer: Customer | null, 
+  canSendCallSms: boolean,
   onClose: () => void, 
   onCustomerUpdated: () => void 
 }) {
@@ -1011,6 +1129,27 @@ function EditCustomerModal({ customer, onClose, onCustomerUpdated }: {
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [properties, setProperties] = useState<CustomerPropertySummary[]>([])
+  const [propertyForm, setPropertyForm] = useState({
+    address: '',
+    city: '',
+    state: '',
+    zip: '',
+  })
+  const [propertySaving, setPropertySaving] = useState(false)
+  const [propertyError, setPropertyError] = useState('')
+  const [propertySuccess, setPropertySuccess] = useState('')
+  const [smsForm, setSmsForm] = useState({
+    phoneNumber: '',
+    template: '',
+    additionalNote: '',
+  })
+  const [sendingSms, setSendingSms] = useState(false)
+  const [smsError, setSmsError] = useState('')
+  const [smsSuccess, setSmsSuccess] = useState('')
+  const [smsHistory, setSmsHistory] = useState<CustomerSmsHistoryRecord[]>([])
+  const [smsHistoryLoading, setSmsHistoryLoading] = useState(false)
+  const [smsHistoryError, setSmsHistoryError] = useState('')
 
   useEffect(() => {
     if (customer) {
@@ -1019,8 +1158,30 @@ function EditCustomerModal({ customer, onClose, onCustomerUpdated }: {
         email: customer.email,
         phone: customer.phone
       })
+      setProperties(customer.properties || [])
+      setPropertyForm({
+        address: '',
+        city: '',
+        state: '',
+        zip: '',
+      })
+      setPropertyError('')
+      setPropertySuccess('')
+      setSmsForm({
+        phoneNumber: customer.phone || '',
+        template: '',
+        additionalNote: '',
+      })
+      setSmsError('')
+      setSmsSuccess('')
+      void loadSmsHistory(customer.id)
     }
   }, [customer])
+
+  const smsPreview = useMemo(
+    () => buildCallSmsMessage(smsForm.template, smsForm.additionalNote),
+    [smsForm.additionalNote, smsForm.template]
+  )
 
   const validateForm = () => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -1089,6 +1250,126 @@ function EditCustomerModal({ customer, onClose, onCustomerUpdated }: {
     setFormData({ ...formData, phone: formatted })
   }
 
+  const handleAddProperty = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!customer) return
+
+    setPropertyError('')
+    setPropertySuccess('')
+
+    if (
+      !propertyForm.address.trim() ||
+      !propertyForm.city.trim() ||
+      !propertyForm.state.trim() ||
+      !propertyForm.zip.trim()
+    ) {
+      setPropertyError('Please complete address, city, state and zip before saving the property.')
+      return
+    }
+
+    setPropertySaving(true)
+
+    try {
+      const response = await fetch('/api/properties', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...propertyForm,
+          customerId: customer.id,
+        }),
+      })
+
+      const data = (await response.json().catch(() => null)) as
+        | (CustomerPropertySummary & { error?: string })
+        | { error?: string }
+        | null
+
+      if (!response.ok) {
+        throw new Error(data && 'error' in data ? data.error || 'Error creating property' : 'Error creating property')
+      }
+
+      const createdProperty = data as CustomerPropertySummary
+      setProperties((current) => [createdProperty, ...current])
+      setPropertyForm({
+        address: '',
+        city: '',
+        state: '',
+        zip: '',
+      })
+      setPropertySuccess('Property added successfully and linked to this customer.')
+      onCustomerUpdated()
+    } catch (error) {
+      setPropertyError(error instanceof Error ? error.message : 'Network error while creating property')
+    } finally {
+      setPropertySaving(false)
+    }
+  }
+
+  const handleSendSms = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!customer) return
+
+    setSmsError('')
+    setSmsSuccess('')
+
+    if (!smsPreview.trim()) {
+      setSmsError('Choose a template or write a short custom message first.')
+      return
+    }
+
+    setSendingSms(true)
+
+    try {
+      const response = await fetch(`/api/customers/${customer.id}/send-sms`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(smsForm),
+      })
+
+      const data = (await response.json().catch(() => null)) as
+        | { success?: boolean; phoneNumber?: string; error?: string }
+        | null
+
+      if (!response.ok) {
+        throw new Error(data?.error || 'Unable to send SMS')
+      }
+
+      setSmsSuccess(`SMS sent to ${data?.phoneNumber || smsForm.phoneNumber}.`)
+      setSmsForm((current) => ({
+        ...current,
+        template: '',
+        additionalNote: '',
+      }))
+      await loadSmsHistory(customer.id)
+    } catch (error) {
+      setSmsError(error instanceof Error ? error.message : 'Unable to send SMS')
+    } finally {
+      setSendingSms(false)
+    }
+  }
+
+  const loadSmsHistory = async (customerId: string) => {
+    setSmsHistoryLoading(true)
+    setSmsHistoryError('')
+
+    try {
+      const response = await fetch(`/api/customers/${customerId}/sms-history`, { cache: 'no-store' })
+      const data = (await response.json().catch(() => null)) as
+        | { records?: CustomerSmsHistoryRecord[]; error?: string }
+        | null
+
+      if (!response.ok) {
+        throw new Error(data?.error || 'Unable to load SMS history')
+      }
+
+      setSmsHistory(data?.records || [])
+    } catch (error) {
+      setSmsHistoryError(error instanceof Error ? error.message : 'Unable to load SMS history')
+    } finally {
+      setSmsHistoryLoading(false)
+    }
+  }
+
   if (!customer) return null
 
   return (
@@ -1106,7 +1387,7 @@ function EditCustomerModal({ customer, onClose, onCustomerUpdated }: {
     }}>
       <div className="kline-card" style={{ 
         width: '90%', 
-        maxWidth: '500px', 
+        maxWidth: '960px', 
         padding: '2rem',
         position: 'relative'
       }}>
@@ -1143,73 +1424,357 @@ function EditCustomerModal({ customer, onClose, onCustomerUpdated }: {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-          <div>
-            <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '0.5rem', fontWeight: '600' }}>
-              Full Name *
-            </label>
-            <input
-              type="text"
-              value={formData.fullName}
-              onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
-              className="kline-input"
-              required
-            />
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.05fr) minmax(320px, 0.95fr)', gap: '1.5rem', alignItems: 'start' }}>
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+            <div>
+              <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '0.5rem', fontWeight: '600' }}>
+                Full Name *
+              </label>
+              <input
+                type="text"
+                value={formData.fullName}
+                onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
+                className="kline-input"
+                required
+              />
+            </div>
+
+            <div>
+              <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '0.5rem', fontWeight: '600' }}>
+                Email Address *
+              </label>
+              <input
+                type="email"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                className="kline-input"
+                required
+              />
+            </div>
+
+            <div>
+              <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '0.5rem', fontWeight: '600' }}>
+                Phone Number *
+              </label>
+              <input
+                type="tel"
+                value={formData.phone}
+                onChange={(e) => handlePhoneChange(e.target.value)}
+                className="kline-input"
+                required
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end', marginTop: '1rem' }}>
+              <button
+                type="button"
+                onClick={onClose}
+                style={{
+                  background: 'transparent',
+                  border: '2px solid var(--kline-text-light)',
+                  color: 'var(--kline-text-light)',
+                  padding: '0.8rem 1.5rem',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontWeight: '600',
+                  fontSize: '0.9rem'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={loading}
+                className="kline-btn-primary"
+                style={{ padding: '0.8rem 1.5rem', fontSize: '0.9rem' }}
+              >
+                {loading ? 'Updating...' : 'Update Customer'}
+              </button>
+            </div>
+          </form>
+
+          <div style={{ display: 'grid', gap: '1rem' }}>
+            <div style={{ border: '1px solid var(--kline-gray)', borderRadius: '16px', padding: '1.1rem', background: 'var(--kline-gray-light)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', marginBottom: '0.85rem' }}>
+              <div>
+                <div style={{ color: 'var(--kline-text)', fontWeight: 800 }}>Linked Properties</div>
+                <div style={{ color: 'var(--kline-text-light)', fontSize: '0.84rem' }}>
+                  {properties.length === 0 ? 'No properties linked yet' : `${properties.length} linked ${properties.length === 1 ? 'property' : 'properties'}`}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => window.location.href = '/properties'}
+                style={{
+                  background: 'transparent',
+                  border: '1px solid var(--kline-gray)',
+                  color: 'var(--kline-text-light)',
+                  padding: '0.55rem 0.8rem',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontWeight: '700',
+                  fontSize: '0.8rem'
+                }}
+              >
+                Open Properties
+              </button>
+            </div>
+
+            <div style={{ display: 'grid', gap: '0.6rem', marginBottom: '1rem', maxHeight: '220px', overflowY: 'auto', paddingRight: '0.25rem' }}>
+              {properties.length === 0 ? (
+                <div style={{ padding: '0.9rem', borderRadius: '12px', background: '#fff', color: 'var(--kline-text-light)', fontSize: '0.86rem' }}>
+                  This customer still has no linked properties.
+                </div>
+              ) : (
+                properties.map((property) => (
+                  <div key={property.id} style={{ padding: '0.85rem 0.95rem', borderRadius: '12px', background: '#fff', border: '1px solid var(--kline-gray)' }}>
+                    <div style={{ fontWeight: 800, color: 'var(--kline-text)' }}>{property.address}</div>
+                    <div style={{ marginTop: 4, color: 'var(--kline-text-light)', fontSize: '0.84rem' }}>
+                      {property.city}, {property.state} {property.zip}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div style={{ borderTop: '1px solid var(--kline-gray)', paddingTop: '1rem' }}>
+              <div style={{ fontWeight: 800, color: 'var(--kline-text)', marginBottom: '0.2rem' }}>Add Property Here</div>
+              <div style={{ color: 'var(--kline-text-light)', fontSize: '0.84rem', marginBottom: '0.9rem' }}>
+                Quick add without leaving the customer record.
+              </div>
+
+              {propertyError && (
+                <div style={{
+                  background: 'rgba(227, 6, 19, 0.1)',
+                  border: '1px solid var(--kline-red)',
+                  color: 'var(--kline-red)',
+                  padding: '0.8rem',
+                  borderRadius: '10px',
+                  marginBottom: '0.85rem',
+                  fontSize: '0.86rem'
+                }}>
+                  {propertyError}
+                </div>
+              )}
+
+              {propertySuccess && (
+                <div style={{
+                  background: 'rgba(25, 135, 84, 0.1)',
+                  border: '1px solid rgba(25, 135, 84, 0.35)',
+                  color: '#198754',
+                  padding: '0.8rem',
+                  borderRadius: '10px',
+                  marginBottom: '0.85rem',
+                  fontSize: '0.86rem'
+                }}>
+                  {propertySuccess}
+                </div>
+              )}
+
+              <form onSubmit={handleAddProperty} style={{ display: 'grid', gap: '0.75rem' }}>
+                <input
+                  type="text"
+                  placeholder="Address"
+                  value={propertyForm.address}
+                  onChange={(e) => setPropertyForm((current) => ({ ...current, address: e.target.value }))}
+                  className="kline-input"
+                />
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 96px 108px', gap: '0.65rem' }}>
+                  <input
+                    type="text"
+                    placeholder="City"
+                    value={propertyForm.city}
+                    onChange={(e) => setPropertyForm((current) => ({ ...current, city: e.target.value }))}
+                    className="kline-input"
+                  />
+                  <input
+                    type="text"
+                    placeholder="State"
+                    value={propertyForm.state}
+                    onChange={(e) => setPropertyForm((current) => ({ ...current, state: e.target.value }))}
+                    className="kline-input"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Zip"
+                    value={propertyForm.zip}
+                    onChange={(e) => setPropertyForm((current) => ({ ...current, zip: e.target.value }))}
+                    className="kline-input"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={propertySaving}
+                  className="kline-btn-primary"
+                  style={{ padding: '0.78rem 1rem', fontSize: '0.88rem' }}
+                >
+                  {propertySaving ? 'Adding Property...' : '+ Add Property'}
+                </button>
+              </form>
+            </div>
           </div>
 
-          <div>
-            <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '0.5rem', fontWeight: '600' }}>
-              Email Address *
-            </label>
-            <input
-              type="email"
-              value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              className="kline-input"
-              required
-            />
-          </div>
+            <div style={{ border: '1px solid var(--kline-gray)', borderRadius: '16px', padding: '1.1rem', background: '#fff', borderTop: '4px solid #198754' }}>
+              <div style={{ fontWeight: 800, color: 'var(--kline-text)', marginBottom: '0.2rem' }}>Send SMS</div>
+              <div style={{ color: 'var(--kline-text-light)', fontSize: '0.84rem', marginBottom: '0.9rem' }}>
+                Send a quick personalized text to this customer from the same record.
+              </div>
 
-          <div>
-            <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '0.5rem', fontWeight: '600' }}>
-              Phone Number *
-            </label>
-            <input
-              type="tel"
-              value={formData.phone}
-              onChange={(e) => handlePhoneChange(e.target.value)}
-              className="kline-input"
-              required
-            />
-          </div>
+              {!canSendCallSms ? (
+                <div style={{ color: 'var(--kline-text-light)', fontSize: '0.86rem' }}>
+                  This user does not have permission to send customer SMS from the system.
+                </div>
+              ) : (
+                <form onSubmit={handleSendSms} style={{ display: 'grid', gap: '0.8rem' }}>
+                  {smsError && (
+                    <div style={{
+                      background: 'rgba(227, 6, 19, 0.1)',
+                      border: '1px solid var(--kline-red)',
+                      color: 'var(--kline-red)',
+                      padding: '0.8rem',
+                      borderRadius: '10px',
+                      fontSize: '0.86rem'
+                    }}>
+                      {smsError}
+                    </div>
+                  )}
 
-          <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end', marginTop: '1rem' }}>
-            <button
-              type="button"
-              onClick={onClose}
-              style={{
-                background: 'transparent',
-                border: '2px solid var(--kline-text-light)',
-                color: 'var(--kline-text-light)',
-                padding: '0.8rem 1.5rem',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                fontWeight: '600',
-                fontSize: '0.9rem'
-              }}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="kline-btn-primary"
-              style={{ padding: '0.8rem 1.5rem', fontSize: '0.9rem' }}
-            >
-              {loading ? 'Updating...' : 'Update Customer'}
-            </button>
+                  {smsSuccess && (
+                    <div style={{
+                      background: 'rgba(25, 135, 84, 0.1)',
+                      border: '1px solid rgba(25, 135, 84, 0.35)',
+                      color: '#198754',
+                      padding: '0.8rem',
+                      borderRadius: '10px',
+                      fontSize: '0.86rem'
+                    }}>
+                      {smsSuccess}
+                    </div>
+                  )}
+
+                  <div>
+                    <label style={{ display: 'block', fontWeight: 700, marginBottom: '0.45rem', color: 'var(--kline-text)' }}>To</label>
+                    <input
+                      className="kline-input"
+                      value={smsForm.phoneNumber}
+                      onChange={(e) => setSmsForm((current) => ({ ...current, phoneNumber: e.target.value }))}
+                      placeholder="Customer phone number"
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontWeight: 700, marginBottom: '0.45rem', color: 'var(--kline-text)' }}>Quick Template</label>
+                    <select
+                      className="kline-input"
+                      value={smsForm.template}
+                      onChange={(e) => setSmsForm((current) => ({ ...current, template: e.target.value }))}
+                    >
+                      <option value="">Manual message only</option>
+                      {callSmsTemplates.map((template) => (
+                        <option key={template.value} value={template.value}>
+                          {template.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontWeight: 700, marginBottom: '0.45rem', color: 'var(--kline-text)' }}>Additional Note</label>
+                    <textarea
+                      className="kline-input"
+                      rows={3}
+                      value={smsForm.additionalNote}
+                      onChange={(e) => setSmsForm((current) => ({ ...current, additionalNote: e.target.value }))}
+                      placeholder="Add a short custom note for this customer."
+                    />
+                  </div>
+
+                  <div>
+                    <div style={{ display: 'block', fontWeight: 700, marginBottom: '0.45rem', color: 'var(--kline-text)' }}>Message Preview</div>
+                    <div
+                      style={{
+                        border: '1px solid var(--kline-gray)',
+                        borderRadius: 12,
+                        padding: '0.95rem',
+                        background: 'var(--kline-gray-light)',
+                        color: smsPreview ? 'var(--kline-text)' : 'var(--kline-text-light)',
+                        lineHeight: 1.5,
+                        minHeight: 94,
+                        whiteSpace: 'pre-wrap',
+                      }}
+                    >
+                      {smsPreview || 'Choose a template or type a short manual message.'}
+                    </div>
+                    <div style={{ marginTop: 6, color: 'var(--kline-text-light)', fontSize: '0.8rem' }}>
+                      {smsPreview.length}/320 characters
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={sendingSms || !smsPreview.trim()}
+                    className="kline-btn-primary"
+                    style={{ padding: '0.78rem 1rem', fontSize: '0.88rem' }}
+                  >
+                    {sendingSms ? 'Sending SMS...' : 'Send SMS'}
+                  </button>
+                </form>
+              )}
+            </div>
+
+            <div style={{ border: '1px solid var(--kline-gray)', borderRadius: '16px', padding: '1.1rem', background: '#fff', borderTop: '4px solid #0d6efd' }}>
+              <div style={{ fontWeight: 800, color: 'var(--kline-text)', marginBottom: '0.2rem' }}>SMS History</div>
+              <div style={{ color: 'var(--kline-text-light)', fontSize: '0.84rem', marginBottom: '0.9rem' }}>
+                Recent text messages sent to this customer from the system.
+              </div>
+
+              {smsHistoryLoading ? (
+                <div style={{ color: 'var(--kline-text-light)', fontSize: '0.86rem' }}>Loading SMS history...</div>
+              ) : smsHistoryError ? (
+                <div style={{
+                  background: 'rgba(227, 6, 19, 0.1)',
+                  border: '1px solid var(--kline-red)',
+                  color: 'var(--kline-red)',
+                  padding: '0.8rem',
+                  borderRadius: '10px',
+                  fontSize: '0.86rem'
+                }}>
+                  {smsHistoryError}
+                </div>
+              ) : smsHistory.length === 0 ? (
+                <div style={{ color: 'var(--kline-text-light)', fontSize: '0.86rem' }}>
+                  No customer SMS history yet.
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gap: '0.7rem', maxHeight: '320px', overflowY: 'auto', paddingRight: '0.25rem' }}>
+                  {smsHistory.map((entry) => (
+                    <div key={entry.id} style={{ border: '1px solid var(--kline-gray)', borderRadius: '12px', padding: '0.9rem', background: 'var(--kline-gray-light)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.8rem', flexWrap: 'wrap' }}>
+                        <div style={{ fontWeight: 800, color: 'var(--kline-text)' }}>
+                          {entry.template || 'Manual message'}
+                        </div>
+                        <div style={{ color: 'var(--kline-text-light)', fontSize: '0.8rem', fontWeight: 700 }}>
+                          {new Date(entry.timestamp).toLocaleString()}
+                        </div>
+                      </div>
+                      <div style={{ marginTop: '0.45rem', color: 'var(--kline-text-light)', fontSize: '0.82rem' }}>
+                        To: {entry.phoneNumber || 'Unknown'}{entry.userEmail ? ` · Sent by ${entry.userEmail}` : ''}
+                      </div>
+                      {entry.additionalNote && (
+                        <div style={{ marginTop: '0.45rem', color: '#0d6efd', fontSize: '0.82rem', fontWeight: 700 }}>
+                          Note: {entry.additionalNote}
+                        </div>
+                      )}
+                      <div style={{ marginTop: '0.55rem', color: 'var(--kline-text)', fontSize: '0.86rem', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
+                        {entry.message || 'No message content recorded.'}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
-        </form>
+        </div>
       </div>
     </div>
   )

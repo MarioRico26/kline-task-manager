@@ -12,6 +12,18 @@ export async function GET() {
         email: true,
         phone: true,
         createdAt: true,
+        properties: {
+          select: {
+            id: true,
+            address: true,
+            city: true,
+            state: true,
+            zip: true,
+          },
+          orderBy: {
+            createdAt: 'desc',
+          },
+        },
       },
       orderBy: { createdAt: 'desc' }
     })
