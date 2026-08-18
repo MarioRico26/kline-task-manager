@@ -1379,53 +1379,102 @@ function EditCustomerModal({ customer, canSendCallSms, onClose, onCustomerUpdate
       left: 0,
       right: 0,
       bottom: 0,
-      background: 'rgba(0, 0, 0, 0.5)',
+      background: 'rgba(15, 23, 42, 0.52)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      zIndex: 1000
+      zIndex: 1000,
+      padding: '1.5rem'
     }}>
       <div className="kline-card" style={{ 
-        width: '90%', 
-        maxWidth: '960px', 
-        padding: '2rem',
-        position: 'relative'
+        width: 'min(1280px, 100%)',
+        maxHeight: '92vh',
+        padding: 0,
+        position: 'relative',
+        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
+        borderRadius: '24px',
+        boxShadow: '0 28px 60px rgba(15, 23, 42, 0.22)'
       }}>
-        <button
-          onClick={onClose}
+        <div
           style={{
-            position: 'absolute',
-            top: '1rem',
-            right: '1rem',
-            background: 'none',
-            border: 'none',
-            fontSize: '1.5rem',
-            cursor: 'pointer',
-            color: 'var(--kline-text-light)'
+            padding: '1.35rem 1.5rem',
+            borderBottom: '1px solid var(--kline-gray)',
+            background:
+              'radial-gradient(circle at top right, rgba(253, 126, 20, 0.12), transparent 26%), linear-gradient(180deg, #ffffff 0%, #fbfbfc 100%)',
           }}
         >
-          ×
-        </button>
-
-        <h2 style={{ fontSize: '1.5rem', fontWeight: '700', marginBottom: '1.5rem', color: 'var(--kline-text)' }}>
-          Edit Customer
-        </h2>
-
-        {error && (
-          <div style={{
-            background: 'rgba(227, 6, 19, 0.1)',
-            border: '1px solid var(--kline-red)',
-            color: 'var(--kline-red)',
-            padding: '1rem',
-            borderRadius: '8px',
-            marginBottom: '1rem'
-          }}>
-            {error}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem' }}>
+            <div>
+              <div style={{ color: 'var(--kline-text-light)', fontSize: '0.78rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                Customer Hub
+              </div>
+              <h2 style={{ fontSize: '1.7rem', fontWeight: '800', margin: '0.35rem 0 0', color: 'var(--kline-text)' }}>
+                Edit {customer.fullName}
+              </h2>
+              <div style={{ marginTop: '0.45rem', color: 'var(--kline-text-light)', fontSize: '0.92rem' }}>
+                Update contact details, review linked properties, and handle customer communication from one place.
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              style={{
+                background: '#fff',
+                border: '1px solid var(--kline-gray)',
+                width: '42px',
+                height: '42px',
+                borderRadius: '12px',
+                fontSize: '1.3rem',
+                cursor: 'pointer',
+                color: 'var(--kline-text-light)',
+                flexShrink: 0
+              }}
+            >
+              ×
+            </button>
           </div>
-        )}
+        </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.05fr) minmax(320px, 0.95fr)', gap: '1.5rem', alignItems: 'start' }}>
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+        <div style={{ overflowY: 'auto', padding: '1.5rem' }}>
+          {error && (
+            <div style={{
+              background: 'rgba(227, 6, 19, 0.1)',
+              border: '1px solid var(--kline-red)',
+              color: 'var(--kline-red)',
+              padding: '1rem',
+              borderRadius: '12px',
+              marginBottom: '1rem'
+            }}>
+              {error}
+            </div>
+          )}
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: '1.25rem', alignItems: 'start' }}>
+            <form
+              onSubmit={handleSubmit}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '1.25rem',
+                border: '1px solid var(--kline-gray)',
+                borderRadius: '20px',
+                padding: '1.35rem',
+                background: 'linear-gradient(180deg, #ffffff 0%, #fffaf8 100%)',
+                minHeight: '100%',
+              }}
+            >
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.55rem', marginBottom: '0.1rem' }}>
+                <span style={{ display: 'inline-flex', padding: '0.35rem 0.7rem', borderRadius: 999, background: 'rgba(15, 23, 42, 0.06)', color: 'var(--kline-text)', fontSize: '0.8rem', fontWeight: 800 }}>
+                  {properties.length} {properties.length === 1 ? 'Property' : 'Properties'}
+                </span>
+                <span style={{ display: 'inline-flex', padding: '0.35rem 0.7rem', borderRadius: 999, background: 'rgba(13, 110, 253, 0.08)', color: '#0d6efd', fontSize: '0.8rem', fontWeight: 800 }}>
+                  {smsHistory.length} SMS logged
+                </span>
+              </div>
+
+              <div style={{ color: 'var(--kline-text)', fontWeight: 800, fontSize: '1.08rem' }}>Customer Details</div>
+
             <div>
               <label style={{ display: 'block', color: 'var(--kline-text)', marginBottom: '0.5rem', fontWeight: '600' }}>
                 Full Name *
@@ -1465,156 +1514,157 @@ function EditCustomerModal({ customer, canSendCallSms, onClose, onCustomerUpdate
               />
             </div>
 
-            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end', marginTop: '1rem' }}>
-              <button
-                type="button"
-                onClick={onClose}
-                style={{
-                  background: 'transparent',
-                  border: '2px solid var(--kline-text-light)',
-                  color: 'var(--kline-text-light)',
-                  padding: '0.8rem 1.5rem',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  fontWeight: '600',
-                  fontSize: '0.9rem'
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={loading}
-                className="kline-btn-primary"
-                style={{ padding: '0.8rem 1.5rem', fontSize: '0.9rem' }}
-              >
-                {loading ? 'Updating...' : 'Update Customer'}
-              </button>
-            </div>
-          </form>
-
-          <div style={{ display: 'grid', gap: '1rem' }}>
-            <div style={{ border: '1px solid var(--kline-gray)', borderRadius: '16px', padding: '1.1rem', background: 'var(--kline-gray-light)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', marginBottom: '0.85rem' }}>
-              <div>
-                <div style={{ color: 'var(--kline-text)', fontWeight: 800 }}>Linked Properties</div>
-                <div style={{ color: 'var(--kline-text-light)', fontSize: '0.84rem' }}>
-                  {properties.length === 0 ? 'No properties linked yet' : `${properties.length} linked ${properties.length === 1 ? 'property' : 'properties'}`}
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => window.location.href = '/properties'}
-                style={{
-                  background: 'transparent',
-                  border: '1px solid var(--kline-gray)',
-                  color: 'var(--kline-text-light)',
-                  padding: '0.55rem 0.8rem',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  fontWeight: '700',
-                  fontSize: '0.8rem'
-                }}
-              >
-                Open Properties
-              </button>
-            </div>
-
-            <div style={{ display: 'grid', gap: '0.6rem', marginBottom: '1rem', maxHeight: '220px', overflowY: 'auto', paddingRight: '0.25rem' }}>
-              {properties.length === 0 ? (
-                <div style={{ padding: '0.9rem', borderRadius: '12px', background: '#fff', color: 'var(--kline-text-light)', fontSize: '0.86rem' }}>
-                  This customer still has no linked properties.
-                </div>
-              ) : (
-                properties.map((property) => (
-                  <div key={property.id} style={{ padding: '0.85rem 0.95rem', borderRadius: '12px', background: '#fff', border: '1px solid var(--kline-gray)' }}>
-                    <div style={{ fontWeight: 800, color: 'var(--kline-text)' }}>{property.address}</div>
-                    <div style={{ marginTop: 4, color: 'var(--kline-text-light)', fontSize: '0.84rem' }}>
-                      {property.city}, {property.state} {property.zip}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-
-            <div style={{ borderTop: '1px solid var(--kline-gray)', paddingTop: '1rem' }}>
-              <div style={{ fontWeight: 800, color: 'var(--kline-text)', marginBottom: '0.2rem' }}>Add Property Here</div>
-              <div style={{ color: 'var(--kline-text-light)', fontSize: '0.84rem', marginBottom: '0.9rem' }}>
-                Quick add without leaving the customer record.
-              </div>
-
-              {propertyError && (
-                <div style={{
-                  background: 'rgba(227, 6, 19, 0.1)',
-                  border: '1px solid var(--kline-red)',
-                  color: 'var(--kline-red)',
-                  padding: '0.8rem',
-                  borderRadius: '10px',
-                  marginBottom: '0.85rem',
-                  fontSize: '0.86rem'
-                }}>
-                  {propertyError}
-                </div>
-              )}
-
-              {propertySuccess && (
-                <div style={{
-                  background: 'rgba(25, 135, 84, 0.1)',
-                  border: '1px solid rgba(25, 135, 84, 0.35)',
-                  color: '#198754',
-                  padding: '0.8rem',
-                  borderRadius: '10px',
-                  marginBottom: '0.85rem',
-                  fontSize: '0.86rem'
-                }}>
-                  {propertySuccess}
-                </div>
-              )}
-
-              <form onSubmit={handleAddProperty} style={{ display: 'grid', gap: '0.75rem' }}>
-                <input
-                  type="text"
-                  placeholder="Address"
-                  value={propertyForm.address}
-                  onChange={(e) => setPropertyForm((current) => ({ ...current, address: e.target.value }))}
-                  className="kline-input"
-                />
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 96px 108px', gap: '0.65rem' }}>
-                  <input
-                    type="text"
-                    placeholder="City"
-                    value={propertyForm.city}
-                    onChange={(e) => setPropertyForm((current) => ({ ...current, city: e.target.value }))}
-                    className="kline-input"
-                  />
-                  <input
-                    type="text"
-                    placeholder="State"
-                    value={propertyForm.state}
-                    onChange={(e) => setPropertyForm((current) => ({ ...current, state: e.target.value }))}
-                    className="kline-input"
-                  />
-                  <input
-                    type="text"
-                    placeholder="Zip"
-                    value={propertyForm.zip}
-                    onChange={(e) => setPropertyForm((current) => ({ ...current, zip: e.target.value }))}
-                    className="kline-input"
-                  />
-                </div>
+              <div style={{ marginTop: 'auto', paddingTop: '0.8rem', display: 'flex', gap: '0.85rem', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  style={{
+                    background: '#fff',
+                    border: '1px solid var(--kline-gray)',
+                    color: 'var(--kline-text-light)',
+                    padding: '0.85rem 1.3rem',
+                    borderRadius: '12px',
+                    cursor: 'pointer',
+                    fontWeight: '700',
+                    fontSize: '0.9rem'
+                  }}
+                >
+                  Cancel
+                </button>
                 <button
                   type="submit"
-                  disabled={propertySaving}
+                  disabled={loading}
                   className="kline-btn-primary"
-                  style={{ padding: '0.78rem 1rem', fontSize: '0.88rem' }}
+                  style={{ padding: '0.85rem 1.4rem', fontSize: '0.92rem', minWidth: '220px' }}
                 >
-                  {propertySaving ? 'Adding Property...' : '+ Add Property'}
+                  {loading ? 'Updating...' : 'Update Customer'}
                 </button>
-              </form>
-            </div>
-          </div>
+              </div>
+            </form>
 
-            <div style={{ border: '1px solid var(--kline-gray)', borderRadius: '16px', padding: '1.1rem', background: '#fff', borderTop: '4px solid #198754' }}>
+            <div style={{ display: 'grid', gap: '1rem' }}>
+              <div style={{ border: '1px solid var(--kline-gray)', borderRadius: '20px', padding: '1.15rem', background: 'linear-gradient(180deg, #ffffff 0%, #f8f9fb 100%)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', marginBottom: '0.95rem' }}>
+                  <div>
+                    <div style={{ color: 'var(--kline-text)', fontWeight: 800, fontSize: '1.05rem' }}>Linked Properties</div>
+                    <div style={{ color: 'var(--kline-text-light)', fontSize: '0.84rem' }}>
+                      {properties.length === 0 ? 'No properties linked yet' : `${properties.length} linked ${properties.length === 1 ? 'property' : 'properties'}`}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => window.location.href = '/properties'}
+                    style={{
+                      background: '#fff',
+                      border: '1px solid var(--kline-gray)',
+                      color: 'var(--kline-text-light)',
+                      padding: '0.62rem 0.95rem',
+                      borderRadius: '10px',
+                      cursor: 'pointer',
+                      fontWeight: '700',
+                      fontSize: '0.82rem',
+                      whiteSpace: 'nowrap'
+                    }}
+                  >
+                    Open Properties
+                  </button>
+                </div>
+
+                <div style={{ display: 'grid', gap: '0.65rem', marginBottom: '1rem', maxHeight: '210px', overflowY: 'auto', paddingRight: '0.15rem' }}>
+                  {properties.length === 0 ? (
+                    <div style={{ padding: '0.95rem', borderRadius: '14px', background: '#fff', color: 'var(--kline-text-light)', fontSize: '0.86rem', border: '1px dashed var(--kline-gray)' }}>
+                      This customer still has no linked properties.
+                    </div>
+                  ) : (
+                    properties.map((property) => (
+                      <div key={property.id} style={{ padding: '0.95rem 1rem', borderRadius: '14px', background: '#fff', border: '1px solid var(--kline-gray)', boxShadow: '0 8px 18px rgba(15, 23, 42, 0.04)' }}>
+                        <div style={{ fontWeight: 800, color: 'var(--kline-text)', fontSize: '0.96rem' }}>{property.address}</div>
+                        <div style={{ marginTop: 4, color: 'var(--kline-text-light)', fontSize: '0.84rem' }}>
+                          {property.city}, {property.state} {property.zip}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                <div style={{ borderTop: '1px solid var(--kline-gray)', paddingTop: '1rem' }}>
+                  <div style={{ fontWeight: 800, color: 'var(--kline-text)', marginBottom: '0.2rem' }}>Add Property Here</div>
+                  <div style={{ color: 'var(--kline-text-light)', fontSize: '0.84rem', marginBottom: '0.9rem' }}>
+                    Quick add without leaving the customer record.
+                  </div>
+
+                  {propertyError && (
+                    <div style={{
+                      background: 'rgba(227, 6, 19, 0.1)',
+                      border: '1px solid var(--kline-red)',
+                      color: 'var(--kline-red)',
+                      padding: '0.8rem',
+                      borderRadius: '10px',
+                      marginBottom: '0.85rem',
+                      fontSize: '0.86rem'
+                    }}>
+                      {propertyError}
+                    </div>
+                  )}
+
+                  {propertySuccess && (
+                    <div style={{
+                      background: 'rgba(25, 135, 84, 0.1)',
+                      border: '1px solid rgba(25, 135, 84, 0.35)',
+                      color: '#198754',
+                      padding: '0.8rem',
+                      borderRadius: '10px',
+                      marginBottom: '0.85rem',
+                      fontSize: '0.86rem'
+                    }}>
+                      {propertySuccess}
+                    </div>
+                  )}
+
+                  <form onSubmit={handleAddProperty} style={{ display: 'grid', gap: '0.75rem' }}>
+                    <input
+                      type="text"
+                      placeholder="Address"
+                      value={propertyForm.address}
+                      onChange={(e) => setPropertyForm((current) => ({ ...current, address: e.target.value }))}
+                      className="kline-input"
+                    />
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '0.65rem' }}>
+                      <input
+                        type="text"
+                        placeholder="City"
+                        value={propertyForm.city}
+                        onChange={(e) => setPropertyForm((current) => ({ ...current, city: e.target.value }))}
+                        className="kline-input"
+                      />
+                      <input
+                        type="text"
+                        placeholder="State"
+                        value={propertyForm.state}
+                        onChange={(e) => setPropertyForm((current) => ({ ...current, state: e.target.value }))}
+                        className="kline-input"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Zip"
+                        value={propertyForm.zip}
+                        onChange={(e) => setPropertyForm((current) => ({ ...current, zip: e.target.value }))}
+                        className="kline-input"
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={propertySaving}
+                      className="kline-btn-primary"
+                      style={{ padding: '0.82rem 1rem', fontSize: '0.9rem' }}
+                    >
+                      {propertySaving ? 'Adding Property...' : '+ Add Property'}
+                    </button>
+                  </form>
+                </div>
+              </div>
+
+              <div style={{ border: '1px solid var(--kline-gray)', borderRadius: '20px', padding: '1.15rem', background: '#fff', borderTop: '4px solid #198754' }}>
               <div style={{ fontWeight: 800, color: 'var(--kline-text)', marginBottom: '0.2rem' }}>Send SMS</div>
               <div style={{ color: 'var(--kline-text-light)', fontSize: '0.84rem', marginBottom: '0.9rem' }}>
                 Send a quick personalized text to this customer from the same record.
@@ -1714,7 +1764,7 @@ function EditCustomerModal({ customer, canSendCallSms, onClose, onCustomerUpdate
                     type="submit"
                     disabled={sendingSms || !smsPreview.trim()}
                     className="kline-btn-primary"
-                    style={{ padding: '0.78rem 1rem', fontSize: '0.88rem' }}
+                    style={{ padding: '0.82rem 1rem', fontSize: '0.9rem', width: '100%' }}
                   >
                     {sendingSms ? 'Sending SMS...' : 'Send SMS'}
                   </button>
@@ -1722,7 +1772,7 @@ function EditCustomerModal({ customer, canSendCallSms, onClose, onCustomerUpdate
               )}
             </div>
 
-            <div style={{ border: '1px solid var(--kline-gray)', borderRadius: '16px', padding: '1.1rem', background: '#fff', borderTop: '4px solid #0d6efd' }}>
+              <div style={{ border: '1px solid var(--kline-gray)', borderRadius: '20px', padding: '1.15rem', background: '#fff', borderTop: '4px solid #0d6efd' }}>
               <div style={{ fontWeight: 800, color: 'var(--kline-text)', marginBottom: '0.2rem' }}>SMS History</div>
               <div style={{ color: 'var(--kline-text-light)', fontSize: '0.84rem', marginBottom: '0.9rem' }}>
                 Recent text messages sent to this customer from the system.
@@ -1748,7 +1798,7 @@ function EditCustomerModal({ customer, canSendCallSms, onClose, onCustomerUpdate
               ) : (
                 <div style={{ display: 'grid', gap: '0.7rem', maxHeight: '320px', overflowY: 'auto', paddingRight: '0.25rem' }}>
                   {smsHistory.map((entry) => (
-                    <div key={entry.id} style={{ border: '1px solid var(--kline-gray)', borderRadius: '12px', padding: '0.9rem', background: 'var(--kline-gray-light)' }}>
+                    <div key={entry.id} style={{ border: '1px solid var(--kline-gray)', borderRadius: '14px', padding: '0.95rem', background: 'var(--kline-gray-light)' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.8rem', flexWrap: 'wrap' }}>
                         <div style={{ fontWeight: 800, color: 'var(--kline-text)' }}>
                           {entry.template || 'Manual message'}
@@ -1774,6 +1824,7 @@ function EditCustomerModal({ customer, canSendCallSms, onClose, onCustomerUpdate
               )}
             </div>
           </div>
+        </div>
         </div>
       </div>
     </div>
