@@ -64,6 +64,9 @@ export default function CustomersPage() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
   const [canAccessCallsInbox, setCanAccessCallsInbox] = useState(false)
   const [canSendCallSms, setCanSendCallSms] = useState(false)
+  const [smsCustomer, setSmsCustomer] = useState<Customer | null>(null)
+  const [selectedCustomerIds, setSelectedCustomerIds] = useState<Set<string>>(new Set())
+  const [isBatchSmsOpen, setIsBatchSmsOpen] = useState(false)
   const [historyCustomer, setHistoryCustomer] = useState<Customer | null>(null)
   const [historyRecords, setHistoryRecords] = useState<CallHistoryRecord[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
@@ -235,6 +238,32 @@ useEffect(() => {
     })
   }
 
+  const selectableCustomers = filteredCustomers.filter((customer) => Boolean(customer.phone?.trim())).slice(0, 100)
+  const allSelectableCustomersSelected = selectableCustomers.length > 0 && selectableCustomers.every((customer) => selectedCustomerIds.has(customer.id))
+  const selectedCustomers = customers.filter((customer) => selectedCustomerIds.has(customer.id))
+
+  const toggleCustomerSelection = (customerId: string) => {
+    setSelectedCustomerIds((current) => {
+      const next = new Set(current)
+      if (next.has(customerId)) next.delete(customerId)
+      else if (next.size < 100) next.add(customerId)
+      return next
+    })
+  }
+
+  const toggleVisibleCustomerSelection = () => {
+    setSelectedCustomerIds((current) => {
+      const next = new Set(current)
+      if (allSelectableCustomersSelected) selectableCustomers.forEach((customer) => next.delete(customer.id))
+      else {
+        selectableCustomers.forEach((customer) => {
+          if (next.size < 100) next.add(customer.id)
+        })
+      }
+      return next
+    })
+  }
+
   return (
     <div style={{ minHeight: '100vh', background: 'var(--kline-gray-light)' }}>
       {/* Header */}
@@ -242,7 +271,7 @@ useEffect(() => {
         <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 1rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
-              <button 
+              <button
                 onClick={handleBack}
                 style={{ 
                   background: 'transparent',
@@ -383,13 +412,34 @@ useEffect(() => {
             </div>
 
             {/* Add Customer Button */}
-            <button 
-              className="kline-btn-primary"
-              style={{ padding: '0.8rem 1.5rem', fontSize: '0.9rem' }}
-              onClick={() => setIsCreateModalOpen(true)}
-            >
-              + New Customer
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+              {canSendCallSms && (
+                <button
+                  type="button"
+                  onClick={() => setIsBatchSmsOpen(true)}
+                  disabled={selectedCustomerIds.size === 0}
+                  style={{
+                    background: selectedCustomerIds.size > 0 ? '#198754' : '#d7e6dd',
+                    border: 'none',
+                    color: selectedCustomerIds.size > 0 ? '#fff' : '#6b7280',
+                    padding: '0.8rem 1.15rem',
+                    borderRadius: '8px',
+                    cursor: selectedCustomerIds.size > 0 ? 'pointer' : 'not-allowed',
+                    fontWeight: '700',
+                    fontSize: '0.9rem',
+                  }}
+                >
+                  Send batch SMS{selectedCustomerIds.size > 0 ? ` (${selectedCustomerIds.size})` : ''}
+                </button>
+              )}
+              <button
+                className="kline-btn-primary"
+                style={{ padding: '0.8rem 1.5rem', fontSize: '0.9rem' }}
+                onClick={() => setIsCreateModalOpen(true)}
+              >
+                + New Customer
+              </button>
+            </div>
           </div>
           <div style={{ marginTop: '0.75rem', color: 'var(--kline-text-light)', fontSize: '0.84rem', fontWeight: 600 }}>
             Showing {filteredCustomers.length} of {customers.length} customers
@@ -406,7 +456,7 @@ useEffect(() => {
           <div className="kline-card" style={{ overflow: 'hidden' }}>
             <div style={{ 
               display: 'grid', 
-              gridTemplateColumns: '1.6fr 2fr 1.35fr 2fr auto', 
+              gridTemplateColumns: canSendCallSms ? '42px 1.6fr 2fr 1.35fr 2fr auto' : '1.6fr 2fr 1.35fr 2fr auto',
               padding: '1.2rem 1.5rem',
               background: 'var(--kline-gray-light)',
               borderBottom: '2px solid var(--kline-gray)',
@@ -414,6 +464,11 @@ useEffect(() => {
               color: 'var(--kline-text)',
               fontSize: '0.9rem'
             }}>
+              {canSendCallSms && (
+                <div>
+                  <input type="checkbox" aria-label="Select visible customers" checked={allSelectableCustomersSelected} onChange={toggleVisibleCustomerSelection} disabled={selectableCustomers.length === 0} />
+                </div>
+              )}
               <div>Name</div>
               <div>Email</div>
               <div>Phone</div>
@@ -426,13 +481,18 @@ useEffect(() => {
                 key={customer.id}
                 style={{ 
                   display: 'grid', 
-                  gridTemplateColumns: '1.6fr 2fr 1.35fr 2fr auto', 
+                  gridTemplateColumns: canSendCallSms ? '42px 1.6fr 2fr 1.35fr 2fr auto' : '1.6fr 2fr 1.35fr 2fr auto',
                   padding: '1.2rem 1.5rem',
                   borderBottom: '1px solid var(--kline-gray)',
                   alignItems: 'center',
                   fontSize: '0.9rem'
                 }}
               >
+                {canSendCallSms && (
+                  <div>
+                    <input type="checkbox" aria-label={`Select ${customer.fullName}`} checked={selectedCustomerIds.has(customer.id)} onChange={() => toggleCustomerSelection(customer.id)} disabled={!customer.phone?.trim()} />
+                  </div>
+                )}
                 <div style={{ fontWeight: '500' }}>{customer.fullName}</div>
                 <div style={{ color: 'var(--kline-blue)' }}>{customer.email}</div>
                 <div style={{ color: 'var(--kline-text-light)', fontFamily: 'monospace' }}>
@@ -498,6 +558,27 @@ useEffect(() => {
                       onClick={() => loadCustomerCallHistory(customer)}
                     >
                       Calls
+                    </button>
+                  )}
+                  {canSendCallSms && (
+                    <button
+                      type="button"
+                      title={customer.phone?.trim() ? `Send an SMS to ${customer.fullName}` : 'This customer does not have a phone number'}
+                      disabled={!customer.phone?.trim()}
+                      style={{
+                        background: '#ecfdf3',
+                        border: '1px solid rgba(25, 135, 84, 0.28)',
+                        color: '#198754',
+                        padding: '0.5rem 1rem',
+                        borderRadius: '6px',
+                        cursor: customer.phone?.trim() ? 'pointer' : 'not-allowed',
+                        fontWeight: '700',
+                        fontSize: '0.8rem',
+                        opacity: customer.phone?.trim() ? 1 : 0.5,
+                      }}
+                      onClick={() => setSmsCustomer(customer)}
+                    >
+                      Send SMS
                     </button>
                   )}
                   <button 
@@ -595,6 +676,27 @@ useEffect(() => {
                         onClick={() => loadCustomerCallHistory(customer)}
                       >
                         Calls
+                      </button>
+                    )}
+                    {canSendCallSms && (
+                      <button
+                        type="button"
+                        title={customer.phone?.trim() ? `Send an SMS to ${customer.fullName}` : 'This customer does not have a phone number'}
+                        disabled={!customer.phone?.trim()}
+                        style={{
+                          background: '#ecfdf3',
+                          border: '1px solid rgba(25, 135, 84, 0.28)',
+                          color: '#198754',
+                          padding: '0.5rem 1rem',
+                          borderRadius: '6px',
+                          cursor: customer.phone?.trim() ? 'pointer' : 'not-allowed',
+                          fontWeight: '700',
+                          fontSize: '0.8rem',
+                          opacity: customer.phone?.trim() ? 1 : 0.5,
+                        }}
+                        onClick={() => setSmsCustomer(customer)}
+                      >
+                        Send SMS
                       </button>
                     )}
                     <button 
@@ -806,6 +908,24 @@ useEffect(() => {
           canSendCallSms={canSendCallSms}
           onClose={() => setEditingCustomer(null)}
           onCustomerUpdated={fetchCustomers}
+        />
+      )}
+
+      {smsCustomer && (
+        <QuickCustomerSmsModal
+          customer={smsCustomer}
+          onClose={() => setSmsCustomer(null)}
+        />
+      )}
+
+      {isBatchSmsOpen && (
+        <BatchCustomerSmsModal
+          customers={selectedCustomers}
+          onClose={() => setIsBatchSmsOpen(false)}
+          onSent={() => {
+            setSelectedCustomerIds(new Set())
+            setIsBatchSmsOpen(false)
+          }}
         />
       )}
 
@@ -1826,6 +1946,187 @@ function EditCustomerModal({ customer, canSendCallSms, onClose, onCustomerUpdate
           </div>
         </div>
         </div>
+      </div>
+    </div>
+  )
+}
+
+function QuickCustomerSmsModal({ customer, onClose }: { customer: Customer; onClose: () => void }) {
+  const [template, setTemplate] = useState('')
+  const [additionalNote, setAdditionalNote] = useState('')
+  const [sending, setSending] = useState(false)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+  const preview = useMemo(
+    () => buildCallSmsMessage(template, additionalNote),
+    [additionalNote, template]
+  )
+
+  const handleSend = async (event: React.FormEvent) => {
+    event.preventDefault()
+    setError('')
+    setSuccess('')
+
+    if (!preview.trim()) {
+      setError('Choose a template or write a short custom message first.')
+      return
+    }
+
+    setSending(true)
+    try {
+      const response = await fetch(`/api/customers/${customer.id}/send-sms`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phoneNumber: customer.phone,
+          template,
+          additionalNote,
+        }),
+      })
+      const data = (await response.json().catch(() => null)) as { phoneNumber?: string; error?: string } | null
+
+      if (!response.ok) {
+        throw new Error(data?.error || 'Unable to send SMS')
+      }
+
+      setSuccess(`SMS sent to ${data?.phoneNumber || customer.phone}.`)
+      setTemplate('')
+      setAdditionalNote('')
+    } catch (sendError) {
+      setError(sendError instanceof Error ? sendError.message : 'Unable to send SMS')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 1300, background: 'rgba(15, 23, 42, 0.52)', display: 'grid', placeItems: 'center', padding: '1rem' }}>
+      <div className="kline-card" style={{ width: 'min(580px, 100%)', maxHeight: '90vh', overflowY: 'auto', padding: 0, borderRadius: 20, boxShadow: '0 28px 60px rgba(15, 23, 42, 0.26)' }}>
+        <div style={{ padding: '1.25rem 1.4rem', borderBottom: '1px solid var(--kline-gray)', background: 'linear-gradient(135deg, #effcf5 0%, #ffffff 72%)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'flex-start' }}>
+            <div>
+              <div style={{ color: '#198754', fontWeight: 800, fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Customer message</div>
+              <h2 style={{ margin: '0.32rem 0 0', color: 'var(--kline-text)', fontSize: '1.35rem' }}>Send SMS to {customer.fullName}</h2>
+              <div style={{ marginTop: '0.4rem', color: 'var(--kline-text-light)', fontSize: '0.9rem' }}>{customer.phone}</div>
+            </div>
+            <button type="button" aria-label="Close SMS dialog" onClick={onClose} style={{ background: '#fff', border: '1px solid var(--kline-gray)', width: 38, height: 38, borderRadius: 10, color: 'var(--kline-text-light)', fontSize: '1.2rem', cursor: 'pointer' }}>×</button>
+          </div>
+        </div>
+
+        <form onSubmit={handleSend} style={{ display: 'grid', gap: '1rem', padding: '1.35rem 1.4rem' }}>
+          {error && <div style={{ background: 'rgba(227, 6, 19, 0.1)', border: '1px solid var(--kline-red)', color: 'var(--kline-red)', padding: '0.8rem', borderRadius: 10, fontSize: '0.88rem' }}>{error}</div>}
+          {success && <div style={{ background: 'rgba(25, 135, 84, 0.1)', border: '1px solid rgba(25, 135, 84, 0.35)', color: '#198754', padding: '0.8rem', borderRadius: 10, fontSize: '0.88rem' }}>{success}</div>}
+
+          <div>
+            <label style={{ display: 'block', fontWeight: 800, marginBottom: '0.45rem', color: 'var(--kline-text)' }}>Quick Template</label>
+            <select className="kline-input" value={template} onChange={(event) => setTemplate(event.target.value)}>
+              <option value="">Manual message only</option>
+              {callSmsTemplates.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+            </select>
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontWeight: 800, marginBottom: '0.45rem', color: 'var(--kline-text)' }}>Message</label>
+            <textarea className="kline-input" rows={4} value={additionalNote} onChange={(event) => setAdditionalNote(event.target.value)} placeholder="Write a short personalized message." />
+          </div>
+
+          <div>
+            <div style={{ fontWeight: 800, marginBottom: '0.45rem', color: 'var(--kline-text)' }}>Preview</div>
+            <div style={{ border: '1px solid var(--kline-gray)', borderRadius: 12, padding: '0.95rem', background: 'var(--kline-gray-light)', minHeight: 96, color: preview ? 'var(--kline-text)' : 'var(--kline-text-light)', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
+              {preview || 'Choose a template or write a short manual message.'}
+            </div>
+            <div style={{ marginTop: 6, color: 'var(--kline-text-light)', fontSize: '0.8rem' }}>{preview.length}/320 characters</div>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.1rem' }}>
+            <button type="button" onClick={onClose} className="ghost-btn">Cancel</button>
+            <button type="submit" disabled={sending || !preview.trim()} className="kline-btn-primary" style={{ minWidth: 150 }}>{sending ? 'Sending...' : 'Send SMS'}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+function BatchCustomerSmsModal({ customers, onClose, onSent }: { customers: Customer[]; onClose: () => void; onSent: () => void }) {
+  const [template, setTemplate] = useState('')
+  const [additionalNote, setAdditionalNote] = useState('')
+  const [sending, setSending] = useState(false)
+  const [error, setError] = useState('')
+  const [result, setResult] = useState<{ sent: number; skipped: number; failed: number } | null>(null)
+  const preview = useMemo(() => buildCallSmsMessage(template, additionalNote), [additionalNote, template])
+  const validRecipients = customers.filter((customer) => Boolean(customer.phone?.trim()))
+
+  const handleSend = async (event: React.FormEvent) => {
+    event.preventDefault()
+    setError('')
+    setResult(null)
+    if (!preview.trim()) {
+      setError('Choose a template or write a short custom message first.')
+      return
+    }
+    if (!window.confirm(`Send this SMS to ${validRecipients.length} selected customer${validRecipients.length === 1 ? '' : 's'}? This cannot be undone.`)) return
+
+    setSending(true)
+    try {
+      const response = await fetch('/api/customers/send-batch-sms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customerIds: customers.map((customer) => customer.id), template, additionalNote }),
+      })
+      const data = (await response.json().catch(() => null)) as { error?: string; summary?: { sent: number; skipped: number; failed: number } } | null
+      if (!response.ok) throw new Error(data?.error || 'Unable to send batch SMS')
+      setResult(data?.summary || { sent: 0, skipped: 0, failed: 0 })
+    } catch (sendError) {
+      setError(sendError instanceof Error ? sendError.message : 'Unable to send batch SMS')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 1350, background: 'rgba(15, 23, 42, 0.56)', display: 'grid', placeItems: 'center', padding: '1rem' }}>
+      <div className="kline-card" style={{ width: 'min(720px, 100%)', maxHeight: '90vh', overflowY: 'auto', padding: 0, borderRadius: 20, boxShadow: '0 28px 60px rgba(15, 23, 42, 0.28)' }}>
+        <div style={{ padding: '1.25rem 1.4rem', borderBottom: '1px solid var(--kline-gray)', background: 'linear-gradient(135deg, #effcf5 0%, #ffffff 72%)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'flex-start' }}>
+            <div>
+              <div style={{ color: '#198754', fontWeight: 800, fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Batch customer message</div>
+              <h2 style={{ margin: '0.32rem 0 0', color: 'var(--kline-text)', fontSize: '1.35rem' }}>Send SMS to selected customers</h2>
+              <div style={{ marginTop: '0.4rem', color: 'var(--kline-text-light)', fontSize: '0.9rem' }}>{validRecipients.length} valid recipient{validRecipients.length === 1 ? '' : 's'} selected · Max 100 per batch</div>
+            </div>
+            <button type="button" aria-label="Close batch SMS dialog" onClick={onClose} style={{ background: '#fff', border: '1px solid var(--kline-gray)', width: 38, height: 38, borderRadius: 10, color: 'var(--kline-text-light)', fontSize: '1.2rem', cursor: 'pointer' }}>×</button>
+          </div>
+        </div>
+
+        <form onSubmit={handleSend} style={{ display: 'grid', gap: '1rem', padding: '1.35rem 1.4rem' }}>
+          {error && <div style={{ background: 'rgba(227, 6, 19, 0.1)', border: '1px solid var(--kline-red)', color: 'var(--kline-red)', padding: '0.8rem', borderRadius: 10, fontSize: '0.88rem' }}>{error}</div>}
+          {result && <div style={{ background: 'rgba(25, 135, 84, 0.1)', border: '1px solid rgba(25, 135, 84, 0.35)', color: '#198754', padding: '0.9rem', borderRadius: 10, fontSize: '0.9rem' }}>Batch complete: {result.sent} sent, {result.skipped} skipped, {result.failed} failed. Each successful message is recorded in the customer SMS history.</div>}
+
+          <div style={{ padding: '0.85rem 1rem', border: '1px solid rgba(25, 135, 84, 0.22)', borderRadius: 12, background: '#f4fbf7', color: '#155f3d', fontSize: '0.87rem', lineHeight: 1.5 }}>
+            Review the preview carefully. The exact same message will be sent to every selected customer.
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontWeight: 800, marginBottom: '0.45rem', color: 'var(--kline-text)' }}>Quick Template</label>
+            <select className="kline-input" value={template} onChange={(event) => setTemplate(event.target.value)}>
+              <option value="">Manual message only</option>
+              {callSmsTemplates.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={{ display: 'block', fontWeight: 800, marginBottom: '0.45rem', color: 'var(--kline-text)' }}>Message</label>
+            <textarea className="kline-input" rows={4} value={additionalNote} onChange={(event) => setAdditionalNote(event.target.value)} placeholder="Write the message that every selected customer will receive." />
+          </div>
+          <div>
+            <div style={{ fontWeight: 800, marginBottom: '0.45rem', color: 'var(--kline-text)' }}>Message Preview</div>
+            <div style={{ border: '1px solid var(--kline-gray)', borderRadius: 12, padding: '0.95rem', background: 'var(--kline-gray-light)', minHeight: 96, color: preview ? 'var(--kline-text)' : 'var(--kline-text-light)', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{preview || 'Choose a template or write a short manual message.'}</div>
+            <div style={{ marginTop: 6, color: 'var(--kline-text-light)', fontSize: '0.8rem' }}>{preview.length}/320 characters</div>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', flexWrap: 'wrap' }}>
+            {result ? <button type="button" onClick={onSent} className="kline-btn-primary">Done</button> : <><button type="button" onClick={onClose} className="ghost-btn">Cancel</button><button type="submit" disabled={sending || !preview.trim() || validRecipients.length === 0} className="kline-btn-primary" style={{ minWidth: 190 }}>{sending ? 'Sending batch...' : `Send to ${validRecipients.length} customers`}</button></>}
+          </div>
+        </form>
       </div>
     </div>
   )
